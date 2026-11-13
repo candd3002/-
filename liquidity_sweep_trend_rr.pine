@@ -1,19 +1,30 @@
 //@version=5
-indicator("Liquidity Sweep + Trend Structure (1:2 RR)", shorttitle="LS Trend 1:2", overlay=true, max_labels_count=500)
+indicator("Liquidity Sweep + Trend Structure v2 (1:2 RR)", shorttitle="LS Trend v2", overlay=true, max_labels_count=500)
 
 // =====================================================================
 //  INPUTS
 // =====================================================================
 grpS = "Structure (القمم والقيعان والترند)"
 pivLen     = input.int(5,   "Swing pivot length (bars each side)", minval=2, group=grpS)
-emaFastLen = input.int(50,  "EMA fast (confluence)", group=grpS)
-emaSlowLen = input.int(200, "EMA slow (confluence)", group=grpS)
+emaFastLen = input.int(50,  "EMA fast", group=grpS)
+emaSlowLen = input.int(200, "EMA slow", group=grpS)
+htfTf      = input.timeframe("240", "Higher timeframe bias", group=grpS)
+
+grpQ = "Sweep vs real break (سحب سيولة أم كسر حقيقي)"
+reclaimBars = input.int(3,    "Max bars to close back inside, else REAL break", minval=1, group=grpQ)
+minDepth    = input.float(0.05, "Min sweep depth (x ATR)", minval=0.0, step=0.05, group=grpQ)
+maxDepth    = input.float(2.0,  "Max sweep depth (x ATR) - deeper = real break", minval=0.2, step=0.1, group=grpQ)
+wickPct     = input.float(0.40, "Min rejection wick (share of candle range)", minval=0.0, maxval=1.0, step=0.05, group=grpQ)
+volMult     = input.float(1.2,  "Volume spike (x 20-bar average)", minval=0.5, step=0.1, group=grpQ)
+eqTol       = input.float(0.25, "Equal highs/lows tolerance (x ATR)", minval=0.0, step=0.05, group=grpQ)
+dispMult    = input.float(0.8,  "Displacement candle body (x ATR)", minval=0.1, step=0.1, group=grpQ)
+minScore    = input.int(3, "Min quality score (0-7) to take a trade", minval=0, maxval=7, group=grpQ)
 
 grpE = "Entries (الدخول)"
-armBars        = input.int(15,   "Bars to wait for confirmation after a sweep", minval=1, group=grpE)
+armBars        = input.int(15,   "Bars to wait for structure shift after a sweep", minval=1, group=grpE)
 useTrendFilter = input.bool(true, "Trade only with structure trend (block counter-trend)", group=grpE)
 allowRange     = input.bool(true, "Allow sweep trades when trend is RANGE", group=grpE)
-useCont        = input.bool(true, "Enable trend continuation (BOS) entries", group=grpE)
+useCont        = input.bool(true, "Enable trend continuation (BOS + displacement) entries", group=grpE)
 
 grpR = "Risk (المخاطرة)"
 rr         = input.float(2.0, "Reward : Risk (fixed)", minval=1.0, step=0.5, group=grpR)
@@ -29,17 +40,31 @@ emaF     = ta.ema(close, emaFastLen)
 emaS     = ta.ema(close, emaSlowLen)
 emaTrend = (close > emaS and emaF > emaS) ? 1 : (close < emaS and emaF < emaS) ? -1 : 0
 
+// Higher-timeframe bias (non-repainting: previous closed HTF bar)
+htfDiff = request.security(syminfo.tickerid, htfTf, ta.ema(close, emaFastLen)[1] - ta.ema(close, emaSlowLen)[1], lookahead=barmerge.lookahead_on)
+htfBull = htfDiff > 0
+htfBear = htfDiff < 0
+
+// Candle anatomy
+body    = math.abs(close - open)
+rng     = high - low
+lowWick = math.min(open, close) - low
+upWick  = high - math.max(open, close)
+volSma  = ta.sma(volume, 20)
+volOK   = volSma > 0 and math.max(volume, nz(volume[1])) >= volMult * volSma
+dispUp  = close > open and body >= dispMult * atr
+dispDn  = close < open and body >= dispMult * atr
+
 // =====================================================================
 //  SWING HIGHS / LOWS (القمم والقيعان)
-//  ta.pivot* is only confirmed pivLen bars after the real pivot.
 // =====================================================================
 ph = ta.pivothigh(high, pivLen, pivLen)
 pl = ta.pivotlow(low, pivLen, pivLen)
 
-var float sh1 = na   // latest confirmed swing high
-var float sh2 = na   // previous swing high
-var float sl1 = na   // latest confirmed swing low
-var float sl2 = na   // previous swing low
+var float sh1 = na
+var float sh2 = na
+var float sl1 = na
+var float sl2 = na
 
 if not na(ph)
     sh2 := sh1
@@ -48,57 +73,153 @@ if not na(pl)
     sl2 := sl1
     sl1 := pl
 
-// Market structure trend: HH+HL = UP, LH+LL = DOWN, otherwise RANGE
+// HH+HL = UP, LH+LL = DOWN, otherwise RANGE
 structTrend = (na(sh2) or na(sl2)) ? 0 : (sh1 > sh2 and sl1 > sl2) ? 1 : (sh1 < sh2 and sl1 < sl2) ? -1 : 0
 
-// =====================================================================
-//  LIQUIDITY SWEEP (سحب السيولة)
-//  Bull sweep: wick takes out the last swing LOW (stops below it are hunted)
-//              and the candle CLOSES back above that low.
-//  Bear sweep: wick takes out the last swing HIGH and closes back below it.
-// =====================================================================
-bullSweep = not na(sl1) and low < sl1 and close > sl1
-bearSweep = not na(sh1) and high > sh1 and close < sh1
+mid     = (sh1 + sl1) / 2                                       // range midpoint (premium / discount)
+eqBull  = not na(sl2) and math.abs(sl1 - sl2) <= eqTol * atr    // equal lows = resting sell stops
+eqBear  = not na(sh2) and math.abs(sh1 - sh2) <= eqTol * atr    // equal highs = resting buy stops
 
-// Arm state: after a sweep we wait for the market to CONFIRM the reversal
-// (structure shift = close back through the swing high/low taken before the sweep).
-// No entry happens on the sweep candle itself.
+var string lastEvent = "-"
+
+// =====================================================================
+//  BREACH TRACKING: sweep (price comes back) or REAL break (price stays out)
+//  Breach starts when the wick passes the last swing level.
+//  If price CLOSES back inside within reclaimBars bars -> sweep (false break).
+//  If it does not -> genuine break (continuation).
+// =====================================================================
+var float bullBLow  = na
+var int   bullBBar  = na
+var bool  bullBDead = false
+var float bearBHigh = na
+var int   bearBBar  = na
+var bool  bearBDead = false
+
+// a new confirmed pivot means a new level: reset the tracking
+if not na(pl)
+    bullBLow  := na
+    bullBBar  := na
+    bullBDead := false
+if not na(ph)
+    bearBHigh := na
+    bearBBar  := na
+    bearBDead := false
+
+if not na(sl1) and low < sl1 and not bullBDead
+    bullBLow := na(bullBLow) ? low : math.min(bullBLow, low)
+    if na(bullBBar)
+        bullBBar := bar_index
+if not na(sh1) and high > sh1 and not bearBDead
+    bearBHigh := na(bearBHigh) ? high : math.max(bearBHigh, high)
+    if na(bearBBar)
+        bearBBar := bar_index
+
+bullReclaim = not na(bullBBar) and not bullBDead and close > sl1 and bar_index - bullBBar <= reclaimBars
+bearReclaim = not na(bearBBar) and not bearBDead and close < sh1 and bar_index - bearBBar <= reclaimBars
+
+bullBreakReal = not na(bullBBar) and not bullBDead and not bullReclaim and bar_index - bullBBar >= reclaimBars
+bearBreakReal = not na(bearBBar) and not bearBDead and not bearReclaim and bar_index - bearBBar >= reclaimBars
+
+// Quality of the sweep (0-6 here, +1 for displacement at confirmation = 7)
+bullDepth = sl1 - bullBLow
+bearDepth = bearBHigh - sh1
+
+bullSweepEv = bullReclaim and bullDepth >= minDepth * atr and bullDepth <= maxDepth * atr
+bearSweepEv = bearReclaim and bearDepth >= minDepth * atr and bearDepth <= maxDepth * atr
+
+bullScoreNow = (bullBBar == bar_index ? 1 : 0) + ((rng > 0 and lowWick / rng >= wickPct) ? 1 : 0) + (volOK ? 1 : 0) + (eqBull ? 1 : 0) + (htfBull ? 1 : 0) + (close <= mid ? 1 : 0)
+bearScoreNow = (bearBBar == bar_index ? 1 : 0) + ((rng > 0 and upWick / rng >= wickPct) ? 1 : 0) + (volOK ? 1 : 0) + (eqBear ? 1 : 0) + (htfBear ? 1 : 0) + (close >= mid ? 1 : 0)
+
+// Armed state: after a sweep we wait for a structure shift (CHoCH). Never enter on the sweep candle.
 var int   bullBar    = na
 var float bullLow    = na
 var float bullStruct = na
+var int   bullScore  = 0
 var int   bearBar    = na
 var float bearHigh   = na
 var float bearStruct = na
+var int   bearScore  = 0
 
-if bullSweep
-    bullBar    := bar_index
-    bullLow    := low
-    bullStruct := sh1
-if bearSweep
-    bearBar    := bar_index
-    bearHigh   := high
-    bearStruct := sl1
+bullSweepPlot = bullSweepEv
+bearSweepPlot = bearSweepEv
+bullRealPlot  = bullBreakReal
+bearRealPlot  = bearBreakReal
 
-bullArmed = not na(bullBar) and bar_index - bullBar > 0 and bar_index - bullBar <= armBars
-bearArmed = not na(bearBar) and bar_index - bearBar > 0 and bar_index - bearBar <= armBars
+if bullReclaim
+    if bullSweepEv
+        bullBar    := bar_index
+        bullLow    := bullBLow
+        bullStruct := sh1
+        bullScore  := bullScoreNow
+        lastEvent  := "Bull sweep (score " + str.tostring(bullScoreNow) + ")"
+    else
+        lastEvent  := "Reclaim rejected (depth)"
+    bullBBar := na
+    bullBLow := na
+if bearReclaim
+    if bearSweepEv
+        bearBar    := bar_index
+        bearHigh   := bearBHigh
+        bearStruct := sl1
+        bearScore  := bearScoreNow
+        lastEvent  := "Bear sweep (score " + str.tostring(bearScoreNow) + ")"
+    else
+        lastEvent  := "Reclaim rejected (depth)"
+    bearBBar  := na
+    bearBHigh := na
+if bullBreakReal
+    bullBDead := true
+    bullBBar  := na
+    bullBLow  := na
+    lastEvent := "REAL break DOWN"
+if bearBreakReal
+    bearBDead := true
+    bearBBar  := na
+    bearBHigh := na
+    lastEvent := "REAL break UP"
 
-// Confirmation = price CLOSES through the structure level (شكل كسر القمة/القاع)
-bullConfirm = bullArmed and close > bullStruct
-bearConfirm = bearArmed and close < bearStruct
+// =====================================================================
+//  CONFIRMATION (CHoCH / MSS) and invalidation
+// =====================================================================
+bullArmed = not na(bullBar) and bar_index - bullBar > 0 and bar_index - bullBar <= armBars and low >= bullLow
+bearArmed = not na(bearBar) and bar_index - bearBar > 0 and bar_index - bearBar <= armBars and high <= bearHigh
 
-if bullConfirm
+// sweep extreme violated -> it was a real break after all
+if not na(bullBar) and bar_index - bullBar > 0 and low < bullLow
+    bullBar   := na
+    lastEvent := "Bull sweep FAILED"
+if not na(bearBar) and bar_index - bearBar > 0 and high > bearHigh
+    bearBar   := na
+    lastEvent := "Bear sweep FAILED"
+
+bullStructBreak = bullArmed and close > bullStruct
+bearStructBreak = bearArmed and close < bearStruct
+
+bullTotal = bullScore + (dispUp ? 1 : 0)
+bearTotal = bearScore + (dispDn ? 1 : 0)
+
+bullConfirm = bullStructBreak and bullTotal >= minScore
+bearConfirm = bearStructBreak and bearTotal >= minScore
+
+if bullStructBreak
+    if bullTotal < minScore
+        lastEvent := "Bull setup skipped (score " + str.tostring(bullTotal) + ")"
     bullBar := na
-if bearConfirm
+if bearStructBreak
+    if bearTotal < minScore
+        lastEvent := "Bear setup skipped (score " + str.tostring(bearTotal) + ")"
     bearBar := na
 
 // =====================================================================
-//  TREND CONTINUATION (BOS) - only in a confirmed trend, no sweep needed
+//  TREND CONTINUATION (BOS) - real break in a confirmed trend, with displacement
 // =====================================================================
-contBull = useCont and structTrend == 1  and ta.crossover(close, sh1)
-contBear = useCont and structTrend == -1 and ta.crossunder(close, sl1)
+crossUpHigh = ta.crossover(close, sh1)
+crossDnLow  = ta.crossunder(close, sl1)
+contBull = useCont and structTrend == 1  and crossUpHigh and dispUp and close > emaS
+contBear = useCont and structTrend == -1 and crossDnLow  and dispDn and close < emaS
 
 // =====================================================================
-//  TREND GATE (الترند يحدد الاتجاه المسموح)
+//  TREND GATE
 // =====================================================================
 longGate  = not useTrendFilter or structTrend == 1  or (allowRange and structTrend == 0)
 shortGate = not useTrendFilter or structTrend == -1 or (allowRange and structTrend == 0)
@@ -106,7 +227,6 @@ shortGate = not useTrendFilter or structTrend == -1 or (allowRange and structTre
 longRaw  = (bullConfirm or contBull) and longGate
 shortRaw = (bearConfirm or contBear) and shortGate
 
-// Stops: beyond the sweep wick (or the swing for continuation) + ATR buffer
 longStop  = bullConfirm ? bullLow  - bufAtr * atr : sl1 - bufAtr * atr
 shortStop = bearConfirm ? bearHigh + bufAtr * atr : sh1 + bufAtr * atr
 
@@ -121,23 +241,21 @@ var bool  tradeOpen = false
 var int   wins      = 0
 var int   losses    = 0
 
-// 1) Manage the open trade first
 tpHitNow = false
 slHitNow = false
 if tradeOpen
     hitStop = tDir == 1 ? low <= tStop : high >= tStop
     hitTP   = tDir == 1 ? high >= tTP  : low <= tTP
-    // If both are inside the same candle we cannot know the order -> count as loss (conservative)
+    // both in the same candle: order unknown -> count as loss (conservative)
     if hitStop
-        losses   += 1
-        slHitNow := true
+        losses    += 1
+        slHitNow  := true
         tradeOpen := false
     else if hitTP
-        wins     += 1
-        tpHitNow := true
+        wins      += 1
+        tpHitNow  := true
         tradeOpen := false
 
-// 2) New entries (one trade at a time)
 longRisk  = close - longStop
 shortRisk = shortStop - close
 
@@ -150,42 +268,46 @@ if longOK
     tTP       := close + rr * longRisk
     tDir      := 1
     tradeOpen := true
+    lastEvent := bullConfirm ? "BUY sweep+CHoCH (score " + str.tostring(bullTotal) + ")" : "BUY continuation (BOS)"
+    label.new(bar_index, low, bullConfirm ? "BUY 1:" + str.tostring(rr, "#.#") + " S" + str.tostring(bullTotal) : "BUY BOS 1:" + str.tostring(rr, "#.#"),
+         style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
 else if shortOK
     tEntry    := close
     tStop     := shortStop
     tTP       := close - rr * shortRisk
     tDir      := -1
     tradeOpen := true
+    lastEvent := bearConfirm ? "SELL sweep+CHoCH (score " + str.tostring(bearTotal) + ")" : "SELL continuation (BOS)"
+    label.new(bar_index, high, bearConfirm ? "SELL 1:" + str.tostring(rr, "#.#") + " S" + str.tostring(bearTotal) : "SELL BOS 1:" + str.tostring(rr, "#.#"),
+         style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
 
-// =====================================================================
-//  PLOTS
-// =====================================================================
 // =====================================================================
 //  WEBHOOK ALERTS (MT5 bridge)
 //  Format must match the bridge parseSignal() regex:
 //  "(BUY|SELL) Signal - X, Close: N, TP: N, SL: N, Time: T"
-//  Use ONE alert on this script with condition "Any alert() function call"
-//  and the bridge URL as webhook. Do NOT also send the alertconditions below
-//  to the webhook, or each trade is sent twice.
+//  Use ONE alert on this script with condition "Any alert() function call".
+//  Do NOT also send the alertconditions below to the webhook (double orders).
 // =====================================================================
 if longOK
-    alert("BUY Signal - LS Trend 1:2, Close: " + str.tostring(close, format.mintick) +
+    alert("BUY Signal - LS Trend v2, Close: " + str.tostring(close, format.mintick) +
          ", TP: " + str.tostring(tTP, format.mintick) +
          ", SL: " + str.tostring(tStop, format.mintick) +
          ", Time: " + str.format_time(time, "yyyy-MM-dd HH:mm"), alert.freq_once_per_bar_close)
 if shortOK
-    alert("SELL Signal - LS Trend 1:2, Close: " + str.tostring(close, format.mintick) +
+    alert("SELL Signal - LS Trend v2, Close: " + str.tostring(close, format.mintick) +
          ", TP: " + str.tostring(tTP, format.mintick) +
          ", SL: " + str.tostring(tStop, format.mintick) +
          ", Time: " + str.format_time(time, "yyyy-MM-dd HH:mm"), alert.freq_once_per_bar_close)
 
-plotshape(bullSweep, "Bull sweep (سحب سيولة شراء)", shape.diamond, location.belowbar, color.new(color.lime, 30), size=size.tiny)
-plotshape(bearSweep, "Bear sweep (سحب سيولة بيع)", shape.diamond, location.abovebar, color.new(color.orange, 30), size=size.tiny)
-plotshape(bullConfirm, "Bull CHoCH", shape.circle, location.belowbar, color.new(color.teal, 0), size=size.tiny)
-plotshape(bearConfirm, "Bear CHoCH", shape.circle, location.abovebar, color.new(color.maroon, 0), size=size.tiny)
-
-plotshape(longOK,  "BUY",  shape.labelup,   location.belowbar, color.new(color.green, 0), text="BUY 1:2",  textcolor=color.white, size=size.small)
-plotshape(shortOK, "SELL", shape.labeldown, location.abovebar, color.new(color.red, 0),   text="SELL 1:2", textcolor=color.white, size=size.small)
+// =====================================================================
+//  PLOTS
+// =====================================================================
+plotshape(bullSweepPlot, "Bull sweep (سحب سيولة شراء)", shape.diamond, location.belowbar, color.new(color.lime, 20), size=size.tiny)
+plotshape(bearSweepPlot, "Bear sweep (سحب سيولة بيع)", shape.diamond, location.abovebar, color.new(color.orange, 20), size=size.tiny)
+plotshape(bullRealPlot,  "Real break DOWN (كسر حقيقي)", shape.xcross, location.abovebar, color.new(color.red, 0), size=size.tiny)
+plotshape(bearRealPlot,  "Real break UP (كسر حقيقي)",   shape.xcross, location.belowbar, color.new(color.green, 0), size=size.tiny)
+plotshape(bullStructBreak, "Bull CHoCH", shape.circle, location.belowbar, color.new(color.teal, 0), size=size.tiny)
+plotshape(bearStructBreak, "Bear CHoCH", shape.circle, location.abovebar, color.new(color.maroon, 0), size=size.tiny)
 
 plot(sh1, "Last swing high (سيولة فوق)", color=color.new(color.red, 40),   style=plot.style_linebr)
 plot(sl1, "Last swing low (سيولة تحت)",  color=color.new(color.green, 40), style=plot.style_linebr)
@@ -201,37 +323,40 @@ bgcolor(structTrend == 1 ? color.new(color.green, 94) : structTrend == -1 ? colo
 // =====================================================================
 //  DASHBOARD
 // =====================================================================
-var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 50))
+var table dash = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
     trTxt  = structTrend == 1 ? "UP  (HH/HL)" : structTrend == -1 ? "DOWN (LH/LL)" : "RANGE"
     trCol  = structTrend == 1 ? color.green : structTrend == -1 ? color.red : color.gray
-    emaTxt = emaTrend == 1 ? "Bullish" : emaTrend == -1 ? "Bearish" : "Mixed"
-    armTxt = bullArmed ? "Bull sweep armed" : bearArmed ? "Bear sweep armed" : "No sweep armed"
+    htfTxt = htfBull ? "Bullish" : htfBear ? "Bearish" : "Neutral"
+    armTxt = bullArmed ? "Bull sweep armed (S" + str.tostring(bullScore) + ")" : bearArmed ? "Bear sweep armed (S" + str.tostring(bearScore) + ")" : "None"
     total  = wins + losses
     wrTxt  = total > 0 ? str.tostring(wins / total * 100, "#.#") + "%" : "-"
     stTxt  = tradeOpen ? (tDir == 1 ? "LONG open" : "SHORT open") : "Flat"
 
     table.cell(dash, 0, 0, "Trend (structure)", text_color=color.white, text_size=size.small)
     table.cell(dash, 1, 0, trTxt, text_color=trCol, text_size=size.small)
-    table.cell(dash, 0, 1, "EMA confluence", text_color=color.white, text_size=size.small)
-    table.cell(dash, 1, 1, emaTxt, text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 2, "Sweep status", text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 1, "HTF bias", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, htfTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 2, "Armed sweep", text_color=color.white, text_size=size.small)
     table.cell(dash, 1, 2, armTxt, text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 3, "Trade", text_color=color.white, text_size=size.small)
-    table.cell(dash, 1, 3, stTxt, text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 4, "Wins / Losses", text_color=color.white, text_size=size.small)
-    table.cell(dash, 1, 4, str.tostring(wins) + " / " + str.tostring(losses), text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 5, "Win rate", text_color=color.white, text_size=size.small)
-    table.cell(dash, 1, 5, wrTxt, text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 6, "R:R", text_color=color.white, text_size=size.small)
-    table.cell(dash, 1, 6, "1 : " + str.tostring(rr, "#.#"), text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 3, "Last event", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, lastEvent, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 4, "Trade", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 4, stTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 5, "Wins / Losses", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 5, str.tostring(wins) + " / " + str.tostring(losses), text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 6, "Win rate", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 6, wrTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 7, "R:R", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 7, "1 : " + str.tostring(rr, "#.#"), text_color=color.white, text_size=size.small)
 
 // =====================================================================
-//  ALERTS
+//  ALERT CONDITIONS (for normal alerts, NOT for the MT5 webhook)
 // =====================================================================
 alertcondition(longOK,  "LS Trend BUY 1:2",  "BUY signal on {{ticker}} {{interval}} at {{close}}")
 alertcondition(shortOK, "LS Trend SELL 1:2", "SELL signal on {{ticker}} {{interval}} at {{close}}")
-alertcondition(bullSweep or bearSweep, "Liquidity sweep", "Liquidity sweep on {{ticker}} {{interval}}")
-alertcondition(tpHitNow, "Take Profit Hit", "LS Trend 1:2: TP hit on {{ticker}}")
-alertcondition(slHitNow, "Stop Loss Hit", "LS Trend 1:2: SL hit on {{ticker}}")
+alertcondition(bullSweepPlot or bearSweepPlot, "Liquidity sweep", "Liquidity sweep on {{ticker}} {{interval}}")
+alertcondition(bullRealPlot or bearRealPlot, "Real break", "Real (non-sweep) break on {{ticker}} {{interval}}")
+alertcondition(tpHitNow, "Take Profit Hit", "LS Trend v2: TP hit on {{ticker}}")
+alertcondition(slHitNow, "Stop Loss Hit", "LS Trend v2: SL hit on {{ticker}}")
