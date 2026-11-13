@@ -1,0 +1,200 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;background:#000;overflow:hidden}
+#cap{position:fixed;left:0;right:0;bottom:90px;padding:0 60px;font:bold 62px "DejaVu Sans",sans-serif;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.45)}
+#cap small{display:block;font:500 42px "DejaVu Sans",sans-serif;margin-top:14px;color:#e8f7ff}
+</style>
+<script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
+</head><body>
+<div id="cap"></div>
+<script type="module">
+import * as THREE from "three";
+
+const W = 1080, H = 1920;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#9fdcff");
+scene.fog = new THREE.Fog("#c9efff", 14, 40);
+
+const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
+
+// Lights: soft sun plus a warm fill so the cartoon colours read well.
+const sun = new THREE.DirectionalLight("#fff3d6", 2.3);
+sun.position.set(6, 10, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -8; sun.shadow.camera.right = 8;
+sun.shadow.camera.top = 8; sun.shadow.camera.bottom = -8;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight("#dff6ff", "#7fb3c9", 1.2));
+
+// Pool: tiled basin, water surface with animated waves.
+const poolFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(12, 0.2, 9),
+  new THREE.MeshStandardMaterial({ color: "#7fe0f2", roughness: 0.6 })
+);
+poolFloor.position.set(0, -1.2, 0);
+poolFloor.receiveShadow = true;
+scene.add(poolFloor);
+
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(12, 9, 120, 90),
+  new THREE.MeshPhysicalMaterial({ color: "#2fb7e0", transparent: true, opacity: 0.72, roughness: 0.15, metalness: 0, clearcoat: 0.6 })
+);
+water.rotation.x = -Math.PI / 2;
+water.position.y = -0.25;
+scene.add(water);
+const wpos = water.geometry.attributes.position;
+const wbase = wpos.array.slice();
+
+// Deck and poolside.
+const deck = new THREE.Mesh(new THREE.BoxGeometry(16, 0.4, 3), new THREE.MeshStandardMaterial({ color: "#f2c46d" }));
+deck.position.set(0, 0.0, 6.5);
+deck.receiveShadow = true;
+scene.add(deck);
+
+// Soft cartoon materials.
+const fur = new THREE.MeshStandardMaterial({ color: "#b5733a", roughness: 0.85 });
+const muzzle = new THREE.MeshStandardMaterial({ color: "#f0cfa0", roughness: 0.9 });
+const black = new THREE.MeshStandardMaterial({ color: "#1d130b", roughness: 0.4 });
+const white = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.3 });
+const cap = new THREE.MeshStandardMaterial({ color: "#ffd23f", roughness: 0.35 });
+
+// Teddy bear built from soft primitives.
+const teddy = new THREE.Group();
+const body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 24), fur);
+body.scale.set(1, 1.05, 0.9); body.position.y = 0.6; body.castShadow = true;
+teddy.add(body);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 32, 24), fur);
+head.position.y = 1.9; head.castShadow = true; teddy.add(head);
+for (const sx of [-0.52, 0.52]) {
+  const ear = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 16), fur);
+  ear.position.set(sx, 2.5, 0); teddy.add(ear);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), black);
+  eye.position.set(sx * 0.5, 2.0, 0.66); teddy.add(eye);
+  const shine = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), white);
+  shine.position.set(sx * 0.5 + 0.04, 2.05, 0.74); teddy.add(shine);
+  const arm = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 16), fur);
+  arm.position.set(sx * 1.25, 0.9, 0.1); arm.castShadow = true; teddy.add(arm);
+}
+const snout = new THREE.Mesh(new THREE.SphereGeometry(0.35, 24, 16), muzzle);
+snout.position.set(0, 1.7, 0.6); snout.scale.set(1, 0.8, 0.7); teddy.add(snout);
+const nose = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), black);
+nose.position.set(0, 1.78, 0.9); teddy.add(nose);
+const swimCap = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 20, 0, Math.PI * 2, 0, Math.PI / 2.4), cap);
+swimCap.position.y = 2.25; swimCap.rotation.x = -0.2; teddy.add(swimCap);
+scene.add(teddy);
+
+// Float ring.
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.22, 20, 48), new THREE.MeshStandardMaterial({ color: "#ff7aa2", roughness: 0.4 }));
+ring.rotation.x = Math.PI / 2; ring.position.set(0, -0.1, 0.4);
+ring.castShadow = true;
+scene.add(ring);
+
+// Rubber duck.
+const duck = new THREE.Group();
+const dBody = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 18), new THREE.MeshStandardMaterial({ color: "#ffcf33", roughness: 0.4 }));
+dBody.scale.set(1.2, 0.85, 1); duck.add(dBody);
+const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 16), dBody.material);
+dHead.position.set(0.35, 0.5, 0); duck.add(dHead);
+const beak = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 14), new THREE.MeshStandardMaterial({ color: "#ff8a00" }));
+beak.rotation.z = -Math.PI / 2; beak.position.set(0.7, 0.45, 0); duck.add(beak);
+duck.position.set(3.2, -0.1, 1.5);
+scene.add(duck);
+
+// Lifeguard chair and a grown-up lifeguard.
+const chair = new THREE.Group();
+const legMat = new THREE.MeshStandardMaterial({ color: "#ff6b6b" });
+for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), legMat);
+  leg.position.set(x, 1.0, z); chair.add(leg);
+}
+const seat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.15, 1.4), legMat);
+seat.position.y = 2.1; chair.add(seat);
+chair.position.set(-5, 0, 6.8);
+scene.add(chair);
+const guard = new THREE.Group();
+const gBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.9, 8, 16), new THREE.MeshStandardMaterial({ color: "#ff4d4d" }));
+gBody.position.y = 1.2; guard.add(gBody);
+const gHead = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 16), new THREE.MeshStandardMaterial({ color: "#f0c39b" }));
+gHead.position.y = 2.1; guard.add(gHead);
+guard.position.set(-5, 2.2, 6.8);
+scene.add(guard);
+
+// Bubbles.
+const bubbles = [];
+for (let i = 0; i < 16; i++) {
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.08 + (i % 4) * 0.04, 12, 10),
+    new THREE.MeshPhysicalMaterial({ color: "#ffffff", transparent: true, opacity: 0.5, roughness: 0.1 }));
+  b.userData = { x: -4 + (i * 0.53) % 8, z: -2 + (i * 0.37) % 4, p: i / 16 };
+  scene.add(b); bubbles.push(b);
+}
+
+const CAPTIONS = [
+  [0, 8, "Teddy is ready for the pool!", "Always swim with a grown-up nearby."],
+  [8, 16, "Floating like a little boat.", "Arms out, face up, and breathe slowly."],
+  [16, 24, "Kick, kick, splash!", "Small kicks help you move forward."],
+  [24, 32, "Great job, Teddy!", "Ask a grown-up to help you practise."],
+];
+const capEl = document.getElementById("cap");
+let lastCap = -1;
+
+function pose(t) {
+  if (t < 8) return { x: 0, y: 0.1 + Math.sin(t * 2) * 0.06, z: 0.2, ry: 0 };
+  if (t < 16) return { x: 0, y: 0.4 + Math.sin(t * 2) * 0.12, z: 0.2, ry: Math.sin(t) * 0.1 };
+  if (t < 24) return { x: Math.sin(t * 3) * 0.6, y: 0.35 + Math.sin(t * 4) * 0.12, z: 0.2, ry: Math.sin(t * 3) * 0.3 };
+  const k = Math.min(1, (t - 24) / 6);
+  return { x: k * 4.5, y: 0.35 - k * 0.5, z: 0.2 + k * 1.5, ry: k * Math.PI * 0.6 };
+}
+
+window.renderFrame = function (t) {
+  // Gentle camera orbit so the scene feels alive.
+  const ang = -0.35 + Math.sin(t * 0.25) * 0.18;
+  camera.position.set(Math.sin(ang) * 11, 4.2 + Math.sin(t * 0.4) * 0.3, 12 + Math.cos(ang) * 1.5);
+  camera.lookAt(0, 0.6, 0.5);
+
+  // Water surface waves.
+  for (let i = 0; i < wpos.count; i++) {
+    const x = wbase[i * 3], z = wbase[i * 3 + 2];
+    wpos.array[i * 3 + 1] = wbase[i * 3 + 1] + Math.sin(x * 1.2 + t * 2.2) * 0.05 + Math.cos(z * 1.6 - t * 1.7) * 0.04;
+  }
+  wpos.needsUpdate = true;
+  water.geometry.computeVertexNormals();
+
+  const p = pose(t);
+  teddy.position.set(p.x, p.y, p.z);
+  teddy.rotation.y = p.ry;
+  ring.position.y = -0.1 + Math.sin(t * 2) * 0.05;
+  ring.position.x = p.x;
+  duck.position.y = -0.1 + Math.sin(t * 3) * 0.06;
+  duck.visible = t >= 16;
+
+  for (const b of bubbles) {
+    const q = (t * 0.25 + b.userData.p) % 1;
+    b.position.set(b.userData.x + Math.sin(t * 2 + b.userData.p * 9) * 0.15, -0.8 + q * 3.2, b.userData.z);
+  }
+
+  const idx = CAPTIONS.findIndex(c => t >= c[0] && t < c[1]);
+  const c = CAPTIONS[idx === -1 ? CAPTIONS.length - 1 : idx];
+  if (idx !== lastCap) {
+    capEl.innerHTML = "";
+    const h = document.createElement("div"); h.textContent = c[2];
+    const s = document.createElement("small"); s.textContent = c[3];
+    capEl.append(h, s);
+    lastCap = idx;
+  }
+  renderer.render(scene, camera);
+};
+window.renderFrame(0);
+window.__ready = true;
+</script>
+</body></html>
