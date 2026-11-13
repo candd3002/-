@@ -122,15 +122,19 @@ var int   wins      = 0
 var int   losses    = 0
 
 // 1) Manage the open trade first
+tpHitNow = false
+slHitNow = false
 if tradeOpen
     hitStop = tDir == 1 ? low <= tStop : high >= tStop
     hitTP   = tDir == 1 ? high >= tTP  : low <= tTP
     // If both are inside the same candle we cannot know the order -> count as loss (conservative)
     if hitStop
         losses   += 1
+        slHitNow := true
         tradeOpen := false
     else if hitTP
         wins     += 1
+        tpHitNow := true
         tradeOpen := false
 
 // 2) New entries (one trade at a time)
@@ -156,6 +160,25 @@ else if shortOK
 // =====================================================================
 //  PLOTS
 // =====================================================================
+// =====================================================================
+//  WEBHOOK ALERTS (MT5 bridge)
+//  Format must match the bridge parseSignal() regex:
+//  "(BUY|SELL) Signal - X, Close: N, TP: N, SL: N, Time: T"
+//  Use ONE alert on this script with condition "Any alert() function call"
+//  and the bridge URL as webhook. Do NOT also send the alertconditions below
+//  to the webhook, or each trade is sent twice.
+// =====================================================================
+if longOK
+    alert("BUY Signal - LS Trend 1:2, Close: " + str.tostring(close, format.mintick) +
+         ", TP: " + str.tostring(tTP, format.mintick) +
+         ", SL: " + str.tostring(tStop, format.mintick) +
+         ", Time: " + str.format_time(time, "yyyy-MM-dd HH:mm"), alert.freq_once_per_bar_close)
+if shortOK
+    alert("SELL Signal - LS Trend 1:2, Close: " + str.tostring(close, format.mintick) +
+         ", TP: " + str.tostring(tTP, format.mintick) +
+         ", SL: " + str.tostring(tStop, format.mintick) +
+         ", Time: " + str.format_time(time, "yyyy-MM-dd HH:mm"), alert.freq_once_per_bar_close)
+
 plotshape(bullSweep, "Bull sweep (سحب سيولة شراء)", shape.diamond, location.belowbar, color.new(color.lime, 30), size=size.tiny)
 plotshape(bearSweep, "Bear sweep (سحب سيولة بيع)", shape.diamond, location.abovebar, color.new(color.orange, 30), size=size.tiny)
 plotshape(bullConfirm, "Bull CHoCH", shape.circle, location.belowbar, color.new(color.teal, 0), size=size.tiny)
@@ -210,3 +233,5 @@ if barstate.islast
 alertcondition(longOK,  "LS Trend BUY 1:2",  "BUY signal on {{ticker}} {{interval}} at {{close}}")
 alertcondition(shortOK, "LS Trend SELL 1:2", "SELL signal on {{ticker}} {{interval}} at {{close}}")
 alertcondition(bullSweep or bearSweep, "Liquidity sweep", "Liquidity sweep on {{ticker}} {{interval}}")
+alertcondition(tpHitNow, "Take Profit Hit", "LS Trend 1:2: TP hit on {{ticker}}")
+alertcondition(slHitNow, "Stop Loss Hit", "LS Trend 1:2: SL hit on {{ticker}}")
