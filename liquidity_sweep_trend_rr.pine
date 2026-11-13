@@ -1,0 +1,212 @@
+//@version=5
+indicator("Liquidity Sweep + Trend Structure (1:2 RR)", shorttitle="LS Trend 1:2", overlay=true, max_labels_count=500)
+
+// =====================================================================
+//  INPUTS
+// =====================================================================
+grpS = "Structure (القمم والقيعان والترند)"
+pivLen     = input.int(5,   "Swing pivot length (bars each side)", minval=2, group=grpS)
+emaFastLen = input.int(50,  "EMA fast (confluence)", group=grpS)
+emaSlowLen = input.int(200, "EMA slow (confluence)", group=grpS)
+
+grpE = "Entries (الدخول)"
+armBars        = input.int(15,   "Bars to wait for confirmation after a sweep", minval=1, group=grpE)
+useTrendFilter = input.bool(true, "Trade only with structure trend (block counter-trend)", group=grpE)
+allowRange     = input.bool(true, "Allow sweep trades when trend is RANGE", group=grpE)
+useCont        = input.bool(true, "Enable trend continuation (BOS) entries", group=grpE)
+
+grpR = "Risk (المخاطرة)"
+rr         = input.float(2.0, "Reward : Risk (fixed)", minval=1.0, step=0.5, group=grpR)
+atrLen     = input.int(14,    "ATR length", group=grpR)
+bufAtr     = input.float(0.2, "Stop buffer (x ATR)", minval=0.0, step=0.05, group=grpR)
+maxRiskAtr = input.float(3.0, "Skip trade if risk > x ATR", minval=0.5, step=0.5, group=grpR)
+
+// =====================================================================
+//  CORE SERIES
+// =====================================================================
+atr      = ta.atr(atrLen)
+emaF     = ta.ema(close, emaFastLen)
+emaS     = ta.ema(close, emaSlowLen)
+emaTrend = (close > emaS and emaF > emaS) ? 1 : (close < emaS and emaF < emaS) ? -1 : 0
+
+// =====================================================================
+//  SWING HIGHS / LOWS (القمم والقيعان)
+//  ta.pivot* is only confirmed pivLen bars after the real pivot.
+// =====================================================================
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+
+var float sh1 = na   // latest confirmed swing high
+var float sh2 = na   // previous swing high
+var float sl1 = na   // latest confirmed swing low
+var float sl2 = na   // previous swing low
+
+if not na(ph)
+    sh2 := sh1
+    sh1 := ph
+if not na(pl)
+    sl2 := sl1
+    sl1 := pl
+
+// Market structure trend: HH+HL = UP, LH+LL = DOWN, otherwise RANGE
+structTrend = (na(sh2) or na(sl2)) ? 0 : (sh1 > sh2 and sl1 > sl2) ? 1 : (sh1 < sh2 and sl1 < sl2) ? -1 : 0
+
+// =====================================================================
+//  LIQUIDITY SWEEP (سحب السيولة)
+//  Bull sweep: wick takes out the last swing LOW (stops below it are hunted)
+//              and the candle CLOSES back above that low.
+//  Bear sweep: wick takes out the last swing HIGH and closes back below it.
+// =====================================================================
+bullSweep = not na(sl1) and low < sl1 and close > sl1
+bearSweep = not na(sh1) and high > sh1 and close < sh1
+
+// Arm state: after a sweep we wait for the market to CONFIRM the reversal
+// (structure shift = close back through the swing high/low taken before the sweep).
+// No entry happens on the sweep candle itself.
+var int   bullBar    = na
+var float bullLow    = na
+var float bullStruct = na
+var int   bearBar    = na
+var float bearHigh   = na
+var float bearStruct = na
+
+if bullSweep
+    bullBar    := bar_index
+    bullLow    := low
+    bullStruct := sh1
+if bearSweep
+    bearBar    := bar_index
+    bearHigh   := high
+    bearStruct := sl1
+
+bullArmed = not na(bullBar) and bar_index - bullBar > 0 and bar_index - bullBar <= armBars
+bearArmed = not na(bearBar) and bar_index - bearBar > 0 and bar_index - bearBar <= armBars
+
+// Confirmation = price CLOSES through the structure level (شكل كسر القمة/القاع)
+bullConfirm = bullArmed and close > bullStruct
+bearConfirm = bearArmed and close < bearStruct
+
+if bullConfirm
+    bullBar := na
+if bearConfirm
+    bearBar := na
+
+// =====================================================================
+//  TREND CONTINUATION (BOS) - only in a confirmed trend, no sweep needed
+// =====================================================================
+contBull = useCont and structTrend == 1  and ta.crossover(close, sh1)
+contBear = useCont and structTrend == -1 and ta.crossunder(close, sl1)
+
+// =====================================================================
+//  TREND GATE (الترند يحدد الاتجاه المسموح)
+// =====================================================================
+longGate  = not useTrendFilter or structTrend == 1  or (allowRange and structTrend == 0)
+shortGate = not useTrendFilter or structTrend == -1 or (allowRange and structTrend == 0)
+
+longRaw  = (bullConfirm or contBull) and longGate
+shortRaw = (bearConfirm or contBear) and shortGate
+
+// Stops: beyond the sweep wick (or the swing for continuation) + ATR buffer
+longStop  = bullConfirm ? bullLow  - bufAtr * atr : sl1 - bufAtr * atr
+shortStop = bearConfirm ? bearHigh + bufAtr * atr : sh1 + bufAtr * atr
+
+// =====================================================================
+//  TRADE STATE & MANAGEMENT (ربح : خسارة = 1 : 2 دائماً)
+// =====================================================================
+var float tEntry    = na
+var float tStop     = na
+var float tTP       = na
+var int   tDir      = 0
+var bool  tradeOpen = false
+var int   wins      = 0
+var int   losses    = 0
+
+// 1) Manage the open trade first
+if tradeOpen
+    hitStop = tDir == 1 ? low <= tStop : high >= tStop
+    hitTP   = tDir == 1 ? high >= tTP  : low <= tTP
+    // If both are inside the same candle we cannot know the order -> count as loss (conservative)
+    if hitStop
+        losses   += 1
+        tradeOpen := false
+    else if hitTP
+        wins     += 1
+        tradeOpen := false
+
+// 2) New entries (one trade at a time)
+longRisk  = close - longStop
+shortRisk = shortStop - close
+
+longOK  = longRaw  and not tradeOpen and not na(longStop)  and longRisk  > 0 and longRisk  <= maxRiskAtr * atr
+shortOK = shortRaw and not tradeOpen and not na(shortStop) and shortRisk > 0 and shortRisk <= maxRiskAtr * atr
+
+if longOK
+    tEntry    := close
+    tStop     := longStop
+    tTP       := close + rr * longRisk
+    tDir      := 1
+    tradeOpen := true
+else if shortOK
+    tEntry    := close
+    tStop     := shortStop
+    tTP       := close - rr * shortRisk
+    tDir      := -1
+    tradeOpen := true
+
+// =====================================================================
+//  PLOTS
+// =====================================================================
+plotshape(bullSweep, "Bull sweep (سحب سيولة شراء)", shape.diamond, location.belowbar, color.new(color.lime, 30), size=size.tiny)
+plotshape(bearSweep, "Bear sweep (سحب سيولة بيع)", shape.diamond, location.abovebar, color.new(color.orange, 30), size=size.tiny)
+plotshape(bullConfirm, "Bull CHoCH", shape.circle, location.belowbar, color.new(color.teal, 0), size=size.tiny)
+plotshape(bearConfirm, "Bear CHoCH", shape.circle, location.abovebar, color.new(color.maroon, 0), size=size.tiny)
+
+plotshape(longOK,  "BUY",  shape.labelup,   location.belowbar, color.new(color.green, 0), text="BUY 1:2",  textcolor=color.white, size=size.small)
+plotshape(shortOK, "SELL", shape.labeldown, location.abovebar, color.new(color.red, 0),   text="SELL 1:2", textcolor=color.white, size=size.small)
+
+plot(sh1, "Last swing high (سيولة فوق)", color=color.new(color.red, 40),   style=plot.style_linebr)
+plot(sl1, "Last swing low (سيولة تحت)",  color=color.new(color.green, 40), style=plot.style_linebr)
+plot(emaF, "EMA fast", color=color.new(color.blue, 50))
+plot(emaS, "EMA slow", color=color.new(color.gray, 30))
+
+plot(tradeOpen ? tEntry : na, "Entry", color=color.white, style=plot.style_linebr)
+plot(tradeOpen ? tStop  : na, "Stop loss", color=color.red,   style=plot.style_linebr, linewidth=2)
+plot(tradeOpen ? tTP    : na, "Take profit (1:2)", color=color.green, style=plot.style_linebr, linewidth=2)
+
+bgcolor(structTrend == 1 ? color.new(color.green, 94) : structTrend == -1 ? color.new(color.red, 94) : na, title="Trend background")
+
+// =====================================================================
+//  DASHBOARD
+// =====================================================================
+var table dash = table.new(position.top_right, 2, 7, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 50))
+
+if barstate.islast
+    trTxt  = structTrend == 1 ? "UP  (HH/HL)" : structTrend == -1 ? "DOWN (LH/LL)" : "RANGE"
+    trCol  = structTrend == 1 ? color.green : structTrend == -1 ? color.red : color.gray
+    emaTxt = emaTrend == 1 ? "Bullish" : emaTrend == -1 ? "Bearish" : "Mixed"
+    armTxt = bullArmed ? "Bull sweep armed" : bearArmed ? "Bear sweep armed" : "No sweep armed"
+    total  = wins + losses
+    wrTxt  = total > 0 ? str.tostring(wins / total * 100, "#.#") + "%" : "-"
+    stTxt  = tradeOpen ? (tDir == 1 ? "LONG open" : "SHORT open") : "Flat"
+
+    table.cell(dash, 0, 0, "Trend (structure)", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 0, trTxt, text_color=trCol, text_size=size.small)
+    table.cell(dash, 0, 1, "EMA confluence", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, emaTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 2, "Sweep status", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 2, armTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 3, "Trade", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, stTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 4, "Wins / Losses", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 4, str.tostring(wins) + " / " + str.tostring(losses), text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 5, "Win rate", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 5, wrTxt, text_color=color.white, text_size=size.small)
+    table.cell(dash, 0, 6, "R:R", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 6, "1 : " + str.tostring(rr, "#.#"), text_color=color.white, text_size=size.small)
+
+// =====================================================================
+//  ALERTS
+// =====================================================================
+alertcondition(longOK,  "LS Trend BUY 1:2",  "BUY signal on {{ticker}} {{interval}} at {{close}}")
+alertcondition(shortOK, "LS Trend SELL 1:2", "SELL signal on {{ticker}} {{interval}} at {{close}}")
+alertcondition(bullSweep or bearSweep, "Liquidity sweep", "Liquidity sweep on {{ticker}} {{interval}}")
