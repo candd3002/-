@@ -143,9 +143,10 @@ i_oneTrade = input.bool(true, "One trade at a time", group = grp_engR,
      tooltip = "New signals are blocked while the previous signal's TP/SL has not been hit.")
 
 grp_engV = "Engine - Visuals"
-i_showSweeps = input.bool(true, "Show sweep / real-break markers", group = grp_engV)
-i_showSwings = input.bool(true, "Show last swing high / low lines", group = grp_engV)
-i_showStats = input.bool(true, "Show dashboard", group = grp_engV)
+i_showSweeps = input.bool(false, "Show sweep / real-break markers", group = grp_engV,
+     tooltip = "Off by default so the chart looks exactly like the original indicator. Turn on to see sweeps, real breaks and structure shifts.")
+i_showSwings = input.bool(false, "Show last swing high / low lines", group = grp_engV)
+i_showStats = input.bool(false, "Show dashboard", group = grp_engV)
 
 lblSize = i_labelSize == "Tiny" ? size.tiny : i_labelSize == "Normal" ? size.normal : size.small
 
@@ -533,8 +534,8 @@ drawTradeVisuals(isBuy, entryPrice, sl, tp, ctFlag, tagTxt) =>
              "R:R 1:" + str.tostring(rr, "#.##"),
              style = label.style_none, textcolor = color.gray, size = size.tiny)
 
-buyTag = buyIsSweep ? "  SWEEP S" + str.tostring(bullTotal) : (i_useEngine ? "  BRK" : "")
-sellTag = sellIsSweep ? "  SWEEP S" + str.tostring(bearTotal) : (i_useEngine ? "  BRK" : "")
+buyTag = buyIsSweep ? "  SWEEP S" + str.tostring(bullTotal) : ""
+sellTag = sellIsSweep ? "  SWEEP S" + str.tostring(bearTotal) : ""
 
 if buySignal
     drawTradeVisuals(true, close, activeSL, activeTP, buyCounterTrend, buyTag)
