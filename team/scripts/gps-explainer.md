@@ -25,7 +25,7 @@ GPS does not measure your position directly. Each satellite broadcasts the time 
 One distance puts you on a sphere around a satellite. Two spheres make a circle. Three spheres narrow it to two points. A fourth signal is needed to resolve the clock error in your phone, which is the one clock that is not atomic.
 
 **[2:45-4:15 | الساعات الذرية والنسبية]**
-The satellite clocks are extremely accurate, but they run at a different rate than clocks on the ground. Special and general relativity together make them run fast by about 38 microseconds per day. That sounds tiny, but at light speed it would add up to around 10 kilometers of error in a single day. Engineers correct for it in the satellites.
+The satellite clocks are extremely accurate, but they run at a different rate than clocks on the ground. Special and general relativity together make them run fast by about 38 microseconds per day. That sounds tiny, but at light speed it would add up to roughly 11 kilometers of position error in a single day. Engineers correct for it in the satellites.
 
 **[4:15-5:30 | لماذا قد تكون الدقة بضعة أمتار]**
 Signals pass through the atmosphere, and reflections from buildings can add delay. Your phone also uses rough clocks. That is why the reading is good, but not perfect.
