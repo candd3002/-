@@ -126,7 +126,7 @@
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
   var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
   var autoOk = {}; // id -> true when the built-in data function returned candles
-  var st = { show: { ema: true, zones: true, levels: true }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -359,7 +359,99 @@
     Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
     return e;
   }
+  // ---------- real chart (lightweight-charts) with fallback to the SVG chart ----------
+  var LW = { chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null };
+  var CH_OPTS = function (height) {
+    return {
+      height: height, width: 300,
+      layout: { background: { type: "solid", color: "transparent" }, textColor: "#c9d2e0", fontFamily: "Tajawal, sans-serif" },
+      grid: { vertLines: { color: "rgba(70,120,200,.10)" }, horzLines: { color: "rgba(70,120,200,.10)" } },
+      timeScale: { timeVisible: true, borderColor: "rgba(70,120,200,.35)" },
+      rightPriceScale: { borderColor: "rgba(70,120,200,.35)" },
+      crosshair: { mode: 1 }
+    };
+  };
+  function ensureLW() {
+    if (LW.chart) return true;
+    if (typeof LightweightCharts === "undefined") return false;
+    var el = $("lw"); if (!el) return false;
+    LW.chart = LightweightCharts.createChart(el, CH_OPTS(300));
+    LW.chart.applyOptions({ width: el.clientWidth || 300 });
+    LW.candle = LW.chart.addCandlestickSeries({ upColor: "#33d69a", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#33d69a", wickDownColor: "#ff6b6b" });
+    LW.ema = LW.chart.addLineSeries({ color: "#b48cff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+    var rel = $("lw-rsi");
+    LW.rsiChart = LightweightCharts.createChart(rel, CH_OPTS(110));
+    LW.rsiChart.applyOptions({ width: rel.clientWidth || 300, timeScale: { visible: false } });
+    LW.rsi = LW.rsiChart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, priceLineVisible: false });
+    LW.rsi.createPriceLine({ price: 70, color: "rgba(255,107,107,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "70" });
+    LW.rsi.createPriceLine({ price: 30, color: "rgba(47,208,139,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30" });
+    window.addEventListener("resize", function () {
+      var w = el.clientWidth || 300;
+      LW.chart.applyOptions({ width: w }); LW.rsiChart.applyOptions({ width: rel.clientWidth || w });
+    });
+    return true;
+  }
+  // Candle times in seconds. Live candles carry real timestamps; sample and file candles are spaced by the timeframe.
+  function toTime(c, i, n) {
+    if (c.t > 1e11) return Math.floor(c.t / 1000);
+    return Math.floor(Date.now() / 1000) - (n - 1 - i) * Math.floor(TF_MS[st.tf] / 1000);
+  }
+  function renderLW(r) {
+    if (!ensureLW()) return false;
+    var c = candlesFor(st.inst), n = c.length;
+    var data = c.map(function (k, i) { return { time: toTime(k, i, n), open: k.o, high: k.h, low: k.l, close: k.c }; });
+    LW.candle.setData(data);
+    var emaData = [];
+    if (r.series && r.series.ema) r.series.ema.forEach(function (v, i) { if (v != null) emaData.push({ time: data[i].time, value: v }); });
+    LW.ema.setData(emaData);
+    LW.ema.applyOptions({ visible: !!st.show.ema });
+    var closes = c.map(function (k) { return k.c; }), R = A.rsi(closes, 14), rsiData = [];
+    R.forEach(function (v, i) { if (v != null) rsiData.push({ time: data[i].time, value: v }); });
+    LW.rsi.setData(rsiData);
+    $("lw-rsi").hidden = !st.show.rsi;
+    // markers: break of structure and liquidity sweep
+    var markers = [];
+    if (r.ev && r.ev.i < n) markers.push({ time: data[r.ev.i].time, position: r.ev.dir === "bull" ? "belowBar" : "aboveBar", color: r.ev.dir === "bull" ? "#2fd08b" : "#ff6b6b", shape: r.ev.dir === "bull" ? "arrowUp" : "arrowDown", text: r.ev.type });
+    if (r.sweep && r.sweep.i < n) markers.push({ time: data[r.sweep.i].time, position: r.sweep.dir === "bear" ? "aboveBar" : "belowBar", color: "#e8c35a", shape: "circle", text: "Sweep" });
+    markers.sort(function (x, y) { return x.time - y.time; });
+    LW.candle.setMarkers(markers);
+    // price lines: levels, liquidity and zones
+    LW.lines.forEach(function (l) { try { LW.candle.removePriceLine(l); } catch (e) {} });
+    LW.lines = [];
+    function line(price, color, title, style) {
+      if (price == null || isNaN(price)) return;
+      LW.lines.push(LW.candle.createPriceLine({ price: price, color: color, lineWidth: 1, lineStyle: style || 2, axisLabelVisible: true, title: title }));
+    }
+    if (st.show.levels) {
+      line(r.bsl, "#4f9bff", "BSL");
+      line(r.ssl, "#ff6b6b", "SSL");
+      if (r.signal) {
+        var s = r.signal;
+        line(s.entry, "#e8c35a", T("entry"));
+        line(s.sl, "#ff6b6b", T("stop"));
+        line(s.tp1, "#2fd08b", "TP1"); line(s.tp2, "#2fd08b", "TP2"); line(s.tp3, "#2fd08b", "TP3");
+      }
+    }
+    if (st.show.zones) {
+      if (r.ob) { line(r.ob.hi, "#e8c35a", "OB", 3); line(r.ob.lo, "#e8c35a", "OB", 3); }
+      if (r.fvg) { line(r.fvg.hi, "#4f9bff", "FVG", 3); line(r.fvg.lo, "#4f9bff", "FVG", 3); }
+    }
+    var key = st.inst + "|" + st.tf;
+    if (LW.fitKey !== key) { LW.chart.timeScale().fitContent(); LW.fitKey = key; }
+    $("chart").hidden = true;
+    return true;
+  }
   function renderChart(r) {
+    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    if (renderLW(r)) {
+      var sty = A.story(r, st.lang);
+      if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
+      return;
+    }
+    $("chart").hidden = false;
+    drawSvgChart(r);
+  }
+  function drawSvgChart(r) {
     var svg = $("chart"); if (!svg) return;
     svg.textContent = "";
     txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
