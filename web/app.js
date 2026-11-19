@@ -75,6 +75,16 @@
     }
   };
   I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
+  I18N.en.welSub = "Market structure, explained simply.";
+  I18N.en.welGuest = "Continue without signing in";
+  I18N.en.welContinue = "Continue";
+  I18N.en.welHint = "Your sign-in is saved on this device only.";
+  I18N.en.welBack = "Welcome back, ";
+  I18N.ar.welSub = "هيكل السوق، مشروحاً ببساطة.";
+  I18N.ar.welGuest = "المتابعة دون تسجيل دخول";
+  I18N.ar.welContinue = "متابعة";
+  I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
+  I18N.ar.welBack = "أهلاً بعودتك، ";
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
   var st = { inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
@@ -490,6 +500,34 @@
     else analyzeAndRender();
   }
 
+  // ---------- welcome screen (shown on every open) ----------
+  function showWelcome() {
+    var u = store("baqerUser");
+    var back = $("wel-back"), fresh = $("wel-new");
+    if (u) {
+      back.hidden = false; fresh.hidden = true;
+      txt("wel-hi", T("welBack") + u.name);
+    } else {
+      back.hidden = true; fresh.hidden = false;
+    }
+    $("welcome").hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function hideWelcome() {
+    $("welcome").hidden = true;
+    document.body.style.overflow = "";
+  }
+  $("wel-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("wel-name").value.trim(), email = $("wel-email").value.trim();
+    if (!name || !email) return;
+    store("baqerUser", { name: name, email: email });
+    renderAccount();
+    hideWelcome();
+  });
+  $("wel-guest").addEventListener("click", hideWelcome);
+  $("wel-continue").addEventListener("click", hideWelcome);
+
   // ---------- wiring ----------
   document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
   document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
@@ -550,6 +588,7 @@
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   applyLang();
   setView("analysis");
+  showWelcome();
   setInterval(tick, 1000); tick();
   loadBtc().then(function () { connect(); analyzeAndRender(); });
   change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {});
