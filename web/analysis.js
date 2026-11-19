@@ -128,9 +128,9 @@
     if (!ev) return null;
     var n = c.length, after = c.slice(ev.i + 1, Math.min(n, ev.i + 4));
     var fail = after.some(function (k) { return ev.dir === "bull" ? k.c < ev.level : k.c > ev.level; });
-    if (fail) return "كاذب";
-    if (after.length < 3) return "قيد الاختبار";
-    return "صامد";
+    if (fail) return "false";
+    if (after.length < 3) return "pending";
+    return "held";
   }
 
   // An order block is strong when a fast impulse of at least 1 ATR leaves it within 3 bars.
@@ -150,13 +150,13 @@
   function analyze(c, profileName, learn) {
     var P = PROFILES[profileName] || PROFILES.balanced;
     var n = c.length;
-    if (n < 60) return { ready: false, reason: "تحتاج 60 شمعة على الأقل" };
+    if (n < 60) return { ready: false, reason: "Needs at least 60 candles" };
 
     var closes = c.map(function (x) { return x.c; });
     var E = ema(closes, CFG.emaLen), R = rsi(closes, CFG.rsiLen), A = atr(c, CFG.atrLen);
     var i = n - 1, price = c[i].c, ema50 = E[i], rsiV = R[i], atrV = A[i];
     if (ema50 == null || rsiV == null || atrV == null || E[i - 5] == null) {
-      return { ready: false, reason: "المؤشرات لم تكتمل بعد" };
+      return { ready: false, reason: "Indicators not ready yet" };
     }
 
     var sw = swings(c, CFG.pivot), H = sw.H, L = sw.L;
@@ -233,25 +233,25 @@
     function checks(side) {
       var up = side === "long", d = up ? "bull" : "bear";
       var out = [];
-      out.push({ label: up ? "السعر فوق EMA50" : "السعر تحت EMA50", ok: up ? price > ema50 : price < ema50, w: 1 });
+      out.push({ label: up ? "Price above EMA50" : "Price below EMA50", ok: up ? price > ema50 : price < ema50, w: 1 });
       var rising = ema50 > E[i - 5];
-      out.push({ label: up ? "EMA50 مائل للأعلى" : "EMA50 مائل للأسفل", ok: up ? rising : !rising, w: 1 });
-      out.push({ label: up ? "RSI في منطقة الزخم الصاعد (45-68)" : "RSI في منطقة الزخم الهابط (32-55)",
+      out.push({ label: up ? "EMA50 sloping up" : "EMA50 sloping down", ok: up ? rising : !rising, w: 1 });
+      out.push({ label: up ? "RSI in bullish momentum zone (45-68)" : "RSI in bearish momentum zone (32-55)",
         ok: up ? (rsiV >= 45 && rsiV <= 68) : (rsiV >= 32 && rsiV <= 55), w: 1 });
-      var brkOK = !!(ev && ev.dir === d && bq !== "كاذب");
-      out.push({ label: brkOK ? ev.type + " " + (up ? "صاعد" : "هابط") + " (" + bq + ")"
-          : (ev && ev.dir === d ? "الكسر كاذب: السعر رجع خلف المستوى" : "لا كسر هيكلي في الاتجاه"),
+      var brkOK = !!(ev && ev.dir === d && bq !== "false");
+      out.push({ label: brkOK ? ev.type + " " + (up ? "bullish" : "bearish") + " (" + bq + ")"
+          : (ev && ev.dir === d ? "False break: price closed back through the level" : "No structure break in direction"),
         ok: brkOK, w: 2 });
-      out.push({ label: sweep && sweep.dir === d ? "سحب سيولة (Sweep) في الاتجاه" : "لا سحب سيولة في الاتجاه",
+      out.push({ label: sweep && sweep.dir === d ? "Liquidity sweep in direction" : "No liquidity sweep in direction",
         ok: !!(sweep && sweep.dir === d), w: 2 });
-      out.push({ label: fvg && fvg.dir === d && near(fvg) ? "السعر داخل FVG في الاتجاه" : "السعر ليس داخل FVG في الاتجاه",
+      out.push({ label: fvg && fvg.dir === d && near(fvg) ? "Price inside FVG in direction" : "Price not inside FVG in direction",
         ok: !!(fvg && fvg.dir === d && near(fvg)), w: 1 });
       var obOK = !!(ob && ob.dir === d && near(ob) && oq && oq.strong);
-      out.push({ label: obOK ? "السعر داخل Order Block بإندفاع قوي" : (ob && ob.dir === d && near(ob) ? "Order Block بلا إندفاع كافٍ" : "السعر ليس داخل Order Block"),
+      out.push({ label: obOK ? "Price inside Order Block with strong impulse" : (ob && ob.dir === d && near(ob) ? "Order Block without enough impulse" : "Price not inside Order Block"),
         ok: obOK, w: 1 });
-      out.push({ label: pd ? (up ? "منطقة الخصم Discount" : "منطقة Premium") + (pd === (up ? "discount" : "premium") ? " (مناسبة)" : " (غير مناسبة)") : "المدى غير واضح",
+      out.push({ label: pd ? (up ? "Discount zone" : "Premium zone") + (pd === (up ? "discount" : "premium") ? " (favourable)" : " (unfavourable)") : "Range unclear",
         ok: pd === (up ? "discount" : "premium"), w: 1 });
-      out.push({ label: cong && cong.breakout === d ? "كسر نطاق تجميع بشمعة قوية" : "لا كسر لنطاق تجميع في الاتجاه",
+      out.push({ label: cong && cong.breakout === d ? "Congestion breakout with strong candle" : "No congestion breakout in direction",
         ok: !!(cong && cong.breakout === d), w: 2 });
       return out;
     }
@@ -265,20 +265,20 @@
 
     var thr = CFG.threshold + ((learn && learn.extra) || 0);
     // ICT rule: no trade without a confirmed structure break in the trade direction (not a false break).
-    var brkLong = !!(ev && ev.dir === "bull" && bq !== "كاذب");
-    var brkShort = !!(ev && ev.dir === "bear" && bq !== "كاذب");
+    var brkLong = !!(ev && ev.dir === "bull" && bq !== "false");
+    var brkShort = !!(ev && ev.dir === "bear" && bq !== "false");
     var qualLong = lt.score >= thr && lt.count >= CFG.minConfirm && !blockLong && brkLong;
     var qualShort = st.score >= thr && st.count >= CFG.minConfirm && !blockShort && brkShort;
 
-    var status = "انتظار: لا توجد صفقة مكتملة الشروط";
+    var status = "Wait: no trade with all conditions met";
     var reasons = [];
     var signal = null;
     if (qualLong && !qualShort) { signal = build("LONG", lt); }
     else if (qualShort && !qualLong) { signal = build("SHORT", st); }
-    else if (qualLong && qualShort) { status = "تضارب: شروط الشراء والبيع مكتملة معاً، لا صفقة"; }
-    if (!signal && !status.startsWith("تضارب")) {
-      if (blockLong && lt.score >= CFG.threshold) reasons.push("RSI في تشبع شرائي (" + rsiV.toFixed(1) + ")، الشراء ممنوع الآن");
-      if (blockShort && st.score >= CFG.threshold) reasons.push("RSI في تشبع بيعي (" + rsiV.toFixed(1) + ")، البيع ممنوع الآن");
+    else if (qualLong && qualShort) { status = "Conflict: buy and sell conditions both met, no trade"; }
+    if (!signal && !status.startsWith("Conflict")) {
+      if (blockLong && lt.score >= CFG.threshold) reasons.push("RSI overbought (" + rsiV.toFixed(1) + "), buying blocked for now");
+      if (blockShort && st.score >= CFG.threshold) reasons.push("RSI oversold (" + rsiV.toFixed(1) + "), selling blocked for now");
     }
 
     function build(dir, t) {
@@ -286,7 +286,7 @@
       var key = dir + "|" + (sweep && sweep.dir === (up ? "bull" : "bear") ? "sweep" : "nosweep") + "|" +
         (ob && ob.dir === (up ? "bull" : "bear") ? "ob" : "noob") + "|" + (bq || "none");
       if (learn && learn.block && learn.block.indexOf(key) >= 0) {
-        reasons.push("هذا النمط موقوف بعد خسائر متكررة في سجلك، لذلك لا صفقة");
+        reasons.push("This pattern is paused after repeated losses in your journal, so no trade");
         return null;
       }
       var stop;
@@ -300,11 +300,11 @@
       var risk = Math.abs(entry - stop);
       var valid = up ? stop < entry : stop > entry;
       if (!valid || risk < CFG.slMinATR * atrV || risk > P.slMaxATR * atrV) {
-        reasons.push("الوقف المنطقي " + (risk / atrV).toFixed(2) + " ATR، خارج النطاق المسموح، لذلك لا صفقة");
+        reasons.push("Logical stop " + (risk / atrV).toFixed(2) + " ATR, outside the allowed range, so no trade");
         return null;
       }
       var s = up ? 1 : -1;
-      status = dir === "LONG" ? "إشارة شراء مؤكدة" : "إشارة بيع مؤكدة";
+      status = dir === "LONG" ? "Confirmed buy signal" : "Confirmed sell signal";
       return {
         dir: dir, key: key, score: t.score, count: t.count,
         grade: t.score >= 9 ? "A" : t.score >= 7 ? "B" : "C",
@@ -331,40 +331,40 @@
   function story(r) {
     if (!r || !r.ready) return null;
     var L1 = [], L2 = [], L3 = [];
-    var trendName = r.trend === "bull" ? "صاعد" : r.trend === "bear" ? "هابط" : "عرضي";
-    L1.push(r.trend === "bull" ? "قمم وقيعان أعلى (HH و HL)" : r.trend === "bear" ? "قمم وقيعان أدنى (LH و LL)" : "القمم والقيعان غير مرتبة");
-    L1.push("السعر " + (r.price > r.ema50 ? "فوق" : "تحت") + " متوسط EMA50 والمتوسط " + (r.emaRising ? "مائل للأعلى" : "مائل للأسفل"));
-    L1.push("الاتجاه يتأكد فقط بكسر قمة أو قاع سابق مع إغلاق واضح");
+    var trendName = r.trend === "bull" ? "bullish" : r.trend === "bear" ? "bearish" : "Ranging";
+    L1.push(r.trend === "bull" ? "Higher highs and higher lows (HH, HL)" : r.trend === "bear" ? "Lower highs and lower lows (LH, LL)" : "Swing highs and lows are not ordered");
+    L1.push("Price " + (r.price > r.ema50 ? "above" : "below") + " EMA50, which is " + (r.emaRising ? "sloping up" : "sloping down"));
+    L1.push("Trend is confirmed only by a close beyond a prior swing high or low");
 
-    if (r.sweep) L2.push((r.sweep.dir === "bear" ? "سُحبت سيولة فوق القمة" : "سُحبت سيولة تحت القاع") + " عند " + fmtN(r.sweep.level) + " ثم رجع السعر");
-    else L2.push("لا يوجد سحب سيولة حديث");
-    L2.push("سيولة الشراء فوق " + fmtN(r.bsl) + "، وسيولة البيع تحت " + fmtN(r.ssl) + " (أهداف محتملة للسعر)");
-    if (r.ob) L2.push("كتلة الأوامر " + (r.ob.dir === "bull" ? "صاعدة" : "هابطة") + " " + fmtN(r.ob.lo) + " – " + fmtN(r.ob.hi) +
-      (r.oq ? (r.oq.strong ? "، بإندفاع قوي" : "، بلا إندفاع كافٍ") + (r.oq.tested ? " وتم اختبارها" : " ولم تُختبر بعد") : ""));
-    else L2.push("لا توجد كتلة أوامر واضحة");
-    if (r.fvg) L2.push("فجوة FVG " + (r.fvg.dir === "bull" ? "صاعدة" : "هابطة") + " " + fmtN(r.fvg.lo) + " – " + fmtN(r.fvg.hi));
+    if (r.sweep) L2.push((r.sweep.dir === "bear" ? "Liquidity swept above the high" : "Liquidity swept below the low") + " at " + fmtN(r.sweep.level) + " then price returned");
+    else L2.push("No recent liquidity sweep");
+    L2.push("Buy-side liquidity above " + fmtN(r.bsl) + ", sell-side liquidity below " + fmtN(r.ssl) + " (possible price targets)");
+    if (r.ob) L2.push("Order block " + (r.ob.dir === "bull" ? "bullish" : "bearish") + " " + fmtN(r.ob.lo) + " – " + fmtN(r.ob.hi) +
+      (r.oq ? (r.oq.strong ? ", strong impulse" : ", weak impulse") + (r.oq.tested ? " and tested" : " and not yet tested") : ""));
+    else L2.push("No clear order block");
+    if (r.fvg) L2.push("FVG " + (r.fvg.dir === "bull" ? "bullish" : "bearish") + " " + fmtN(r.fvg.lo) + " – " + fmtN(r.fvg.hi));
 
-    var bqTxt = r.bq === "كاذب" ? "كاذب، رجع السعر خلف المستوى"
-      : r.bq === "صامد" ? "صامد بعد 3 شموع"
-      : r.bq === "قيد الاختبار" ? "ينتظر تأكيد 3 شموع"
-      : "لا كسر حديث";
-    L3.push("الكسر الهيكلي: " + bqTxt);
-    L3.push("التأكيدات: شراء " + r.longScore + "/12 · بيع " + r.shortScore + "/12");
-    if (r.learnExtra) L3.push("تم رفع شرط القرار بعد خسائر سابقة في سجلك");
+    var bqTxt = r.bq === "false" ? "false, price closed back through the level"
+      : r.bq === "held" ? "held for 3 candles"
+      : r.bq === "pending" ? "waiting for 3-candle confirmation"
+      : "no recent break";
+    L3.push("Structure break: " + bqTxt);
+    L3.push("Confirmations: buy " + r.longScore + "/12 · بيع " + r.shortScore + "/12");
+    if (r.learnExtra) L3.push("Decision bar raised after earlier losses in your journal");
     if (r.signal) {
-      L3.push("الخطة: دخول " + fmtN(r.signal.entry) + " · وقف " + fmtN(r.signal.sl) + " · هدف أول " + fmtN(r.signal.tp1));
+      L3.push("Plan: entry " + fmtN(r.signal.entry) + " · stop " + fmtN(r.signal.sl) + " · first target " + fmtN(r.signal.tp1));
     } else if (r.trend === "bear") {
-      L3.push("الانتظار: ارتداد نحو كتلة الأوامر أو الفجوة ثم رفض هابط");
+      L3.push("Wait: pullback into the order block or gap, then bearish rejection");
     } else if (r.trend === "bull") {
-      L3.push("الانتظار: ارتداد نحو منطقة شراء ثم رفض صاعد");
+      L3.push("Wait: pullback into a buy zone, then bullish rejection");
     } else {
-      L3.push("الانتظار: كسر واضح لنطاق العرض في أحد الاتجاهين");
+      L3.push("Wait: clear break of the range in either direction");
     }
     return {
       trend: trendName,
-      l1: { title: "الاتجاه", state: trendName, lines: L1 },
-      l2: { title: "السيولة والمناطق", state: r.sweep ? "سحب سيولة" : "بلا سحب", lines: L2 },
-      l3: { title: "القرار", state: r.signal ? (r.signal.dir === "LONG" ? "شراء" : "بيع") : "انتظار", lines: L3 }
+      l1: { title: "Trend", state: trendName, lines: L1 },
+      l2: { title: "Liquidity & zones", state: r.sweep ? "sweep" : "no sweep", lines: L2 },
+      l3: { title: "Decision", state: r.signal ? (r.signal.dir === "LONG" ? "Buy" : "Sell") : "Wait", lines: L3 }
     };
   }
   function fmtN(v) {
