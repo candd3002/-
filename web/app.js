@@ -3,7 +3,7 @@
   var A = window.Analysis;
   var TF_MS = { "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
   var SAMPLE = { BTC: { base: 91527, vol: 0.0036, seed: 11 }, XAU: { base: 3716, vol: 0.0028, seed: 23 } };
-  var st = { tf: "1h", view: "analysis", btc: null, btcChange: null, xau: null, xauSrc: "تجريبي", csv: null,
+  var st = { profile: "balanced", tf: "1h", view: "analysis", btc: null, btcChange: null, xau: null, xauSrc: "تجريبي", csv: null,
              res: null, lastSig: null, ws: null, poll: null };
 
   function $(id) { return document.getElementById(id); }
@@ -95,7 +95,7 @@
   // ---------- analysis & render ----------
   function analyzeAndRender() {
     var c = st.btc || [];
-    var r = A.analyze(c);
+    var r = A.analyze(c, st.profile);
     st.res = r;
     txt("btc-px", c.length ? fmt(c[c.length - 1].c) : "—");
     renderTickers();
@@ -241,6 +241,17 @@
     };
     rd.readAsText(f);
   });
+
+  try { st.profile = localStorage.getItem("sniperProfile") || "balanced"; } catch (e) {}
+  var sel = $("profile");
+  if (sel) {
+    sel.value = st.profile;
+    sel.addEventListener("change", function () {
+      st.profile = sel.value;
+      try { localStorage.setItem("sniperProfile", st.profile); } catch (e) {}
+      analyzeAndRender();
+    });
+  }
 
   // ---------- boot ----------
   setView("analysis");

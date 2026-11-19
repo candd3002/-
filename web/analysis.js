@@ -25,6 +25,12 @@
     slBufferATR: 0.2
   };
 
+  // Risk profiles. "sniper" = tight structural stop, far targets (lower hit rate, larger reward per win).
+  var PROFILES = {
+    balanced: { slMaxATR: 4, slBufferATR: 0.2, tp: [1.5, 2.5, 4] },
+    sniper:   { slMaxATR: 1.2, slBufferATR: 0.1, tp: [3, 5, 8] }
+  };
+
   // ---------- indicators ----------
   function ema(vals, len) {
     var out = new Array(vals.length).fill(null);
@@ -118,7 +124,8 @@
   }
 
   // ---------- main analysis ----------
-  function analyze(c) {
+  function analyze(c, profileName) {
+    var P = PROFILES[profileName] || PROFILES.balanced;
     var n = c.length;
     if (n < 60) return { ready: false, reason: "تحتاج 60 شمعة على الأقل" };
 
@@ -252,10 +259,10 @@
       if (sweep && sweep.dir === (up ? "bull" : "bear")) cands.push(sweep.wick);
       if (ob && ob.dir === (up ? "bull" : "bear")) cands.push(up ? ob.lo : ob.hi);
       if (!cands.length) return null;
-      stop = up ? Math.min.apply(null, cands) - CFG.slBufferATR * atrV : Math.max.apply(null, cands) + CFG.slBufferATR * atrV;
+      stop = up ? Math.min.apply(null, cands) - P.slBufferATR * atrV : Math.max.apply(null, cands) + P.slBufferATR * atrV;
       var risk = Math.abs(entry - stop);
       var valid = up ? stop < entry : stop > entry;
-      if (!valid || risk < CFG.slMinATR * atrV || risk > CFG.slMaxATR * atrV) {
+      if (!valid || risk < CFG.slMinATR * atrV || risk > P.slMaxATR * atrV) {
         reasons.push("الوقف المنطقي " + (risk / atrV).toFixed(2) + " ATR، خارج النطاق المسموح، لذلك لا صفقة");
         return null;
       }
@@ -265,7 +272,7 @@
         dir: dir, score: t.score, count: t.count,
         grade: t.score >= 9 ? "A" : t.score >= 7 ? "B" : "C",
         entry: entry, sl: stop,
-        tp1: entry + s * 1.5 * risk, tp2: entry + s * 2.5 * risk, tp3: entry + s * 4 * risk,
+        tp1: entry + s * P.tp[0] * risk, tp2: entry + s * P.tp[1] * risk, tp3: entry + s * P.tp[2] * risk,
         risk: risk
       };
     }
@@ -284,12 +291,12 @@
 
   // ---------- backtest (no lookahead: each decision sees only closed bars) ----------
   // Simple rule: after a signal, first of {stop, TP1} wins. Same-bar ties count as stop (conservative).
-  function backtest(c, maxBars) {
+  function backtest(c, maxBars, profileName) {
     maxBars = maxBars || 120;
     var trades = [], busyUntil = -1;
     for (var i = 60; i < c.length - 1; i++) {
       if (i <= busyUntil) continue;
-      var r = analyze(c.slice(0, i + 1));
+      var r = analyze(c.slice(0, i + 1), profileName);
       if (!r.ready || !r.signal) continue;
       var s = r.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
       for (var j = i + 1; j < Math.min(c.length, i + 1 + maxBars); j++) {
@@ -297,7 +304,7 @@
         var hitStop = up ? b.l <= s.sl : b.h >= s.sl;
         var hitTP1 = up ? b.h >= s.tp1 : b.l <= s.tp1;
         if (hitStop) { outcome = "stop"; R = -1; exit = j; break; }
-        if (hitTP1) { outcome = "tp1"; R = 1.5; exit = j; break; }
+        if (hitTP1) { outcome = "tp1"; R = Math.abs(s.tp1 - s.entry) / s.risk; exit = j; break; }
       }
       if (exit == null) { exit = Math.min(c.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
       trades.push({ i: i, dir: s.dir, grade: s.grade, outcome: outcome, R: R });
@@ -336,7 +343,7 @@
   }
 
   return {
-    CFG: CFG, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    CFG: CFG, PROFILES: PROFILES, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles
   };
 });

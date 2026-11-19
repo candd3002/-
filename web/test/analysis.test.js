@@ -30,3 +30,19 @@ for (let i = 60; i < c.length; i += 3) {
 
 // RSI overbought blocks a long even when the score passes.
 console.log("analysis tests passed");
+
+// Sniper profile: stops never exceed 1.2 ATR and targets keep their order.
+(function () {
+  const c2 = A.sampleCandles(91527, 0.0036, 400, 5);
+  let checked = 0;
+  for (let i = 60; i < c2.length; i += 2) {
+    const r = A.analyze(c2.slice(0, i + 1), "sniper");
+    if (!r.signal) continue;
+    const s = r.signal;
+    assert.ok(s.risk <= 1.2 * r.atr + 1e-9, "sniper stop too wide");
+    if (s.dir === "LONG") assert.ok(s.tp3 > s.tp2 && s.tp2 > s.tp1 && s.tp1 > s.entry);
+    else assert.ok(s.tp3 < s.tp2 && s.tp2 < s.tp1 && s.tp1 < s.entry);
+    checked++;
+  }
+  console.log("sniper profile checked", checked, "signals");
+})();
