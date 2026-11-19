@@ -325,7 +325,7 @@
     var tl = $("trend-line"); tl.textContent = trendTxt; tl.className = "trend " + cls;
 
     var tb = $("trend-bar");
-    tb.style.width = Math.min(100, Math.round(Math.abs(r.longScore - r.shortScore) / 12 * 100)) + "%";
+    tb.style.width = (s ? 100 : Math.min(100, Math.round(Math.abs(r.longScore - r.shortScore) / 12 * 100))) + "%";
     tb.className = r.longScore > r.shortScore ? "buy" : "";
 
     var arc = $("ring-arc");

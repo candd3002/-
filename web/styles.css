@@ -292,3 +292,43 @@ html[dir="rtl"] .eyebrow{font-family:Tajawal,sans-serif; letter-spacing:0; font-
 .tk.gold{border-color:var(--gold); box-shadow:0 0 0 1px rgba(217,177,90,.25)}
 .tk.gold .px{color:#f4f5f7}
 .tk.gold .pct{color:var(--up)}
+
+/* ---- Palette from the original app screenshots ---- */
+:root{ --bg:#070d17; --card:#0b1424; --card2:#0c1830; --line:rgba(70,120,200,.42); --muted:#8c99ad; --gold:#e8c35a; }
+body{background:#070d17}
+.phone{background:#070d17}
+.tk{background:#0b1830; border:1.5px solid rgba(70,120,200,.55)}
+.tk.gold{border:2px solid #e8c35a; box-shadow:0 0 14px rgba(232,195,90,.22)}
+.tk .pct{color:#2fd08b}
+.sec-h{color:#e8c35a}
+.zones-card{background:#0b1424; border:1.5px solid rgba(232,195,90,.55); border-radius:20px}
+.z{background:#0b1830; border:1.5px solid rgba(70,120,200,.5)}
+.z span{color:#e8c35a}
+.z b.down{color:#ff6b6b} .z b.blue{color:#4f9bff}
+.modes{background:transparent; border:0}
+.modes button{background:#0b1830; border:1.5px solid rgba(70,120,200,.5); color:#b9c4d6; border-radius:12px}
+.modes button[aria-selected="true"]{background:#0b1830; border:1.5px solid #e8c35a; color:#e8c35a; box-shadow:0 0 14px rgba(232,195,90,.2)}
+.trend-card{background:#0b1424; border:1.5px solid rgba(232,195,90,.45); border-radius:20px}
+.badge.sell{background:#e0474c; color:#fff; border:0; border-radius:8px; padding:6px 12px; font-weight:800}
+.badge.buy{background:#1fb27a; color:#fff; border:0; border-radius:8px; padding:6px 12px; font-weight:800}
+.trend{color:#ffffff}
+.bar{background:#0b1830}
+.bar i{background:#ff5d5d}
+.bar i.buy{background:#2fd08b}
+.pl{background:#0b1424; border:1.5px solid rgba(70,120,200,.5); border-radius:14px}
+.pl.sl, #p-sl{color:#ff6b6b}
+.plan:not(.tps) .pl:first-child{border-color:rgba(255,80,80,.7)}
+.plan:not(.tps) .pl:last-child{border-color:rgba(232,195,90,.8)}
+.pl.tp{border-color:rgba(47,208,139,.6)}
+.pl.tp b{color:#2fd08b}
+.analysis-card{background:#0b1424; border:1.5px solid rgba(232,195,90,.55); border-radius:20px}
+.analysis-card h2{color:#e8c35a}
+.lvl-h b{font-weight:800}
+.lvl:nth-child(1) .lvl-h b{color:#2fd08b}
+.lvl:nth-child(2) .lvl-h b{color:#e8c35a}
+.lvl:nth-child(3) .lvl-h b{color:#4f9bff}
+.lvl-p{color:#e6eaf2}
+.nav{background:#070d17; border-top:1px solid rgba(70,120,200,.35)}
+.nav button.on{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-radius:16px; margin:0 6px}
+.nav button.on svg{stroke:#15110a}
+.live{background:#0b1830; border:1.5px solid rgba(70,120,200,.5)}
