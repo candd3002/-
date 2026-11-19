@@ -349,7 +349,7 @@
       : r.bq === "pending" ? "waiting for 3-candle confirmation"
       : "no recent break";
     L3.push("Structure break: " + bqTxt);
-    L3.push("Confirmations: buy " + r.longScore + "/12 · بيع " + r.shortScore + "/12");
+    L3.push("Confirmations: buy " + r.longScore + "/12 · sell " + r.shortScore + "/12");
     if (r.learnExtra) L3.push("Decision bar raised after earlier losses in your journal");
     if (r.signal) {
       L3.push("Plan: entry " + fmtN(r.signal.entry) + " · stop " + fmtN(r.signal.sl) + " · first target " + fmtN(r.signal.tp1));
