@@ -1,103 +1,131 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#070a0e">
-  <meta name="description" content="باقر سنايبر: تحليل ICT و SMC للذهب والكريبتو. أداة تحليل تعليمية وليست توصية مالية">
-  <title>باقر سنايبر</title>
+  <meta name="theme-color" content="#06080b">
+  <meta name="description" content="Baqer Sniper: ICT and SMC market structure for gold, silver, forex, Nasdaq and crypto. Educational analysis, not financial advice.">
+  <title>Baqer Sniper</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main class="phone" id="app">
+<main class="phone" id="app" data-view="analysis">
 
   <header class="hd">
-    <div class="live"><span class="dot"></span><span id="live-text">مباشر</span><span class="clock" id="clock">--:--:--</span></div>
-    <div class="title">
-      <h1>باقر سنايبر</h1>
-      <p>تحليل ICT و SMC للذهب والكريبتو</p>
+    <div class="brand">
+      <img class="logo" src="logo.svg" alt="" width="42" height="42">
+      <div>
+        <div class="wordmark">BAQER <span class="grad">SNIPER</span></div>
+        <div class="tag">ICT · SMC · STRUCTURE</div>
+      </div>
     </div>
-    <img class="logo" src="logo.svg" alt="شعار باقر سنايبر" width="46" height="46">
-    <button type="button" class="ico" aria-label="القائمة" id="menu-btn">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
+    <div class="live" id="live"><span class="dot"></span><span id="live-text">Live</span><span class="clock" id="clock">--:--:--</span></div>
   </header>
 
-  <section class="tickers" id="tickers" aria-label="الأسعار"></section>
+  <section class="tickers" id="tickers" aria-label="Instruments"></section>
 
-  <section class="tabs main-only" role="tablist" aria-label="نمط التداول">
-    <button type="button" role="tab" data-tf="4h" aria-selected="false">تداول متدرج</button>
-    <button type="button" role="tab" data-tf="15m" aria-selected="false">مضاربة سريعة</button>
-    <button type="button" role="tab" data-tf="1h" aria-selected="true">تداول يومي ICT</button>
-  </section>
-
-  <section class="panel main-only">
-    <div class="panel-h">
-      <span class="sub">اتجاه السوق (<span id="tf-name">1H</span>)</span>
-      <span class="badge" id="signal-badge">—</span>
-    </div>
-    <div class="trend" id="trend-line">—</div>
-    <div class="bar"><i id="trend-bar"></i></div>
-    <div class="asset-row">
-      <span class="asset-name" id="asset-name">BTC/USDT</span>
-      <span class="asset-src" id="src">—</span>
+  <section class="main-only">
+    <div class="tabs" role="tablist" aria-label="Trading style">
+      <button type="button" role="tab" data-tf="4h" aria-selected="false">Swing</button>
+      <button type="button" role="tab" data-tf="15m" aria-selected="false">Scalp</button>
+      <button type="button" role="tab" data-tf="1h" aria-selected="true">Day ICT</button>
     </div>
   </section>
 
-  <section class="zones main-only" aria-label="مناطق ICT وSMC">
-    <div class="z"><span>كتلة الأوامر</span><b id="z-ob">—</b></div>
-    <div class="z"><span>فجوة FVG</span><b id="z-fvg">—</b></div>
-    <div class="z"><span>سيولة بيعية SSL</span><b class="down" id="z-ssl">—</b></div>
-    <div class="z"><span>سيولة شرائية BSL</span><b class="up" id="z-bsl">—</b></div>
+  <section class="card bias main-only">
+    <div class="bias-l">
+      <div class="row"><span class="muted">Bias · <span id="tf-name">1H</span></span><span class="badge" id="signal-badge">—</span></div>
+      <div class="trend" id="trend-line">—</div>
+      <div class="bar"><i id="trend-bar"></i></div>
+      <div class="asset-row"><span id="asset-name">BTC/USDT</span><span id="src" class="muted">—</span></div>
+    </div>
+    <div class="ring" aria-hidden="true">
+      <svg viewBox="0 0 78 78" width="78" height="78">
+        <circle cx="39" cy="39" r="31" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="6"/>
+        <circle id="ring-arc" cx="39" cy="39" r="31" fill="none" stroke="#ff6b6b" stroke-width="6" stroke-linecap="round" stroke-dasharray="0 195" transform="rotate(-90 39 39)"/>
+        <text id="ring-num" x="39" y="37" text-anchor="middle" class="ring-num">0</text>
+        <text x="39" y="51" text-anchor="middle" class="ring-lbl">CONF</text>
+      </svg>
+    </div>
   </section>
 
-  <section class="plan main-only" aria-label="خطة الصفقة">
-    <div class="pl sl"><span>وقف الخسارة</span><b id="p-sl">—</b></div>
-    <div class="pl en"><span>الدخول</span><b id="p-en">—</b></div>
-  </section>
-  <section class="plan tps main-only" aria-label="الأهداف">
-    <div class="pl tp"><span>الهدف 3</span><b id="p-t3">—</b></div>
-    <div class="pl tp"><span>الهدف 2</span><b id="p-t2">—</b></div>
-    <div class="pl tp"><span>الهدف 1</span><b id="p-t1">—</b></div>
+  <section class="card chart main-only">
+    <div class="row"><span class="muted" id="chart-title">Structure · 1H</span><span class="muted" id="chart-price">—</span></div>
+    <svg id="chart" viewBox="0 0 358 170" width="100%" role="img" aria-label="Candle chart with order block, fair value gap and trade levels"></svg>
+    <div class="legend">
+      <span><i class="sw-stop"></i>Stop</span>
+      <span><i class="sw-entry"></i>Entry</span>
+      <span><i class="sw-tp"></i>Targets</span>
+      <span><i class="sw-bsl"></i>BSL</span>
+      <span><i class="sw-sweep"></i>SSL sweep</span>
+    </div>
   </section>
 
-  <section class="panel analysis main-only">
-    <h2>فهم السوق</h2>
-    <div id="analysis"></div>
+  <section class="zones main-only">
+    <div class="z"><span>ORDER BLOCK</span><b id="z-ob">—</b></div>
+    <div class="z"><span>FAIR VALUE GAP</span><b id="z-fvg">—</b></div>
+    <div class="z"><span>SELL-SIDE LIQ.</span><b class="down" id="z-ssl">—</b></div>
+    <div class="z"><span>BUY-SIDE LIQ.</span><b class="blue" id="z-bsl">—</b></div>
   </section>
+
+  <section class="card entry main-only" id="plan">
+    <div class="row"><span class="eyebrow">SNIPER ENTRY</span><span class="muted" id="rr">—</span></div>
+    <div class="trio">
+      <div><span class="muted">Stop</span><b class="down" id="p-sl">—</b></div>
+      <div><span class="muted">Entry</span><b class="gold" id="p-en">—</b></div>
+      <div><span class="muted">Final target</span><b class="up" id="p-t3">—</b></div>
+    </div>
+    <div class="tps">
+      <span id="p-t1">TP1 —</span><span id="p-t2">TP2 —</span><span id="p-t3b">TP3 —</span>
+    </div>
+  </section>
+
+  <section class="levels main-only" id="analysis" aria-label="Market understanding"></section>
 
   <section class="panel" id="markets-panel" hidden>
-    <h2>الأسواق</h2>
+    <h2>Markets</h2>
     <div id="markets"></div>
   </section>
   <section class="panel" id="alerts-panel" hidden>
-    <h2>التنبيهات</h2>
-    <p class="muted" id="alerts-note">عند ظهور إشارة جديدة سيعرض التطبيق إشعاراً إن سمحت المتصفح بذلك.</p>
-    <button type="button" class="btn" id="notify-btn">تفعيل الإشعارات</button>
+    <h2>Alerts</h2>
+    <p class="muted" id="alerts-note">When a new signal appears, the app can notify you if your browser allows it.</p>
+    <button type="button" class="btn" id="notify-btn">Enable notifications</button>
   </section>
   <section class="panel" id="settings-panel" hidden>
-    <h2>الإعدادات</h2>
+    <h2>Settings</h2>
     <div id="journal-box" class="journal"></div>
-    <label class="field">الأصل<select id="inst-select"></select></label><label class="field">ملف CSV (تصدير MT5)<input type="file" id="csv" accept=".csv,text/csv"></label><label class="field">نمط المخاطرة<select id="profile"><option value="balanced">متوازن (أهداف 1.5R و2.5R و4R)</option><option value="sniper">Sniper (وقف قريب وأهداف بعيدة)</option></select></label><p class="muted">النمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل، لذلك قد تخسر أكثر من الصفقات الصغيرة. هذا خيار في الإعدادات وليس ضماناً لأي نتيجة.</p>
+    <label class="field">Risk profile
+      <select id="profile">
+        <option value="balanced">Balanced (targets 1.5R, 2.5R, 4R)</option>
+        <option value="sniper">Sniper (tight stop, far targets)</option>
+      </select>
+    </label>
+    <p class="muted">Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.</p>
+    <label class="field">Instrument
+      <select id="inst-select"></select>
+    </label>
+    <label class="field">Import candles (CSV from MT5)
+      <input type="file" id="csv" accept=".csv,text/csv">
+    </label>
     <p class="muted" id="csv-note"></p>
   </section>
   <section class="panel" id="calendar-panel" hidden>
-    <h2>التقويم</h2>
-    <p class="muted">الجلسات: لندن 10:00-19:00 بتوقيت الرياض، نيويورك 16:30-23:30. تُعرض أخبار الاقتصاد عند ربط مزود البيانات.</p>
+    <h2>Calendar</h2>
+    <p class="muted">Sessions: London 10:00–19:00 and New York 16:30–23:30 (Riyadh time). Economic news appears once a data provider is connected.</p>
   </section>
 
-  <p class="disclaimer">تحليل تعليمي وليس توصية مالية. الصفقات المقترحة لا تضمن ربحاً، والتداول بالرافعة يحمل خسارة كبيرة. حدّد حجم المخاطرة بنفسك.</p>
+  <p class="disclaimer">Educational analysis, not financial advice. Trades do not guarantee profit, and leverage can cause large losses. Size your risk yourself.</p>
 </main>
 
-<nav class="nav" aria-label="القائمة السفلية">
-  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>الإعدادات</span></button>
-  <button type="button" data-tab="alerts"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 21h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>التنبيهات</span></button>
-  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2"/></svg><span>التقويم</span></button>
-  <button type="button" data-tab="analysis" class="on"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 18l5-6 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>التحليل</span></button>
-  <button type="button" data-tab="markets"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 19V9M12 19V5M19 19v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>الأسواق</span></button>
+<nav class="nav" aria-label="Main navigation">
+  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>Settings</span></button>
+  <button type="button" data-tab="alerts"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/></svg><span>Alerts</span></button>
+  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Calendar</span></button>
+  <button type="button" data-tab="analysis" class="on"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 18l5-6 4 3 7-8"/></svg><span>Analysis</span></button>
+  <button type="button" data-tab="markets"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-7"/></svg><span>Markets</span></button>
 </nav>
 
 <script src="analysis.js"></script>
