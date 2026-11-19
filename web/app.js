@@ -17,10 +17,71 @@
   var BY = {};
   INST.forEach(function (x) { BY[x.id] = x; });
 
-  var st = { inst: "BTC", tf: "1h", profile: "balanced", btc: null, btcFetchedTf: null, btcChange: null,
-             csv: {}, res: null, lastSig: null, ws: null, poll: null };
+  // ---------- translations (UI chrome) ----------
+  var I18N = {
+    en: {
+      tag: "ICT · SMC · STRUCTURE", sample: "Sample", live: "Live", swing: "Swing", scalp: "Scalp", dayIct: "Day ICT",
+      bias: "Bias", orderBlock: "ORDER BLOCK", fvgLbl: "FAIR VALUE GAP", sslLbl: "SELL-SIDE LIQ.", bslLbl: "BUY-SIDE LIQ.",
+      sniperEntry: "SNIPER ENTRY", stop: "Stop", entry: "Entry", finalTarget: "Final target", targets: "Targets", sweep: "Sweep",
+      noSetup: "No active setup", marketsTitle: "Markets", alertsTitle: "Alerts", settingsTitle: "Settings", calendarTitle: "Calendar",
+      alertSignal: "Notify me when a new signal appears", alertTp: "Notify me when a trade closes (win or loss)",
+      enableNotif: "Enable notifications", alertsNote: "Notifications appear only while the page is open in your browser.",
+      risk: "Risk profile", riskBalanced: "Balanced (targets 1.5R, 2.5R, 4R)", riskSniper: "Sniper (tight stop, far targets)",
+      riskNote: "Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.",
+      instrument: "Instrument", importCsv: "Import candles (CSV from MT5)",
+      sessLondon: "London session", sessNewYork: "New York session", sessAsia: "Asia session",
+      calendarNote: "Times are Riyadh time. Economic news appears once a data provider is connected.",
+      disclaimer: "Educational analysis, not financial advice. Trades do not guarantee profit, and leverage can cause large losses. Size your risk yourself.",
+      account: "Account", signIn: "Sign in", signOut: "Sign out", namePh: "Name", emailPh: "Email",
+      localAccount: "This sign-in is saved on this device only.", signedInAs: "Signed in as ", notSigned: "Not signed in.",
+      language: "Language", go: "Go to", menuSettings: "Settings and risk profile", about: "About",
+      aboutText: "Baqer Sniper is an educational market-structure tool. It does not place trades and does not guarantee results.",
+      navSettings: "Settings", navAlerts: "Alerts", navCalendar: "Calendar", navAnalysis: "Analysis", navMarkets: "Markets",
+      trend: "Trend", journal: "Trade journal", clearJournal: "Clear journal", noTrades: "No closed trades yet. Every signal is recorded and closes at its stop or first target.",
+      closedTrades: "Closed trades", wins: "wins", losses: "losses", winRate: "win rate", learnNote: "After recent losses, decisions need 2 more points.",
+      paused: "Paused patterns", loading: "Loading…", csvLoaded: " loaded ", candles: " candles.",
+      csvNeeds: "The file needs at least 60 candles.", csvColumns: "Could not find open, high, low, close columns.",
+      notifOff: "This browser does not support notifications.", notifOn: "Notifications are on.", notifNo: "Notifications were not enabled.",
+      waitWord: "Wait", buyWord: "BUY", sellWord: "SELL", ranging: "Ranging, accumulating",
+      bullTrend: "Institutional short-term uptrend", bearTrend: "Institutional short-term downtrend",
+      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file"
+    },
+    ar: {
+      tag: "ICT · SMC · الهيكل", sample: "عينة", live: "مباشر", swing: "سوينغ", scalp: "سكالب", dayIct: "يومي ICT",
+      bias: "الاتجاه", orderBlock: "كتلة الأوامر", fvgLbl: "فجوة القيمة العادلة", sslLbl: "سيولة البيع SSL", bslLbl: "سيولة الشراء BSL",
+      sniperEntry: "دخول القناص", stop: "وقف", entry: "دخول", finalTarget: "الهدف النهائي", targets: "الأهداف", sweep: "سحب",
+      noSetup: "لا توجد صفقة نشطة", marketsTitle: "الأسواق", alertsTitle: "التنبيهات", settingsTitle: "الإعدادات", calendarTitle: "التقويم",
+      alertSignal: "أخبرني عند ظهور إشارة جديدة", alertTp: "أخبرني عند إغلاق صفقة (ربح أو خسارة)",
+      enableNotif: "تفعيل الإشعارات", alertsNote: "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.",
+      risk: "نمط المخاطرة", riskBalanced: "متوازن (أهداف 1.5R و2.5R و4R)", riskSniper: "Sniper (وقف قريب وأهداف بعيدة)",
+      riskNote: "نمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل. هذا خيار وليس ضماناً لأي نتيجة.",
+      instrument: "الأصل", importCsv: "استيراد الشموع (CSV من MT5)",
+      sessLondon: "جلسة لندن", sessNewYork: "جلسة نيويورك", sessAsia: "جلسة آسيا",
+      calendarNote: "الأوقات بتوقيت الرياض. تظهر أخبار الاقتصاد عند ربط مزود بيانات.",
+      disclaimer: "تحليل تعليمي وليس نصيحة مالية. الصفقات لا تضمن ربحاً، والرافعة قد تسبب خسائر كبيرة. حدّد مخاطرتك بنفسك.",
+      account: "الحساب", signIn: "تسجيل الدخول", signOut: "تسجيل الخروج", namePh: "الاسم", emailPh: "البريد الإلكتروني",
+      localAccount: "يُحفظ تسجيل الدخول على هذا الجهاز فقط.", signedInAs: "مسجّل الدخول باسم ", notSigned: "غير مسجّل الدخول.",
+      language: "اللغة", go: "انتقل إلى", menuSettings: "الإعدادات ونمط المخاطرة", about: "عن التطبيق",
+      aboutText: "باقر سنايبر أداة تعليمية لتحليل هيكل السوق. لا تنفّذ صفقات ولا تضمن نتائج.",
+      navSettings: "الإعدادات", navAlerts: "التنبيهات", navCalendar: "التقويم", navAnalysis: "التحليل", navMarkets: "الأسواق",
+      trend: "الاتجاه", journal: "سجل الصفقات", clearJournal: "مسح السجل", noTrades: "لا توجد صفقات مغلقة بعد. تُسجَّل كل إشارة وتُغلق عند الوقف أو الهدف الأول.",
+      closedTrades: "صفقات مغلقة", wins: "ربح", losses: "خسارة", winRate: "نسبة النجاح", learnNote: "بعد خسائر حديثة يحتاج القرار إلى نقطتين إضافيتين.",
+      paused: "أنماط موقوفة", loading: "جارٍ التحميل…", csvLoaded: " تم تحميل ", candles: " شمعة.",
+      csvNeeds: "يحتاج الملف إلى 60 شمعة على الأقل.", csvColumns: "لم أجد أعمدة open وhigh وlow وclose.",
+      notifOff: "هذا المتصفح لا يدعم الإشعارات.", notifOn: "الإشعارات مفعّلة.", notifNo: "لم تُفعّل الإشعارات.",
+      waitWord: "انتظار", buyWord: "شراء", sellWord: "بيع", ranging: "عرضي، يتجمع السعر",
+      bullTrend: "اتجاه صاعد مؤسسي قصير المدى", bearTrend: "اتجاه هابط مؤسسي قصير المدى",
+      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV"
+    }
+  };
+  I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
+  I18N.ar.signedInAs = "مسجّل الدخول باسم ";
+
+  var st = { inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+             csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
+  function T(k) { return (I18N[st.lang] && I18N[st.lang][k]) || I18N.en[k] || k; }
   function txt(id, t) { var e = $(id); if (e) e.textContent = t; }
   function fmtD(v, d) {
     if (v == null || isNaN(v)) return "—";
@@ -28,6 +89,7 @@
   }
   function fmt(v) { return fmtD(v, BY[st.inst].digits); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function store(key, val) { try { if (val === undefined) return JSON.parse(localStorage.getItem(key) || "null"); localStorage.setItem(key, JSON.stringify(val)); } catch (e) { return val === undefined ? null : undefined; } }
 
   // ---------- candles ----------
   function sampleFor(x) { return A.sampleCandles(x.base, x.vol, 500, x.seed); }
@@ -36,8 +98,8 @@
     return st.csv[id] || sampleFor(BY[id]);
   }
   function sourceFor(id) {
-    if (id === "BTC") return st.btc && st.btcFetchedTf ? "Binance · live" : "Sample";
-    return st.csv[id] ? "CSV file" : "Sample";
+    if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
+    return st.csv[id] ? T("sourceCsv") : T("sourceSample");
   }
   function changeFor(id) {
     if (id === "BTC" && st.btcChange != null) return st.btcChange;
@@ -61,14 +123,14 @@
   }
   function parseCSV(text) {
     var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
-    if (lines.length < 61) throw new Error("The file needs at least 60 candles.");
+    if (lines.length < 61) throw new Error(T("csvNeeds"));
     var head = lines[0].split(/[,;\t]/).map(function (s) { return s.trim().toLowerCase().replace(/[<>]/g, ""); });
     var idx = { o: 2, h: 3, l: 4, c: 5 }, start = 0;
     if (/[a-z]/i.test(lines[0])) {
       start = 1;
       var f = function (names) { for (var k = 0; k < head.length; k++) if (names.indexOf(head[k]) >= 0) return k; return -1; };
       idx = { o: f(["open"]), h: f(["high"]), l: f(["low"]), c: f(["close"]) };
-      if (idx.o < 0 || idx.h < 0 || idx.l < 0 || idx.c < 0) throw new Error("Could not find open, high, low, close columns.");
+      if (idx.o < 0 || idx.h < 0 || idx.l < 0 || idx.c < 0) throw new Error(T("csvColumns"));
     }
     var out = [];
     for (var i = start; i < lines.length; i++) {
@@ -77,13 +139,10 @@
       if ([o, h, l, c].some(isNaN)) continue;
       out.push({ t: i, o: o, h: h, l: l, c: c, v: 1 });
     }
-    if (out.length < 60) throw new Error("Fewer than 60 valid candles.");
+    if (out.length < 60) throw new Error(T("csvNeeds"));
     return out.slice(-500);
   }
-  function live(on) {
-    var box = $("live"); if (box) box.classList.toggle("off", !on);
-    txt("live-text", on ? "Live" : "Sample");
-  }
+  function live(on) { var box = $("live"); if (box) box.classList.toggle("off", !on); txt("live-text", on ? T("live") : T("sample")); }
   function stopStreams() {
     if (st.ws) { try { st.ws.close(); } catch (e) {} st.ws = null; }
     if (st.poll) { clearInterval(st.poll); st.poll = null; }
@@ -122,6 +181,7 @@
     renderTickers();
     render();
     renderJournal();
+    renderMarkets();
     notifyIfNew(st.res);
   }
 
@@ -144,22 +204,20 @@
 
   function render() {
     var r = st.res;
-    if (!r || !r.ready) { txt("trend-line", r ? r.reason : "Loading…"); return; }
+    if (!r || !r.ready) { txt("trend-line", r ? r.reason : T("loading")); return; }
     var s = r.signal, sell = s && s.dir === "SHORT", buy = s && s.dir === "LONG";
     var cls = buy ? "buy" : sell ? "sell" : "wait";
     var conf = Math.min(99, Math.round(Math.max(r.longScore, r.shortScore) / 12 * 100));
 
     txt("tf-name", TF_NAME[st.tf]);
-    txt("chart-title", "Structure · " + TF_NAME[st.tf]);
+    txt("chart-title", T("bias") + " · " + TF_NAME[st.tf]);
     document.querySelectorAll("[data-tf]").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-tf") === st.tf)); });
 
     var badge = $("signal-badge");
     badge.className = "badge " + cls;
-    badge.textContent = s ? (sell ? "SELL" : "BUY") + " · " + conf : "WAIT · " + conf;
+    badge.textContent = s ? (sell ? T("sellWord") : T("buyWord")) + " · " + conf : T("waitWord") + " · " + conf;
 
-    var trendTxt = r.trend === "bear" ? "Institutional short-term downtrend"
-      : r.trend === "bull" ? "Institutional short-term uptrend" : "Ranging, accumulating";
-    if (!s && r.reasons.length && r.trend == null) trendTxt = r.status;
+    var trendTxt = r.trend === "bear" ? T("bearTrend") : r.trend === "bull" ? T("bullTrend") : T("ranging");
     var tl = $("trend-line"); tl.textContent = trendTxt; tl.className = "trend " + cls;
 
     var tb = $("trend-bar");
@@ -187,16 +245,15 @@
     } else {
       txt("p-sl", "—"); txt("p-en", "—"); txt("p-t3", "—");
       txt("p-t1", "TP1 —"); txt("p-t2", "TP2 —"); txt("p-t3b", "TP3 —");
-      txt("rr", "No active setup");
+      txt("rr", T("noActive"));
     }
     renderLevels(r);
-    renderMarkets();
   }
 
-  // ---------- chart: real candles with zones and levels ----------
+  // ---------- chart ----------
   function svgEl(tag, attrs) {
     var e = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
     return e;
   }
   function renderChart(r) {
@@ -218,14 +275,11 @@
 
     var defs = svgEl("defs", {});
     var gu = svgEl("linearGradient", { id: "cUp", x1: 0, x2: 0, y1: 0, y2: 1 });
-    gu.appendChild(svgEl("stop", { offset: 0, "stop-color": "#7ff5c8" }));
-    gu.appendChild(svgEl("stop", { offset: 1, "stop-color": "#1ea877" }));
+    gu.appendChild(svgEl("stop", { offset: 0, "stop-color": "#7ff5c8" })); gu.appendChild(svgEl("stop", { offset: 1, "stop-color": "#1ea877" }));
     var gd = svgEl("linearGradient", { id: "cDn", x1: 0, x2: 0, y1: 0, y2: 1 });
-    gd.appendChild(svgEl("stop", { offset: 0, "stop-color": "#ffa3a3" }));
-    gd.appendChild(svgEl("stop", { offset: 1, "stop-color": "#d93d48" }));
+    gd.appendChild(svgEl("stop", { offset: 0, "stop-color": "#ffa3a3" })); gd.appendChild(svgEl("stop", { offset: 1, "stop-color": "#d93d48" }));
     var go = svgEl("linearGradient", { id: "obFill", x1: 0, x2: 0, y1: 0, y2: 1 });
-    go.appendChild(svgEl("stop", { offset: 0, "stop-color": "#e8b44a", "stop-opacity": ".28" }));
-    go.appendChild(svgEl("stop", { offset: 1, "stop-color": "#e8b44a", "stop-opacity": ".06" }));
+    go.appendChild(svgEl("stop", { offset: 0, "stop-color": "#e8b44a", "stop-opacity": ".28" })); go.appendChild(svgEl("stop", { offset: 1, "stop-color": "#e8b44a", "stop-opacity": ".06" }));
     var glow = svgEl("filter", { id: "glow", x: "-20%", y: "-20%", width: "140%", height: "140%" });
     glow.appendChild(svgEl("feGaussianBlur", { stdDeviation: "1.1", result: "b" }));
     var mg = svgEl("feMerge", {}); mg.appendChild(svgEl("feMergeNode", { in: "b" })); mg.appendChild(svgEl("feMergeNode", { in: "SourceGraphic" }));
@@ -240,25 +294,22 @@
       var t = svgEl("text", { x: x0 + 4, y: y0 + 10, "font-family": "Inter, sans-serif", "font-size": 9, fill: stroke || "#e8b44a" });
       t.textContent = label; svg.appendChild(t);
     }
-    if (r.ob && r.ob.i >= off) zone(r.ob, "url(#obFill)", null, "ORDER BLOCK");
-    else if (r.ob) zone({ lo: r.ob.lo, hi: r.ob.hi, i: off }, "url(#obFill)", null, "ORDER BLOCK");
-    if (r.fvg) zone(r.fvg, "rgba(127,184,255,.14)", "rgba(127,184,255,.45)", "FVG");
+    if (r.ob) zone(r.ob.i >= off ? r.ob : { lo: r.ob.lo, hi: r.ob.hi, i: off }, "url(#obFill)", null, T("orderBlock"));
+    if (r.fvg) zone(r.fvg.i >= off ? r.fvg : { lo: r.fvg.lo, hi: r.fvg.hi, i: off }, "rgba(127,184,255,.14)", "rgba(127,184,255,.45)", "FVG");
 
-    function hline(price, color, label, dash, weight) {
+    function hline(price, color, label, dash) {
       var y = Y(price);
-      svg.appendChild(svgEl("line", { x1: 0, y1: y, x2: W, y2: y, stroke: color, "stroke-width": weight || 1, "stroke-dasharray": dash || null, opacity: dash ? 0.75 : 1 }));
+      svg.appendChild(svgEl("line", { x1: 0, y1: y, x2: W, y2: y, stroke: color, "stroke-width": 1, "stroke-dasharray": dash || null, opacity: dash ? 0.75 : 1 }));
       var t = svgEl("text", { x: areaR + 6, y: y + 3, "font-family": "Inter, sans-serif", "font-size": 9, fill: color });
       t.textContent = label; svg.appendChild(t);
     }
-
     vis.forEach(function (k, i) {
-      var up = k.c >= k.o, x = X(i), col = up ? "#5ff0b5" : "#ff8a8a";
-      svg.appendChild(svgEl("line", { x1: x, y1: Y(k.h), x2: x, y2: Y(k.l), stroke: col, "stroke-width": 1.1, opacity: 0.7 }));
+      var up = k.c >= k.o, x = X(i);
+      svg.appendChild(svgEl("line", { x1: x, y1: Y(k.h), x2: x, y2: Y(k.l), stroke: up ? "#5ff0b5" : "#ff8a8a", "stroke-width": 1.1, opacity: 0.7 }));
     });
     var g = svgEl("g", { filter: "url(#glow)" });
     vis.forEach(function (k, i) {
-      var up = k.c >= k.o, x = X(i);
-      var top = Y(Math.max(k.o, k.c)), bot = Y(Math.min(k.o, k.c));
+      var up = k.c >= k.o, x = X(i), top = Y(Math.max(k.o, k.c)), bot = Y(Math.min(k.o, k.c));
       g.appendChild(svgEl("rect", { x: x - cw * 0.32, y: top, width: cw * 0.64, height: Math.max(1, bot - top), rx: 1.5, fill: up ? "url(#cUp)" : "url(#cDn)" }));
     });
     svg.appendChild(g);
@@ -289,8 +340,8 @@
   function renderLevels(r) {
     var box = $("analysis"); if (!box) return;
     box.textContent = "";
-    var sty = A.story(r);
-    if (!sty) { box.textContent = r && r.reason ? r.reason : "Loading…"; return; }
+    var sty = A.story(r, st.lang);
+    if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
     [sty.l1, sty.l2, sty.l3].forEach(function (lv, idx) {
       var card = el("div", "lvl");
       var head = el("div", "lvl-h");
@@ -317,10 +368,10 @@
     });
   }
 
-  // ---------- trade journal: records signals, closes them at stop or target, learns ----------
+  // ---------- trade journal ----------
   var JKEY = "baqerJournal";
-  function loadJournal() { try { return JSON.parse(localStorage.getItem(JKEY) || "[]"); } catch (e) { return []; } }
-  function saveJournal(j) { try { localStorage.setItem(JKEY, JSON.stringify(j.slice(-300))); } catch (e) {} }
+  function loadJournal() { return store(JKEY) || []; }
+  function saveJournal(j) { store(JKEY, j.slice(-300)); }
   function journalStats(j) {
     var closed = j.filter(function (e) { return e.status !== "open"; });
     var wins = closed.filter(function (e) { return e.status === "win"; }).length;
@@ -353,8 +404,8 @@
         if (!(c[i].t > e.t)) continue;
         var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
         var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
-        if (hitStop) { e.status = "loss"; changed = true; break; }
-        if (hitTP) { e.status = "win"; changed = true; break; }
+        if (hitStop) { e.status = "loss"; e.closed = true; changed = true; break; }
+        if (hitTP) { e.status = "win"; e.closed = true; changed = true; break; }
       }
     });
     if (changed) saveJournal(j);
@@ -363,21 +414,20 @@
     var box = $("journal-box"); if (!box) return;
     var s = journalStats(loadJournal()), L = learnFromJournal();
     box.textContent = "";
-    box.appendChild(el("h2", "", "Trade journal"));
+    box.appendChild(el("h2", "", T("journal")));
     box.appendChild(el("p", "muted", s.closed
-      ? "Closed trades: " + s.closed + " · wins: " + s.wins + " · losses: " + s.losses + " · win rate: " + Math.round(s.wins / s.closed * 100) + "%"
-      : "No closed trades yet. Every signal is recorded and closes at its stop or first target."));
-    box.appendChild(el("p", "muted", (L.extra ? "After recent losses, decisions need 2 more points. " : "") +
-      (L.block.length ? "Paused patterns: " + L.block.length + "." : "")));
-    var btn = el("button", "btn", "Clear journal");
-    btn.type = "button";
+      ? T("closedTrades") + ": " + s.closed + " · " + T("wins") + ": " + s.wins + " · " + T("losses") + ": " + s.losses + " · " + T("winRate") + ": " + Math.round(s.wins / s.closed * 100) + "%"
+      : T("noTrades")));
+    var extra = (L.extra ? T("learnNote") + " " : "") + (L.block.length ? T("paused") + ": " + L.block.length + "." : "");
+    if (extra) box.appendChild(el("p", "muted", extra));
+    var btn = el("button", "btn", T("clearJournal")); btn.type = "button";
     btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
     box.appendChild(btn);
   }
 
   // ---------- alerts ----------
   function notifyIfNew(r) {
-    if (!r || !r.signal) return;
+    if (!r || !r.signal || !st.prefs.signal) return;
     var key = st.inst + ":" + r.signal.dir + ":" + r.signal.entry.toFixed(BY[st.inst].digits);
     if (key === st.lastSig) return;
     st.lastSig = key;
@@ -387,7 +437,41 @@
     }
   }
 
-  // ---------- views and controls ----------
+  // ---------- language ----------
+  function applyLang() {
+    document.documentElement.lang = st.lang;
+    document.documentElement.dir = st.lang === "ar" ? "rtl" : "ltr";
+    document.querySelectorAll("[data-i18n]").forEach(function (e) { e.textContent = T(e.getAttribute("data-i18n")); });
+    document.querySelectorAll("[data-i18nph]").forEach(function (e) { e.setAttribute("placeholder", T(e.getAttribute("data-i18nph"))); });
+    document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === st.lang)); });
+    var sel = $("inst-select"); if (sel) { sel.value = st.inst; }
+    document.title = st.lang === "ar" ? "باقر سنايبر" : "Baqer Sniper";
+    renderAccount();
+    analyzeAndRender();
+    setView(currentView());
+  }
+  function setLang(lang) {
+    st.lang = lang === "ar" ? "ar" : "en";
+    store("baqerLang", st.lang);
+    applyLang();
+  }
+
+  // ---------- account (local sign-in, saved on this device only) ----------
+  function renderAccount() {
+    var u = store("baqerUser");
+    txt("acct-state", u ? T("signedInAs") + u.name : T("notSigned"));
+    var out = $("signout"); if (out) out.hidden = !u;
+    var form = $("signin-form"); if (form) form.hidden = !!u;
+  }
+
+  // ---------- menu drawer ----------
+  function openMenu(open) {
+    $("drawer").hidden = !open; $("scrim").hidden = !open;
+    $("menu-btn").setAttribute("aria-expanded", String(open));
+  }
+
+  // ---------- views ----------
+  function currentView() { return $("app").getAttribute("data-view") || "analysis"; }
   function setView(v) {
     $("app").setAttribute("data-view", v);
     document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
@@ -406,16 +490,31 @@
     else analyzeAndRender();
   }
 
-  document.querySelectorAll("[data-tf]").forEach(function (b) {
-    b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); });
+  // ---------- wiring ----------
+  document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
+  document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
+  document.querySelectorAll("[data-lang]").forEach(function (b) { b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); }); });
+  document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { openMenu(false); setView(b.getAttribute("data-go")); }); });
+  $("menu-btn").addEventListener("click", function () { openMenu(true); });
+  $("drawer-close").addEventListener("click", function () { openMenu(false); });
+  $("scrim").addEventListener("click", function () { openMenu(false); });
+  $("signin-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("su-name").value.trim(), email = $("su-email").value.trim();
+    if (!name || !email) return;
+    store("baqerUser", { name: name, email: email });
+    $("signin-form").reset();
+    renderAccount();
   });
-  document.querySelectorAll(".nav [data-tab]").forEach(function (b) {
-    b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); });
-  });
+  $("signout").addEventListener("click", function () { store("baqerUser", null); renderAccount(); });
   $("notify-btn").addEventListener("click", function () {
-    if (!("Notification" in window)) { txt("alerts-note", "This browser does not support notifications."); return; }
-    Notification.requestPermission().then(function (p) { txt("alerts-note", p === "granted" ? "Notifications are on." : "Notifications were not enabled."); });
+    if (!("Notification" in window)) { txt("alerts-note", T("notifOff")); return; }
+    Notification.requestPermission().then(function (p) { txt("alerts-note", p === "granted" ? T("notifOn") : T("notifNo")); });
   });
+  var pSig = $("pref-signal"), pTp = $("pref-tp");
+  pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
+  pSig.addEventListener("change", function () { st.prefs.signal = pSig.checked; store("baqerPrefs", st.prefs); });
+  pTp.addEventListener("change", function () { st.prefs.tp = pTp.checked; store("baqerPrefs", st.prefs); });
 
   var sel = $("inst-select");
   INST.forEach(function (x) { var o = el("option", "", x.name); o.value = x.id; sel.appendChild(o); });
@@ -428,7 +527,7 @@
     rd.onload = function () {
       try {
         st.csv[target] = parseCSV(String(rd.result));
-        txt("csv-note", BY[target].name + ": loaded " + st.csv[target].length + " candles.");
+        txt("csv-note", BY[target].name + T("csvLoaded") + st.csv[target].length + T("candles"));
         if (st.inst === target) analyzeAndRender(); else renderTickers();
       } catch (e) { txt("csv-note", e.message); }
     };
@@ -436,13 +535,9 @@
   });
 
   var prof = $("profile");
-  try { st.profile = localStorage.getItem("sniperProfile") || "balanced"; } catch (e) {}
+  st.profile = store("sniperProfile") || "balanced";
   prof.value = st.profile;
-  prof.addEventListener("change", function () {
-    st.profile = prof.value;
-    try { localStorage.setItem("sniperProfile", st.profile); } catch (e) {}
-    analyzeAndRender();
-  });
+  prof.addEventListener("change", function () { st.profile = prof.value; store("sniperProfile", st.profile); analyzeAndRender(); });
 
   function tick() {
     var ms = TF_MS[st.tf], left = ms - (Date.now() % ms), s = Math.floor(left / 1000);
@@ -450,6 +545,10 @@
   }
 
   // ---------- boot ----------
+  st.lang = store("baqerLang") === "ar" ? "ar" : "en";
+  st.prefs = store("baqerPrefs") || st.prefs;
+  pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
+  applyLang();
   setView("analysis");
   setInterval(tick, 1000); tick();
   loadBtc().then(function () { connect(); analyzeAndRender(); });

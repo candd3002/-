@@ -327,44 +327,87 @@
     };
   }
 
-  // Plain-language story in three levels: trend, liquidity and zones, decision.
-  function story(r) {
-    if (!r || !r.ready) return null;
-    var L1 = [], L2 = [], L3 = [];
-    var trendName = r.trend === "bull" ? "bullish" : r.trend === "bear" ? "bearish" : "Ranging";
-    L1.push(r.trend === "bull" ? "Higher highs and higher lows (HH, HL)" : r.trend === "bear" ? "Lower highs and lower lows (LH, LL)" : "Swing highs and lows are not ordered");
-    L1.push("Price " + (r.price > r.ema50 ? "above" : "below") + " EMA50, which is " + (r.emaRising ? "sloping up" : "sloping down"));
-    L1.push("Trend is confirmed only by a close beyond a prior swing high or low");
-
-    if (r.sweep) L2.push((r.sweep.dir === "bear" ? "Liquidity swept above the high" : "Liquidity swept below the low") + " at " + fmtN(r.sweep.level) + " then price returned");
-    else L2.push("No recent liquidity sweep");
-    L2.push("Buy-side liquidity above " + fmtN(r.bsl) + ", sell-side liquidity below " + fmtN(r.ssl) + " (possible price targets)");
-    if (r.ob) L2.push("Order block " + (r.ob.dir === "bull" ? "bullish" : "bearish") + " " + fmtN(r.ob.lo) + " – " + fmtN(r.ob.hi) +
-      (r.oq ? (r.oq.strong ? ", strong impulse" : ", weak impulse") + (r.oq.tested ? " and tested" : " and not yet tested") : ""));
-    else L2.push("No clear order block");
-    if (r.fvg) L2.push("FVG " + (r.fvg.dir === "bull" ? "bullish" : "bearish") + " " + fmtN(r.fvg.lo) + " – " + fmtN(r.fvg.hi));
-
-    var bqTxt = r.bq === "false" ? "false, price closed back through the level"
-      : r.bq === "held" ? "held for 3 candles"
-      : r.bq === "pending" ? "waiting for 3-candle confirmation"
-      : "no recent break";
-    L3.push("Structure break: " + bqTxt);
-    L3.push("Confirmations: buy " + r.longScore + "/12 · sell " + r.shortScore + "/12");
-    if (r.learnExtra) L3.push("Decision bar raised after earlier losses in your journal");
-    if (r.signal) {
-      L3.push("Plan: entry " + fmtN(r.signal.entry) + " · stop " + fmtN(r.signal.sl) + " · first target " + fmtN(r.signal.tp1));
-    } else if (r.trend === "bear") {
-      L3.push("Wait: pullback into the order block or gap, then bearish rejection");
-    } else if (r.trend === "bull") {
-      L3.push("Wait: pullback into a buy zone, then bullish rejection");
-    } else {
-      L3.push("Wait: clear break of the range in either direction");
+  // Plain-language story in three levels: trend, liquidity and zones, decision. Supports "en" and "ar".
+  var TXT = {
+    en: {
+      hh: "Higher highs and higher lows (HH, HL)", lh: "Lower highs and lower lows (LH, LL)", unordered: "Swing highs and lows are not ordered",
+      above: "above", below: "below", emaSlope: "EMA50, which is sloping ", up: "up", down: "down",
+      confirm: "Trend is confirmed only by a close beyond a prior swing high or low",
+      sweepHigh: "Liquidity swept above the high at ", sweepLow: "Liquidity swept below the low at ", then: " then price returned",
+      noSweep: "No recent liquidity sweep",
+      liq: "Buy-side liquidity above ", liqS: ", sell-side liquidity below ", liqEnd: " (possible price targets)",
+      ob: "Order block ", bullish: "bullish", bearish: "bearish", strong: ", strong impulse", weak: ", weak impulse",
+      tested: " and tested", untested: " and not yet tested", noOb: "No clear order block", fvg: "FVG ",
+      brk: "Structure break: ", bqFalse: "false, price closed back through the level", bqHeld: "held for 3 candles",
+      bqPending: "waiting for 3-candle confirmation", bqNone: "no recent break",
+      conf: "Confirmations: buy ", sell: " · sell ", learn: "Decision bar raised after earlier losses in your journal",
+      plan: "Plan: entry ", stop: " · stop ", first: " · first target ",
+      waitBear: "Wait: pullback into the order block or gap, then bearish rejection",
+      waitBull: "Wait: pullback into a buy zone, then bullish rejection",
+      waitRange: "Wait: clear break of the range in either direction",
+      t1: "Trend", t2: "Liquidity & zones", t3: "Decision", sweepS: "sweep", noSweepS: "no sweep",
+      buy: "Buy", sellS: "Sell", wait: "Wait", rangeS: "Ranging"
+    },
+    ar: {
+      hh: "قمم وقيعان أعلى (HH و HL)", lh: "قمم وقيعان أدنى (LH و LL)", unordered: "القمم والقيعان غير مرتبة بعد",
+      above: "فوق", below: "تحت", emaSlope: "، والمتوسط EMA50 ", up: "مائل للأعلى", down: "مائل للأسفل",
+      confirm: "لا يتأكد الاتجاه إلا بإغلاق واضح فوق قمة سابقة أو تحت قاع سابق",
+      sweepHigh: "سُحبت سيولة فوق القمة عند ", sweepLow: "سُحبت سيولة تحت القاع عند ", then: " ثم عاد السعر",
+      noSweep: "لا يوجد سحب سيولة حديث",
+      liq: "سيولة الشراء فوق ", liqS: "، وسيولة البيع تحت ", liqEnd: " (أهداف محتملة للسعر)",
+      ob: "كتلة أوامر ", bullish: "صاعدة", bearish: "هابطة", strong: "، باندفاع قوي", weak: "، باندفاع ضعيف",
+      tested: " وتم اختبارها", untested: " ولم تُختبر بعد", noOb: "لا توجد كتلة أوامر واضحة", fvg: "فجوة FVG ",
+      brk: "كسر الهيكل: ", bqFalse: "كاذب، عاد السعر خلف المستوى", bqHeld: "صامد لثلاث شموع",
+      bqPending: "بانتظار تأكيد ثلاث شموع", bqNone: "لا كسر حديث",
+      conf: "التأكيدات: شراء ", sell: " · بيع ", learn: "رُفع شرط القرار بعد خسائر سابقة في سجلك",
+      plan: "الخطة: دخول ", stop: " · وقف ", first: " · الهدف الأول ",
+      waitBear: "انتظار: ارتداد نحو كتلة الأوامر أو الفجوة ثم رفض هابط",
+      waitBull: "انتظار: ارتداد نحو منطقة شراء ثم رفض صاعد",
+      waitRange: "انتظار: كسر واضح لنطاق العرض في أحد الاتجاهين",
+      t1: "الاتجاه", t2: "السيولة والمناطق", t3: "القرار", sweepS: "سحب سيولة", noSweepS: "بلا سحب",
+      buy: "شراء", sellS: "بيع", wait: "انتظار", rangeS: "عرضي"
     }
+  };
+
+  function story(r, lang) {
+    if (!r || !r.ready) return null;
+    var T = TXT[lang === "ar" ? "ar" : "en"], ar = lang === "ar";
+    var L1 = [], L2 = [], L3 = [];
+    var trendName = r.trend === "bull" ? (ar ? "صاعد" : "bullish") : r.trend === "bear" ? (ar ? "هابط" : "bearish") : T.rangeS;
+    L1.push(r.trend === "bull" ? T.hh : r.trend === "bear" ? T.lh : T.unordered);
+    if (ar) L1.push("السعر " + (r.price > r.ema50 ? T.above : T.below) + " متوسط EMA50" + T.emaSlope.replace("، والمتوسط EMA50 ", "، والمتوسط ") + (r.emaRising ? T.up : T.down));
+    else L1.push("Price " + (r.price > r.ema50 ? T.above : T.below) + " EMA50, which is sloping " + (r.emaRising ? T.up : T.down));
+    L1.push(T.confirm);
+
+    if (r.sweep) L2.push((r.sweep.dir === "bear" ? T.sweepHigh : T.sweepLow) + fmtN(r.sweep.level) + T.then);
+    else L2.push(T.noSweep);
+    L2.push(T.liq + fmtN(r.bsl) + T.liqS + fmtN(r.ssl) + T.liqEnd);
+    if (r.ob) {
+      var obDir = r.ob.dir === "bull" ? T.bullish : T.bearish;
+      var obTxt = T.ob + obDir + " " + fmtN(r.ob.lo) + " – " + fmtN(r.ob.hi);
+      if (r.oq) obTxt += (r.oq.strong ? T.strong : T.weak) + (r.oq.tested ? T.tested : T.untested);
+      L2.push(obTxt);
+    } else L2.push(T.noOb);
+    if (r.fvg) L2.push(T.fvg + (r.fvg.dir === "bull" ? T.bullish : T.bearish) + " " + fmtN(r.fvg.lo) + " – " + fmtN(r.fvg.hi));
+
+    var bqTxt = r.bq === "كاذب" || r.bq === "false" ? T.bqFalse
+      : r.bq === "صامد" || r.bq === "held" ? T.bqHeld
+      : r.bq === "قيد الاختبار" || r.bq === "pending" ? T.bqPending
+      : T.bqNone;
+    L3.push(T.brk + bqTxt);
+    L3.push(T.conf + r.longScore + "/12" + T.sell + r.shortScore + "/12");
+    if (r.learnExtra) L3.push(T.learn);
+    if (r.signal) L3.push(T.plan + fmtN(r.signal.entry) + T.stop + fmtN(r.signal.sl) + T.first + fmtN(r.signal.tp1));
+    else if (r.trend === "bear") L3.push(T.waitBear);
+    else if (r.trend === "bull") L3.push(T.waitBull);
+    else L3.push(T.waitRange);
+
+    var decState = r.signal ? (r.signal.dir === "LONG" ? T.buy : T.sellS) : T.wait;
     return {
       trend: trendName,
-      l1: { title: "Trend", state: trendName, lines: L1 },
-      l2: { title: "Liquidity & zones", state: r.sweep ? "sweep" : "no sweep", lines: L2 },
-      l3: { title: "Decision", state: r.signal ? (r.signal.dir === "LONG" ? "Buy" : "Sell") : "Wait", lines: L3 }
+      l1: { title: T.t1, state: trendName, lines: L1 },
+      l2: { title: T.t2, state: r.sweep ? T.sweepS : T.noSweepS, lines: L2 },
+      l3: { title: T.t3, state: decState, lines: L3 }
     };
   }
   function fmtN(v) {
@@ -428,7 +471,7 @@
 
   return {
     CFG: CFG, PROFILES: PROFILES, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
-    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story,
+    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };
 });
