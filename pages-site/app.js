@@ -653,7 +653,7 @@
       autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
       timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
       toolbar_bg: "#07090c", enable_publishing: false, hide_side_toolbar: true, allow_symbol_change: false, hide_legend: false, withdateranges: false, details: false, hotlist: false, calendar: false, show_popup_button: false, save_image: false, backgroundColor: "#07090c", gridColor: "rgba(120,140,170,.08)",
-      container_id: "tv-holder", studies: tvStudies().concat(["Volume@tv-basicstudies"])
+      container_id: "tv-holder", studies: tvStudies().concat(["Volume@tv-basicstudies", "BB@tv-basicstudies", "RSI@tv-basicstudies"])
     });
   }
   // Reading under the chart: what the structure shows right now.
