@@ -647,13 +647,13 @@
       return;
     }
     box.textContent = "";
-    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "440px";
+    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "600px";
     box.appendChild(holder);
     new TradingView.widget({
       autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
       timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
-      toolbar_bg: "#0b1424", enable_publishing: false, hide_side_toolbar: false, allow_symbol_change: false,
-      container_id: "tv-holder", studies: tvStudies()
+      toolbar_bg: "#07090c", enable_publishing: false, hide_side_toolbar: true, allow_symbol_change: false, hide_legend: false, withdateranges: false, details: false, hotlist: false, calendar: false, show_popup_button: false, save_image: false, backgroundColor: "#07090c", gridColor: "rgba(120,140,170,.08)",
+      container_id: "tv-holder", studies: tvStudies().concat(["Volume@tv-basicstudies"])
     });
   }
   // Reading under the chart: what the structure shows right now.
