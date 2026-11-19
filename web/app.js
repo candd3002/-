@@ -44,7 +44,7 @@
       notifOff: "This browser does not support notifications.", notifOn: "Notifications are on.", notifNo: "Notifications were not enabled.",
       waitWord: "Wait", buyWord: "BUY", sellWord: "SELL", ranging: "Ranging, accumulating",
       bullTrend: "Institutional short-term uptrend", bearTrend: "Institutional short-term downtrend",
-      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file", sourceLinked: "Linked feed"
+      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file", sourceLinked: "Linked feed", sourceAuto: "Auto feed"
     },
     ar: {
       tag: "ICT · SMC · الهيكل", sample: "عينة", live: "مباشر", swing: "سوينغ", scalp: "سكالب", dayIct: "يومي ICT",
@@ -71,7 +71,7 @@
       notifOff: "هذا المتصفح لا يدعم الإشعارات.", notifOn: "الإشعارات مفعّلة.", notifNo: "لم تُفعّل الإشعارات.",
       waitWord: "انتظار", buyWord: "شراء", sellWord: "بيع", ranging: "عرضي، يتجمع السعر",
       bullTrend: "اتجاه صاعد مؤسسي قصير المدى", bearTrend: "اتجاه هابط مؤسسي قصير المدى",
-      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV", sourceLinked: "رابط بيانات"
+      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV", sourceLinked: "رابط بيانات", sourceAuto: "بيانات تلقائية"
     }
   };
   I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
@@ -99,7 +99,9 @@
   I18N.ar.dataFail = "تعذّرت قراءة الرابط. تأكد أنه عام ويعيد شموعاً.";
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
-  var feeds = {}; // id -> { url, updated }
+  var feeds = {}; // id -> { url, updated, ok } (user-provided links)
+  var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
+  var autoOk = {}; // id -> true when the built-in data function returned candles
   var st = { inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
@@ -153,14 +155,26 @@
   }
   function saveFeeds() { store("baqerFeeds", feeds); }
   function connectedNow(id) { return !!(feeds[id] && feeds[id].ok); }
+  // Built-in feed: the Netlify function fetches candles for this timeframe automatically.
+  function autoLoad() {
+    var jobs = INST.filter(function (x) { return AUTO[x.id] && !connectedNow(x.id); }).map(function (x) {
+      var url = "/.netlify/functions/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
+      return fetch(url, { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+        .then(function (text) { st.csv[x.id] = parseJSONCandles(text); autoOk[x.id] = true; })
+        .catch(function () { autoOk[x.id] = false; });
+    });
+    return Promise.all(jobs);
+  }
   function refreshFeeds() {
     var ids = Object.keys(feeds);
-    if (!ids.length) return;
-    Promise.all(ids.map(loadFeed)).then(function () { analyzeAndRender(); });
+    var userJobs = ids.map(loadFeed);
+    Promise.all(userJobs.concat([autoLoad()])).then(function () { analyzeAndRender(); });
   }
   function sourceFor(id) {
     if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
     if (connectedNow(id)) return T("sourceLinked");
+    if (autoOk[id]) return T("sourceAuto");
     return st.csv[id] ? T("sourceCsv") : T("sourceSample");
   }
   function changeFor(id) {
@@ -548,6 +562,7 @@
   }
   function setTf(tf) {
     st.tf = tf; tick();
+    autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); });
     if (st.inst === "BTC") loadBtc().then(function () { connect(); analyzeAndRender(); });
     else analyzeAndRender();
   }
@@ -646,6 +661,7 @@
   feeds = store("baqerFeeds") || {};
   setInterval(refreshFeeds, 60000);
   refreshFeeds();
+  setInterval(function () { autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); }); }, 60000);
   showFeedFor(sel.value);
   var prof = $("profile");
   st.profile = store("sniperProfile") || "balanced";
