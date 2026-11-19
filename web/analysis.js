@@ -346,7 +346,7 @@
       waitBear: "Wait: pullback into the order block or gap, then bearish rejection",
       waitBull: "Wait: pullback into a buy zone, then bullish rejection",
       waitRange: "Wait: clear break of the range in either direction",
-      t1: "Trend", t2: "Liquidity & zones", t3: "Decision", sweepS: "sweep", noSweepS: "no sweep",
+      t1: "Market structure (BOS / CHoCH)", t2: "Order blocks & FVG", t3: "Decision & plan", sweepS: "sweep", noSweepS: "no sweep",
       buy: "Buy", sellS: "Sell", wait: "Wait", rangeS: "Ranging"
     },
     ar: {
@@ -365,7 +365,7 @@
       waitBear: "انتظار: ارتداد نحو كتلة الأوامر أو الفجوة ثم رفض هابط",
       waitBull: "انتظار: ارتداد نحو منطقة شراء ثم رفض صاعد",
       waitRange: "انتظار: كسر واضح لنطاق العرض في أحد الاتجاهين",
-      t1: "الاتجاه", t2: "السيولة والمناطق", t3: "القرار", sweepS: "سحب سيولة", noSweepS: "بلا سحب",
+      t1: "هيكل السوق (BOS / CHoCH)", t2: "كتل الأوامر والفجوات", t3: "القرار والخطة", sweepS: "سحب سيولة", noSweepS: "بلا سحب",
       buy: "شراء", sellS: "بيع", wait: "انتظار", rangeS: "عرضي"
     }
   };

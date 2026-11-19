@@ -12,104 +12,65 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<section class="welcome" id="welcome" aria-labelledby="wel-title" hidden>
-  <div class="wel-card">
-    <img class="wel-logo" src="logo.svg" alt="" width="84" height="84">
-    <h1 id="wel-title" class="wel-title"><span class="wordmark">BAQER <span class="grad">SNIPER</span></span></h1>
-    <p class="wel-sub" data-i18n="welSub">Market structure, explained simply.</p>
-    <div class="seg2 wel-lang" role="group" aria-label="Language">
-      <button type="button" data-lang="en" aria-pressed="true">English</button>
-      <button type="button" data-lang="ar" aria-pressed="false">العربية</button>
-    </div>
-    <div id="wel-new">
-      <form id="wel-form" class="signin">
-        <input id="wel-name" type="text" autocomplete="name" placeholder="Name" data-i18nph="namePh" required>
-        <input id="wel-email" type="email" autocomplete="email" placeholder="Email" data-i18nph="emailPh" required>
-        <button type="submit" class="btn" data-i18n="signIn">Sign in</button>
-      </form>
-      <button type="button" class="ghost" id="wel-guest" data-i18n="welGuest">Continue without signing in</button>
-    </div>
-    <div id="wel-back" hidden>
-      <p class="wel-hi" id="wel-hi"></p>
-      <button type="button" class="btn" id="wel-continue" data-i18n="welContinue">Continue</button>
-    </div>
-    <p class="muted wel-hint" data-i18n="welHint">Your sign-in is saved on this device only.</p>
-  </div>
-</section>
+
 <main class="phone" id="app" data-view="analysis">
 
-  <header class="hd">
+  <header class="top">
+    <div class="live" id="live"><span class="rf" aria-hidden="true">&#8635;</span><span class="dot"></span><span id="live-text" data-i18n="live">Live</span><span class="clock" id="clock">--:--:--</span></div>
+    <div class="title">
+      <h1 data-i18n="appName">Radar</h1>
+      <p data-i18n="appSub">Markets analysis</p>
+    </div>
     <button type="button" class="ico" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
-    <div class="brand">
-      <img class="logo" src="logo.svg" alt="" width="40" height="40">
-      <div>
-        <div class="wordmark" id="brand-name">BAQER <span class="grad">SNIPER</span></div>
-        <div class="tag" id="brand-tag" data-i18n="tag">ICT · SMC · STRUCTURE</div>
-      </div>
-    </div>
-    <div class="live" id="live"><span class="dot"></span><span id="live-text" data-i18n="sample">Sample</span><span class="clock" id="clock">--:--:--</span></div>
   </header>
 
   <section class="tickers" id="tickers" aria-label="Instruments"></section>
 
-  <section class="main-only">
-    <div class="tabs" role="tablist" aria-label="Trading style">
-      <button type="button" role="tab" data-tf="4h" aria-selected="false" data-i18n="swing">Swing</button>
-      <button type="button" role="tab" data-tf="15m" aria-selected="false" data-i18n="scalp">Scalp</button>
-      <button type="button" role="tab" data-tf="1h" aria-selected="true" data-i18n="dayIct">Day ICT</button>
-    </div>
-  </section>
+  <div class="main-only">
+    <h3 class="sec-h" data-i18n="structTitle">ICT + SMC structure</h3>
+    <section class="card zones-card">
+      <div class="zgrid">
+        <div class="z"><span data-i18n="orderBlock">Order block</span><b id="z-ob">—</b></div>
+        <div class="z"><span data-i18n="fvgLbl">FVG</span><b id="z-fvg">—</b></div>
+        <div class="z"><span data-i18n="sslLbl">SSL liquidity</span><b class="down" id="z-ssl">—</b></div>
+        <div class="z"><span data-i18n="bslLbl">BSL liquidity</span><b class="blue" id="z-bsl">—</b></div>
+      </div>
+    </section>
 
-  <section class="card bias main-only">
-    <div class="bias-l">
-      <div class="row"><span class="muted"><span data-i18n="bias">Bias</span> · <span id="tf-name">1H</span></span><span class="badge" id="signal-badge">—</span></div>
+    <div class="modes" role="tablist" aria-label="Trading style">
+      <button type="button" role="tab" data-tf="4h" aria-selected="false" data-i18n="modeSwing">Swing</button>
+      <button type="button" role="tab" data-tf="15m" aria-selected="false" data-i18n="modeScalp">Scalp</button>
+      <button type="button" role="tab" data-tf="1h" aria-selected="true" data-i18n="modeDay">Day ICT</button>
+    </div>
+
+    <section class="card trend-card">
+      <div class="row">
+        <span class="muted"><span data-i18n="marketTrend">Market trend</span> (<span id="tf-name">1H</span>)</span>
+        <span class="badge" id="signal-badge">—</span>
+      </div>
       <div class="trend" id="trend-line">—</div>
       <div class="bar"><i id="trend-bar"></i></div>
       <div class="asset-row"><span id="asset-name">BTC/USDT</span><span id="src" class="muted">—</span></div>
-    </div>
-    <div class="ring" aria-hidden="true">
-      <svg viewBox="0 0 78 78" width="78" height="78">
-        <circle cx="39" cy="39" r="31" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="6"/>
-        <circle id="ring-arc" cx="39" cy="39" r="31" fill="none" stroke="#ff6b6b" stroke-width="6" stroke-linecap="round" stroke-dasharray="0 195" transform="rotate(-90 39 39)"/>
-        <text id="ring-num" x="39" y="37" text-anchor="middle" class="ring-num">0</text>
-        <text x="39" y="51" text-anchor="middle" class="ring-lbl">CONF</text>
-      </svg>
-    </div>
-  </section>
+    </section>
 
-  <section class="card chart main-only">
-    <div class="row"><span class="muted" id="chart-title">Structure · 1H</span><span class="muted" id="chart-price">—</span></div>
-    <svg id="chart" viewBox="0 0 358 170" width="100%" role="img" aria-label="Candle chart with order block, fair value gap and trade levels"></svg>
-    <div class="legend">
-      <span><i class="sw-stop"></i><span data-i18n="stop">Stop</span></span>
-      <span><i class="sw-entry"></i><span data-i18n="entry">Entry</span></span>
-      <span><i class="sw-tp"></i><span data-i18n="targets">Targets</span></span>
-      <span><i class="sw-bsl"></i>BSL</span>
-      <span><i class="sw-sweep"></i><span data-i18n="sweep">Sweep</span></span>
-    </div>
-  </section>
+    <section class="plan">
+      <div class="pl"><span data-i18n="stopLoss">Stop loss</span><b class="down" id="p-sl">—</b></div>
+      <div class="pl"><span data-i18n="entryZone">Entry zone</span><b class="gold" id="p-en">—</b></div>
+    </section>
+    <section class="plan tps">
+      <div class="pl tp"><span data-i18n="tp3">TP3</span><b id="p-t3">—</b></div>
+      <div class="pl tp"><span data-i18n="tp2">TP2</span><b id="p-t2">—</b></div>
+      <div class="pl tp"><span data-i18n="tp1">TP1</span><b id="p-t1">—</b></div>
+    </section>
+    <span id="rr" hidden></span>
 
-  <section class="zones main-only">
-    <div class="z"><span data-i18n="orderBlock">ORDER BLOCK</span><b id="z-ob">—</b></div>
-    <div class="z"><span data-i18n="fvgLbl">FAIR VALUE GAP</span><b id="z-fvg">—</b></div>
-    <div class="z"><span data-i18n="sslLbl">SELL-SIDE LIQ.</span><b class="down" id="z-ssl">—</b></div>
-    <div class="z"><span data-i18n="bslLbl">BUY-SIDE LIQ.</span><b class="blue" id="z-bsl">—</b></div>
-  </section>
-
-  <section class="card entry main-only">
-    <div class="row"><span class="eyebrow" data-i18n="sniperEntry">SNIPER ENTRY</span><span class="muted" id="rr">—</span></div>
-    <div class="trio">
-      <div><span class="muted" data-i18n="stop">Stop</span><b class="down" id="p-sl">—</b></div>
-      <div><span class="muted" data-i18n="entry">Entry</span><b class="gold" id="p-en">—</b></div>
-      <div><span class="muted" data-i18n="finalTarget">Final target</span><b class="up" id="p-t3">—</b></div>
-    </div>
-    <div class="tps"><span id="p-t1">TP1 —</span><span id="p-t2">TP2 —</span><span id="p-t3b">TP3 —</span></div>
-  </section>
-
-  <h2 class="sec-title main-only" data-i18n="analysisTitle">Detailed ICT + SMC analysis</h2>
-  <section class="levels main-only" id="analysis" aria-label="Market understanding"></section>
+    <section class="card analysis-card">
+      <h2 data-i18n="detailTitle">Detailed analysis (ICT + SMC)</h2>
+      <div id="analysis" class="levels"></div>
+    </section>
+  </div>
 
   <section class="panel" id="markets-panel" hidden>
     <h2 data-i18n="marketsTitle">Markets</h2>
@@ -154,9 +115,35 @@
     <p class="muted" data-i18n="calendarNote">Times are Riyadh time. Economic news appears once a data provider is connected.</p>
   </section>
 
-  <p class="disclaimer" data-i18n="disclaimer">Educational analysis, not financial advice. Trades do not guarantee profit, and leverage can cause large losses. Size your risk yourself.</p>
+  
+  <p class="disclaimer" data-i18n="disclaimer">Educational analysis, not financial advice.</p>
+  <svg hidden aria-hidden="true"><circle id="ring-arc" r="1"></circle></svg><span id="ring-num" hidden></span>
 </main>
 
+<section class="welcome" id="welcome" aria-labelledby="wel-title" hidden>
+  <div class="wel-card">
+    <img class="wel-logo" src="logo.svg" alt="" width="84" height="84">
+    <h1 id="wel-title" class="wel-title"><span class="wordmark">BAQER <span class="grad">SNIPER</span></span></h1>
+    <p class="wel-sub" data-i18n="welSub">Market structure, explained simply.</p>
+    <div class="seg2 wel-lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">English</button>
+      <button type="button" data-lang="ar" aria-pressed="false">العربية</button>
+    </div>
+    <div id="wel-new">
+      <form id="wel-form" class="signin">
+        <input id="wel-name" type="text" autocomplete="name" placeholder="Name" data-i18nph="namePh" required>
+        <input id="wel-email" type="email" autocomplete="email" placeholder="Email" data-i18nph="emailPh" required>
+        <button type="submit" class="btn" data-i18n="signIn">Sign in</button>
+      </form>
+      <button type="button" class="ghost" id="wel-guest" data-i18n="welGuest">Continue without signing in</button>
+    </div>
+    <div id="wel-back" hidden>
+      <p class="wel-hi" id="wel-hi"></p>
+      <button type="button" class="btn" id="wel-continue" data-i18n="welContinue">Continue</button>
+    </div>
+    <p class="muted wel-hint" data-i18n="welHint">Your sign-in is saved on this device only.</p>
+  </div>
+</section>
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="Menu">
   <div class="dr-head">
@@ -199,11 +186,11 @@
 </aside>
 
 <nav class="nav" aria-label="Main navigation">
-  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span data-i18n="navSettings">Settings</span></button>
-  <button type="button" data-tab="alerts"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/></svg><span data-i18n="navAlerts">Alerts</span></button>
-  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span data-i18n="navCalendar">Calendar</span></button>
-  <button type="button" data-tab="analysis" class="on"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 18l5-6 4 3 7-8"/></svg><span data-i18n="navAnalysis">Analysis</span></button>
-  <button type="button" data-tab="markets"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-7"/></svg><span data-i18n="navMarkets">Markets</span></button>
+  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span data-i18n="navSettings">Settings</span></button>
+  <button type="button" data-tab="alerts"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/></svg><span data-i18n="navAlerts">Alerts</span></button>
+  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span data-i18n="navCalendar">Calendar</span></button>
+  <button type="button" data-tab="analysis" class="on"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span data-i18n="navAnalysis">Analysis</span></button>
+  <button type="button" data-tab="markets"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3"/></svg><span data-i18n="navMarkets">Markets</span></button>
 </nav>
 
 <script src="analysis.js"></script>

@@ -93,6 +93,19 @@
   I18N.ar.welContinue = "متابعة";
   I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
   I18N.ar.welBack = "أهلاً بعودتك، ";
+  var NEW = {
+    en: { appName: "Radar", appSub: "Gold & crypto market analysis", live: "Live", structTitle: "ICT + SMC structure",
+          modeSwing: "Swing", modeScalp: "Scalp", modeDay: "Day ICT", marketTrend: "Market trend",
+          stopLoss: "Stop loss", entryZone: "Entry zone", tp1: "TP1", tp2: "TP2", tp3: "TP3",
+          detailTitle: "Detailed analysis (ICT + SMC)", signalBuy: "Buy signal", signalSell: "Sell signal", signalWait: "Wait" },
+    ar: { appName: "رادار الأسواق", appSub: "تحليل الذهب والعملات الرقمية", live: "مباشر", structTitle: "هيكل ICT + SMC الفوري",
+          modeSwing: "تداول متدرج", modeScalp: "مضاربة سريعة", modeDay: "تداول يومي ICT", marketTrend: "اتجاه السوق",
+          stopLoss: "وقف الخسارة", entryZone: "منطقة الدخول", tp1: "الهدف 1", tp2: "الهدف 2", tp3: "الهدف 3",
+          detailTitle: "التحليل التفصيلي بنظام ICT + SMC", signalBuy: "إشارة شراء", signalSell: "إشارة بيع", signalWait: "انتظار" }
+  };
+  Object.keys(NEW).forEach(function (l) { Object.keys(NEW[l]).forEach(function (k) { I18N[l][k] = NEW[l][k]; }); });
+  I18N.en.sslLbl = "SSL liquidity"; I18N.en.bslLbl = "BSL liquidity"; I18N.en.fvgLbl = "FVG"; I18N.en.orderBlock = "Order block";
+  I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.orderBlock = "كتلة الأوامر";
   I18N.en.dataUrl = "Live data link (CSV or JSON)";
   I18N.en.dataSave = "Connect data";
   I18N.en.dataClear = "Disconnect";
@@ -305,9 +318,10 @@
 
     var badge = $("signal-badge");
     badge.className = "badge " + cls;
-    badge.textContent = s ? (sell ? T("sellWord") : T("buyWord")) + " · " + conf : T("waitWord") + " · " + conf;
+    badge.textContent = s ? T(sell ? "signalSell" : "signalBuy") + " • " + conf : T("signalWait") + " • " + conf;
 
     var trendTxt = r.trend === "bear" ? T("bearTrend") : r.trend === "bull" ? T("bullTrend") : T("ranging");
+    if (!s && r.reasons.length && !r.trend) trendTxt = T("ranging");
     var tl = $("trend-line"); tl.textContent = trendTxt; tl.className = "trend " + cls;
 
     var tb = $("trend-bar");
@@ -329,13 +343,10 @@
 
     if (s) {
       var rr = function (x) { return ((Math.abs(x - s.entry)) / s.risk).toFixed(1) + "R"; };
-      txt("p-sl", fmt(s.sl)); txt("p-en", fmt(s.entry)); txt("p-t3", fmt(s.tp3));
-      txt("p-t1", "TP1 " + rr(s.tp1)); txt("p-t2", "TP2 " + rr(s.tp2)); txt("p-t3b", "TP3 " + rr(s.tp3));
-      txt("rr", "R : 1 → " + (Math.abs(s.tp3 - s.entry) / s.risk).toFixed(1));
+      txt("p-sl", fmt(s.sl)); txt("p-en", fmt(s.entry));
+      txt("p-t1", fmt(s.tp1)); txt("p-t2", fmt(s.tp2)); txt("p-t3", fmt(s.tp3));
     } else {
-      txt("p-sl", "—"); txt("p-en", "—"); txt("p-t3", "—");
-      txt("p-t1", "TP1 —"); txt("p-t2", "TP2 —"); txt("p-t3b", "TP3 —");
-      txt("rr", T("noActive"));
+      txt("p-sl", "—"); txt("p-en", "—"); txt("p-t1", "—"); txt("p-t2", "—"); txt("p-t3", "—");
     }
     renderLevels(r);
   }
