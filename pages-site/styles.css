@@ -388,3 +388,5 @@ body{background:#070d17}
 .sessions li > div{display:flex; justify-content:space-between; align-items:center; gap:8px}
 .sess-state{font-size:12px; padding:2px 9px; border-radius:999px; border:1px solid #3a4a66; color:#8a97ad}
 .sess-state.on{color:#2fd08b; border-color:#2fd08b}
+
+.tv-cal{min-height:520px; margin-bottom:12px; border-radius:14px; overflow:hidden}

@@ -541,6 +541,7 @@
     applyLang();
     renderSessions();
     if (NEWS.ok !== null) renderNews();
+    renderTvCal();
   }
 
   // ---------- account (local sign-in, saved on this device only) ----------
@@ -563,7 +564,7 @@
     $("app").setAttribute("data-view", v);
     document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
     ["markets", "alerts", "settings", "calendar"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
-    if (v === "calendar") loadNews(false);
+    if (v === "calendar") { loadNews(false); renderTvCal(); }
     if (v === "analysis") render();
   }
   function setInst(id) {
@@ -748,6 +749,20 @@
     if (/speaks|speech|testif|press conference/i.test(title)) return { c: c, t: "تصريح: " + title };
     for (var i = 0; i < EVT_AR.length; i++) { if (EVT_AR[i][0].test(title)) return { c: c, t: EVT_AR[i][1] }; }
     return { c: c, t: title };
+  }
+  // TradingView economic calendar widget (free embed; language follows the app).
+  function renderTvCal() {
+    var box = $("tv-cal"); if (!box) return;
+    box.textContent = "";
+    var wrap = el("div", "tradingview-widget-container");
+    wrap.appendChild(el("div", "tradingview-widget-container__widget"));
+    var sc = document.createElement("script");
+    sc.type = "text/javascript";
+    sc.src = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
+    sc.async = true;
+    sc.textContent = JSON.stringify({ colorTheme: "dark", isTransparent: true, width: "100%", height: "520", locale: st.lang === "ar" ? "ar" : "en", importanceFilter: "0,1", countryFilter: "us,eu,gb,jp,cn,ca,au,nz,ch" });
+    wrap.appendChild(sc);
+    box.appendChild(wrap);
   }
   function impactOf(e) { return e.impact === "high" ? "high" : e.impact === "medium" ? "medium" : "low"; }
   function renderNews() {
