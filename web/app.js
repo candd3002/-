@@ -336,7 +336,6 @@
     arc.setAttribute("stroke-dasharray", (conf / 100 * 195).toFixed(1) + " 195");
     txt("ring-num", String(conf));
 
-    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     renderChart(r);
 
     txt("z-ob", r.ob ? fmt(r.ob.lo) + " – " + fmt(r.ob.hi) : "—");
@@ -363,6 +362,7 @@
   function renderChart(r) {
     var svg = $("chart"); if (!svg) return;
     svg.textContent = "";
+    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     var c = candlesFor(st.inst), N = 60, off = Math.max(0, c.length - N), vis = c.slice(off);
     var W = 358, H = 170, padL = 4, areaR = 286, padT = 10, padB = 12;
     var lo = Infinity, hi = -Infinity;
