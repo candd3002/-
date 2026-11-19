@@ -541,7 +541,6 @@
     applyLang();
     renderSessions();
     if (NEWS.ok !== null) renderNews();
-    renderTvCal();
   }
 
   // ---------- account (local sign-in, saved on this device only) ----------
@@ -564,7 +563,7 @@
     $("app").setAttribute("data-view", v);
     document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
     ["markets", "alerts", "settings", "calendar"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
-    if (v === "calendar") { loadNews(false); renderTvCal(); }
+    if (v === "calendar") loadNews(false);
     if (v === "analysis") render();
   }
   function setInst(id) {
