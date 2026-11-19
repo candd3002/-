@@ -122,6 +122,19 @@
   I18N.ar.dataNote = "يقرأ التطبيق هذا الرابط كل دقيقة. الأعمدة المطلوبة: open، high، low، close، والوقت إن توفّر. لكل أصل رابطه الخاص.";
   I18N.ar.dataOk = "تم الربط. آخر تحديث: ";
   I18N.ar.dataFail = "تعذّرت قراءة الرابط. تأكد أنه عام ويعيد شموعاً.";
+  var NEWS_TXT = {
+    en: { newsTitle: "Market news", econTitle: "Economic calendar today", high: "High", medium: "Medium", low: "Low",
+          upcoming: "Soon", forecast: "Forecast", previous: "Previous", actual: "Actual", refresh: "Refresh",
+          newsNeed: "News needs a provider key. Add FINNHUB_KEY in Netlify environment variables, then redeploy.",
+          noEvents: "No high or medium impact events in the next two days.", noNews: "No news available right now.",
+          todaySummary: "High-impact events in the next 2 days: ", rule: "Rule of thumb: an actual above forecast usually strengthens the currency, and below weakens it." },
+    ar: { newsTitle: "أخبار السوق", econTitle: "التقويم الاقتصادي اليوم", high: "تأثير عالٍ", medium: "تأثير متوسط", low: "تأثير منخفض",
+          upcoming: "قريباً", forecast: "المتوقع", previous: "السابق", actual: "الفعلي", refresh: "تحديث",
+          newsNeed: "الأخبار تحتاج مفتاح مزود. أضف FINNHUB_KEY في إعدادات Netlify ثم أعد النشر.",
+          noEvents: "لا توجد أحداث ذات تأثير عالٍ أو متوسط خلال يومين.", noNews: "لا توجد أخبار متاحة الآن.",
+          todaySummary: "أحداث عالية التأثير خلال يومين: ", rule: "قاعدة عامة: الفعلي أعلى من المتوقع يقوّي العملة غالباً، والأقل منه يضعفها." }
+  };
+  Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
   I18N.ar.noSource = "لا يوجد مصدر بيانات";
   I18N.ar.noData = "لا توجد بيانات لهذا الأصل بعد. اربط مصدر بيانات من الإعدادات.";
   I18N.ar.tvLoad = "جارٍ تحميل TradingView…";
@@ -548,6 +561,7 @@
     $("app").setAttribute("data-view", v);
     document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
     ["markets", "alerts", "settings", "calendar"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
+    if (v === "calendar") loadNews(false);
     if (v === "analysis") render();
   }
   function setInst(id) {
@@ -643,6 +657,64 @@
     var sty = A.story(r, st.lang);
     if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
   }
+
+  // ---------- news and economic calendar (via the news function) ----------
+  var NEWS = { cal: [], news: [], ok: null, at: 0 };
+  function loadNews(force) {
+    if (!force && NEWS.at && Date.now() - NEWS.at < 300000) return Promise.resolve();
+    return fetch("/.netlify/functions/news", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) { NEWS.cal = j.calendar || []; NEWS.news = j.news || []; NEWS.ok = true; })
+      .catch(function () { NEWS.ok = false; })
+      .then(function () { NEWS.at = Date.now(); renderNews(); });
+  }
+  function impactOf(e) { return e.impact === "high" ? "high" : e.impact === "medium" ? "medium" : "low"; }
+  function renderNews() {
+    var econ = $("econ"), list = $("newslist");
+    if (!econ || !list) return;
+    econ.textContent = ""; list.textContent = "";
+    if (NEWS.ok === false) { econ.appendChild(el("p", "muted", T("newsNeed"))); list.appendChild(el("p", "muted", T("newsNeed"))); return; }
+    var now = Date.now();
+    var events = NEWS.cal.filter(function (e) { return impactOf(e) !== "low"; })
+      .sort(function (x, y) { return String(x.time).localeCompare(String(y.time)); });
+    var highCount = events.filter(function (e) { return impactOf(e) === "high"; }).length;
+    econ.appendChild(el("h2", "", T("econTitle")));
+    econ.appendChild(el("p", "muted", T("todaySummary") + highCount));
+    if (!events.length) econ.appendChild(el("p", "muted", T("noEvents")));
+    events.forEach(function (e) {
+      var card = el("div", "ev");
+      var t = e.time ? new Date(e.time) : null;
+      var soon = t && t.getTime() > now && t.getTime() - now < 60 * 60e3;
+      var top = el("div", "ev-h");
+      top.appendChild(el("b", "", (e.country ? e.country + " · " : "") + (e.event || "")));
+      top.appendChild(el("span", "imp imp-" + impactOf(e), T(impactOf(e) === "high" ? "high" : "medium")));
+      card.appendChild(top);
+      var meta = el("div", "ev-m muted", (t ? t.toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "") + (soon ? "  ·  " + T("upcoming") : ""));
+      card.appendChild(meta);
+      var vals = el("div", "ev-v");
+      [[T("previous"), e.previous], [T("forecast"), e.forecast], [T("actual"), e.actual]].forEach(function (x) {
+        var c = el("div", "");
+        c.appendChild(el("span", "muted", x[0]));
+        c.appendChild(el("b", "", x[1] == null ? "—" : String(x[1]) + (e.unit || "")));
+        vals.appendChild(c);
+      });
+      card.appendChild(vals);
+      econ.appendChild(card);
+    });
+    econ.appendChild(el("p", "muted", T("rule")));
+    if (!NEWS.news.length) list.appendChild(el("p", "muted", T("noNews")));
+    NEWS.news.slice(0, 20).forEach(function (n) {
+      var card = el("a", "nw");
+      if (n.url) { card.href = n.url; card.target = "_blank"; card.rel = "noopener noreferrer"; }
+      card.appendChild(el("b", "", n.headline || ""));
+      var when = n.time ? new Date(n.time * 1000).toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }) : "";
+      card.appendChild(el("span", "muted", (n.source || "") + (when ? "  ·  " + when : "")));
+      list.appendChild(card);
+    });
+  }
+  var refreshBtn = $("news-refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", function () { loadNews(true); });
+  setInterval(function () { loadNews(false); }, 300000);
 
   // ---------- wiring ----------
   document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
