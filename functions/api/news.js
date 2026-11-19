@@ -2,6 +2,8 @@
 // Key is read from the FINNHUB_KEY secret (never sent to the browser).
 const HEADERS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" };
 function ymd(d) { return d.toISOString().slice(0, 10); }
+// Free calendar is cached for 30 minutes to avoid hitting the provider's rate limit.
+let FF_CACHE = { at: 0, rows: null, status: "" };
 
 export async function onRequest(context) {
   const key = context.env.FINNHUB_KEY;
@@ -18,10 +20,15 @@ export async function onRequest(context) {
       return { time: e.time, country: e.country, event: e.event, impact: String(e.impact || "").toLowerCase(), actual: e.actual, forecast: e.estimate, previous: e.prev, unit: e.unit || "" };
     });
     // Free fallback (no key): weekly economic calendar used when Finnhub returns nothing on the free plan.
+    let calSource = "finnhub";
     if (!calendar.length) {
       try {
-        const ffRes = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
-        const ff = ffRes.ok ? await ffRes.json() : [];
+        if (!FF_CACHE.rows || Date.now() - FF_CACHE.at > 30 * 60e3) {
+          const ffRes = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
+          FF_CACHE = { at: Date.now(), rows: ffRes.ok ? await ffRes.json() : [], status: "HTTP " + ffRes.status };
+        }
+        const ff = FF_CACHE.rows;
+        calSource = "faireconomy (" + FF_CACHE.status + ")";
         const today0 = ymd(today);
         calendar = (Array.isArray(ff) ? ff : []).filter(function (e) {
           return String(e.date || "").slice(0, 10) >= today0 && String(e.date || "").slice(0, 10) <= ymd(ahead);
@@ -33,7 +40,7 @@ export async function onRequest(context) {
     const items = (Array.isArray(news) ? news : []).slice(0, 30).map(function (n) {
       return { time: n.datetime, headline: n.headline, source: n.source, url: n.url, summary: n.summary };
     });
-    return new Response(JSON.stringify({ calendar: calendar, news: items }), { status: 200, headers: HEADERS });
+    return new Response(JSON.stringify({ calendar: calendar, calendarSource: calSource, news: items }), { status: 200, headers: HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ error: "news provider unreachable" }), { status: 502, headers: HEADERS });
   }
