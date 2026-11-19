@@ -155,16 +155,22 @@
   }
   function saveFeeds() { store("baqerFeeds", feeds); }
   function connectedNow(id) { return !!(feeds[id] && feeds[id].ok); }
-  // Built-in feed: the Netlify function fetches candles for this timeframe automatically.
+  // Built-in feed: loads only the selected instrument (saves the provider quota) and
+  // reuses it for 2 minutes per timeframe.
+  var autoKey = {}, autoAt = {};
   function autoLoad() {
-    var jobs = INST.filter(function (x) { return AUTO[x.id] && !connectedNow(x.id); }).map(function (x) {
-      var url = "/.netlify/functions/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
-      return fetch(url, { cache: "no-store" })
-        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
-        .then(function (text) { st.csv[x.id] = parseJSONCandles(text); autoOk[x.id] = true; })
-        .catch(function () { autoOk[x.id] = false; });
-    });
-    return Promise.all(jobs);
+    var x = BY[st.inst];
+    if (!x || !AUTO[x.id] || connectedNow(x.id)) return Promise.resolve();
+    var key = x.id + "|" + st.tf;
+    if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 120000) return Promise.resolve();
+    var url = "/.netlify/functions/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
+    return fetch(url, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (text) {
+        st.csv[x.id] = parseJSONCandles(text);
+        autoOk[x.id] = true; autoKey[key] = true; autoAt[key] = Date.now();
+      })
+      .catch(function () { autoOk[x.id] = false; });
   }
   function refreshFeeds() {
     var ids = Object.keys(feeds);
@@ -557,7 +563,7 @@
   function setInst(id) {
     st.inst = id;
     if (id === "BTC") { loadBtc().then(function () { connect(); analyzeAndRender(); }); }
-    else { stopStreams(); live(false); analyzeAndRender(); }
+    else { stopStreams(); live(false); autoLoad().then(analyzeAndRender); }
     var sel = $("inst-select"); if (sel) sel.value = id;
   }
   function setTf(tf) {
@@ -661,7 +667,7 @@
   feeds = store("baqerFeeds") || {};
   setInterval(refreshFeeds, 60000);
   refreshFeeds();
-  setInterval(function () { autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); }); }, 60000);
+  setInterval(function () { autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); }); }, 120000);
   showFeedFor(sel.value);
   var prof = $("profile");
   st.profile = store("sniperProfile") || "balanced";
