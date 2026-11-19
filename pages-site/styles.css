@@ -408,3 +408,6 @@ body{background:#070d17}
 .nw b{color:#f2f5fb}
 
 .tv{background:#07090c; border-color:rgba(70,120,200,.35); padding:0; min-height:600px}
+
+/* keep the tall chart clear of the fixed bottom navigation */
+.tv{margin-bottom:110px}
