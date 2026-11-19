@@ -44,7 +44,7 @@
       notifOff: "This browser does not support notifications.", notifOn: "Notifications are on.", notifNo: "Notifications were not enabled.",
       waitWord: "Wait", buyWord: "BUY", sellWord: "SELL", ranging: "Ranging, accumulating",
       bullTrend: "Institutional short-term uptrend", bearTrend: "Institutional short-term downtrend",
-      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file"
+      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file", sourceLinked: "Linked feed"
     },
     ar: {
       tag: "ICT · SMC · الهيكل", sample: "عينة", live: "مباشر", swing: "سوينغ", scalp: "سكالب", dayIct: "يومي ICT",
@@ -71,7 +71,7 @@
       notifOff: "هذا المتصفح لا يدعم الإشعارات.", notifOn: "الإشعارات مفعّلة.", notifNo: "لم تُفعّل الإشعارات.",
       waitWord: "انتظار", buyWord: "شراء", sellWord: "بيع", ranging: "عرضي، يتجمع السعر",
       bullTrend: "اتجاه صاعد مؤسسي قصير المدى", bearTrend: "اتجاه هابط مؤسسي قصير المدى",
-      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV"
+      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV", sourceLinked: "رابط بيانات"
     }
   };
   I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
@@ -85,8 +85,21 @@
   I18N.ar.welContinue = "متابعة";
   I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
   I18N.ar.welBack = "أهلاً بعودتك، ";
+  I18N.en.dataUrl = "Live data link (CSV or JSON)";
+  I18N.en.dataSave = "Connect data";
+  I18N.en.dataClear = "Disconnect";
+  I18N.en.dataNote = "The app reads this link every minute. The file needs columns open, high, low, close (and time if available). Each instrument can have its own link.";
+  I18N.en.dataOk = "Connected. Last update: ";
+  I18N.en.dataFail = "Could not read this link. Check that it is public and returns candles.";
+  I18N.ar.dataUrl = "رابط البيانات الحية (CSV أو JSON)";
+  I18N.ar.dataSave = "ربط البيانات";
+  I18N.ar.dataClear = "فصل";
+  I18N.ar.dataNote = "يقرأ التطبيق هذا الرابط كل دقيقة. الملف يحتاج أعمدة open وhigh وlow وclose، والوقت إن توفّر. لكل أصل رابطه الخاص.";
+  I18N.ar.dataOk = "تم الربط. آخر تحديث: ";
+  I18N.ar.dataFail = "تعذّرت قراءة الرابط. تأكد أنه عام ويعيد شموعاً.";
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
+  var feeds = {}; // id -> { url, updated }
   var st = { inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
@@ -107,8 +120,47 @@
     if (id === "BTC") return st.btc || sampleFor(BY.BTC);
     return st.csv[id] || sampleFor(BY[id]);
   }
+  function parseJSONCandles(text) {
+    var arr = JSON.parse(text);
+    if (arr && !Array.isArray(arr) && Array.isArray(arr.candles)) arr = arr.candles;
+    if (!Array.isArray(arr)) throw new Error("bad json");
+    var out = [];
+    arr.forEach(function (k, i) {
+      var o = +(k.o != null ? k.o : k.open), h = +(k.h != null ? k.h : k.high);
+      var l = +(k.l != null ? k.l : k.low), c = +(k.c != null ? k.c : k.close);
+      if ([o, h, l, c].some(isNaN)) return;
+      out.push({ t: k.t != null ? +k.t : i, o: o, h: h, l: l, c: c, v: +(k.v || 1) });
+    });
+    if (out.length < 60) throw new Error(T("csvNeeds"));
+    return out.slice(-500);
+  }
+  function loadFeed(id) {
+    var f = feeds[id]; if (!f || !f.url) return Promise.resolve();
+    return fetch(f.url, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (text) {
+        var t = text.trim();
+        st.csv[id] = (t[0] === "[" || t[0] === "{") ? parseJSONCandles(t) : parseCSV(t);
+        f.updated = new Date(); f.ok = true;
+        feedNote(id);
+      })
+      .catch(function () { f.ok = false; feedNote(id); });
+  }
+  function feedNote(id) {
+    var f = feeds[id];
+    if (!f) return;
+    txt("data-note", f.ok ? T("dataOk") + f.updated.toLocaleTimeString() : T("dataFail"));
+  }
+  function saveFeeds() { store("baqerFeeds", feeds); }
+  function connectedNow(id) { return !!(feeds[id] && feeds[id].ok); }
+  function refreshFeeds() {
+    var ids = Object.keys(feeds);
+    if (!ids.length) return;
+    Promise.all(ids.map(loadFeed)).then(function () { analyzeAndRender(); });
+  }
   function sourceFor(id) {
     if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
+    if (connectedNow(id)) return T("sourceLinked");
     return st.csv[id] ? T("sourceCsv") : T("sourceSample");
   }
   function changeFor(id) {
@@ -557,7 +609,26 @@
   var sel = $("inst-select");
   INST.forEach(function (x) { var o = el("option", "", x.name); o.value = x.id; sel.appendChild(o); });
   sel.value = st.inst;
-  sel.addEventListener("change", function () { setInst(sel.value); });
+  sel.addEventListener("change", function () { setInst(sel.value); showFeedFor(sel.value); });
+  function showFeedFor(id) {
+    var f = feeds[id];
+    $("data-url").value = f ? f.url : "";
+    txt("data-note", f && f.ok ? T("dataOk") + f.updated.toLocaleTimeString() : (f ? T("dataFail") : ""));
+  }
+  $("data-save").addEventListener("click", function () {
+    var id = sel.value, url = $("data-url").value.trim();
+    if (!url) { txt("data-note", T("dataFail")); return; }
+    feeds[id] = { url: url, ok: false };
+    saveFeeds();
+    loadFeed(id).then(function () { if (st.inst === id) analyzeAndRender(); else renderTickers(); });
+  });
+  $("data-clear").addEventListener("click", function () {
+    var id = sel.value;
+    delete feeds[id]; delete st.csv[id]; saveFeeds();
+    $("data-url").value = "";
+    txt("data-note", "");
+    if (st.inst === id) analyzeAndRender(); else renderTickers();
+  });
 
   $("csv").addEventListener("change", function (ev) {
     var f = ev.target.files && ev.target.files[0]; if (!f) return;
@@ -572,6 +643,10 @@
     rd.readAsText(f);
   });
 
+  feeds = store("baqerFeeds") || {};
+  setInterval(refreshFeeds, 60000);
+  refreshFeeds();
+  showFeedFor(sel.value);
   var prof = $("profile");
   st.profile = store("sniperProfile") || "balanced";
   prof.value = st.profile;

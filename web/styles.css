@@ -150,3 +150,5 @@ html[dir="rtl"] .tk{text-align:right}
 #wel-back[hidden]{display:none !important}
 .wel-hi{margin:0; font-size:16px; font-weight:600}
 .wel-hint{margin:0; font-size:12px}
+.row-btns{display:flex; gap:8px; flex-wrap:wrap}
+.row-btns .btn,.row-btns .ghost{flex:1}
