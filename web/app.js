@@ -126,7 +126,7 @@
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
   var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
   var autoOk = {}; // id -> true when the built-in data function returned candles
-  var st = { show: { ema: true, zones: true, levels: true, rsi: true }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, sma200: false, macd: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -360,7 +360,7 @@
     return e;
   }
   // ---------- real chart (lightweight-charts) with fallback to the SVG chart ----------
-  var LW = { chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null };
+  var LW = { chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null, bbUp: null, bbMid: null, bbLo: null, sma: null, macdChart: null, macdHist: null, macdLine: null, macdSig: null };
   var CH_OPTS = function (height) {
     return {
       height: height, width: 300,
@@ -385,9 +385,21 @@
     LW.rsi = LW.rsiChart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, priceLineVisible: false });
     LW.rsi.createPriceLine({ price: 70, color: "rgba(255,107,107,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "70" });
     LW.rsi.createPriceLine({ price: 30, color: "rgba(47,208,139,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30" });
+    var noLast = { priceLineVisible: false, lastValueVisible: false };
+    LW.bbUp = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
+    LW.bbMid = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.45)", lineWidth: 1, lineStyle: 1 }, noLast));
+    LW.bbLo = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
+    LW.sma = LW.chart.addLineSeries(Object.assign({ color: "#ff9f43", lineWidth: 1.6 }, noLast));
+    var mel = $("lw-macd");
+    LW.macdChart = LightweightCharts.createChart(mel, CH_OPTS(120));
+    LW.macdChart.applyOptions({ width: mel.clientWidth || 300, timeScale: { visible: false } });
+    LW.macdHist = LW.macdChart.addHistogramSeries(noLast);
+    LW.macdLine = LW.macdChart.addLineSeries(Object.assign({ color: "#4f9bff", lineWidth: 1.4 }, noLast));
+    LW.macdSig = LW.macdChart.addLineSeries(Object.assign({ color: "#ff9f43", lineWidth: 1.2 }, noLast));
     window.addEventListener("resize", function () {
       var w = el.clientWidth || 300;
       LW.chart.applyOptions({ width: w }); LW.rsiChart.applyOptions({ width: rel.clientWidth || w });
+      LW.macdChart.applyOptions({ width: mel.clientWidth || w });
     });
     return true;
   }
@@ -409,6 +421,16 @@
     R.forEach(function (v, i) { if (v != null) rsiData.push({ time: data[i].time, value: v }); });
     LW.rsi.setData(rsiData);
     $("lw-rsi").hidden = !st.show.rsi;
+    // optional indicators
+    function pts(arr) { var o = []; arr.forEach(function (v, i) { if (v != null) o.push({ time: data[i].time, value: v }); }); return o; }
+    var bb = A.bollinger(closes, 20, 2);
+    LW.bbUp.setData(pts(bb.up)); LW.bbMid.setData(pts(bb.mid)); LW.bbLo.setData(pts(bb.lo));
+    LW.bbUp.applyOptions({ visible: !!st.show.bb }); LW.bbMid.applyOptions({ visible: !!st.show.bb }); LW.bbLo.applyOptions({ visible: !!st.show.bb });
+    LW.sma.setData(pts(A.sma(closes, 200))); LW.sma.applyOptions({ visible: !!st.show.sma200 });
+    var md = A.macd(closes, 12, 26, 9);
+    var hist = []; md.hist.forEach(function (v, i) { if (v != null) hist.push({ time: data[i].time, value: v, color: v >= 0 ? "rgba(47,208,139,.6)" : "rgba(255,100,100,.6)" }); });
+    LW.macdHist.setData(hist); LW.macdLine.setData(pts(md.line)); LW.macdSig.setData(pts(md.signal));
+    $("lw-macd").hidden = !st.show.macd;
     // markers: break of structure and liquidity sweep
     var markers = [];
     if (r.ev && r.ev.i < n) markers.push({ time: data[r.ev.i].time, position: r.ev.dir === "bull" ? "belowBar" : "aboveBar", color: r.ev.dir === "bull" ? "#2fd08b" : "#ff6b6b", shape: r.ev.dir === "bull" ? "arrowUp" : "arrowDown", text: r.ev.type });

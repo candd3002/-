@@ -147,6 +147,37 @@
     return { strong: best >= atrV, tested: tested };
   }
 
+  // ---------- optional indicators ----------
+  function sma(vals, len) {
+    var out = new Array(vals.length).fill(null), s = 0;
+    for (var i = 0; i < vals.length; i++) {
+      s += vals[i]; if (i >= len) s -= vals[i - len];
+      if (i >= len - 1) out[i] = s / len;
+    }
+    return out;
+  }
+  function bollinger(vals, len, k) {
+    var mid = sma(vals, len), up = [], lo = [];
+    for (var i = 0; i < vals.length; i++) {
+      if (mid[i] == null) { up.push(null); lo.push(null); continue; }
+      var v = 0;
+      for (var j = i - len + 1; j <= i; j++) v += (vals[j] - mid[i]) * (vals[j] - mid[i]);
+      var sd = Math.sqrt(v / len);
+      up.push(mid[i] + k * sd); lo.push(mid[i] - k * sd);
+    }
+    return { mid: mid, up: up, lo: lo };
+  }
+  function macd(vals, f, s, sig) {
+    var ef = ema(vals, f), es = ema(vals, s);
+    var line = vals.map(function (_, i) { return ef[i] != null && es[i] != null ? ef[i] - es[i] : null; });
+    var idx = [], nums = [];
+    line.forEach(function (v, i) { if (v != null) { idx.push(i); nums.push(v); } });
+    var sg = ema(nums, sig);
+    var signal = new Array(vals.length).fill(null), hist = new Array(vals.length).fill(null);
+    idx.forEach(function (i, j) { if (sg[j] != null) { signal[i] = sg[j]; hist[i] = line[i] - sg[j]; } });
+    return { line: line, signal: signal, hist: hist };
+  }
+
   // ---------- main analysis ----------
   function analyze(c, profileName, learn) {
     var P = PROFILES[profileName] || PROFILES.balanced;
@@ -471,7 +502,7 @@
   }
 
   return {
-    CFG: CFG, PROFILES: PROFILES, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    CFG: CFG, PROFILES: PROFILES, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };
