@@ -1,0 +1,818 @@
+(function () {
+  "use strict";
+  var A = window.Analysis;
+  var NS = "http://www.w3.org/2000/svg";
+  var TF_MS = { "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
+  var TF_NAME = { "15m": "15M", "1h": "1H", "4h": "4H" };
+
+  // Only BTC has a keyless live feed. Other instruments use CSV from MT5 or labelled sample candles.
+  var INST = [
+    { id: "BTC",    name: "BTC/USDT",   digits: 2, live: true,  base: 91527,  vol: 0.0036, seed: 11 },
+    { id: "XAU",    name: "XAU/USD",    digits: 2,              base: 3716,   vol: 0.0028, seed: 23 },
+    { id: "XAG",    name: "XAG/USD",    digits: 3,              base: 52.40,  vol: 0.0045, seed: 31 },
+    { id: "EURUSD", name: "EUR/USD",    digits: 5,              base: 1.1650, vol: 0.0007, seed: 41 },
+    { id: "GBPUSD", name: "GBP/USD",    digits: 5,              base: 1.3420, vol: 0.0008, seed: 53 },
+    { id: "NAS100", name: "NASDAQ 100", digits: 2,              base: 25400,  vol: 0.0032, seed: 67 }
+  ];
+  var BY = {};
+  INST.forEach(function (x) { BY[x.id] = x; });
+
+  // ---------- translations (UI chrome) ----------
+  var I18N = {
+    en: {
+      tag: "ICT · SMC · STRUCTURE", sample: "Sample", live: "Live", swing: "Swing", scalp: "Scalp", dayIct: "Day ICT",
+      bias: "Bias", orderBlock: "ORDER BLOCK", fvgLbl: "FAIR VALUE GAP", sslLbl: "SELL-SIDE LIQ.", bslLbl: "BUY-SIDE LIQ.",
+      noSource: "No data source", noData: "No data for this instrument yet. Connect a data source in Settings.", tvLoad: "Loading TradingView…", tvFail: "TradingView could not load (needs internet).", chartTitle2: "Chart",
+      sniperEntry: "SNIPER ENTRY", stop: "Stop", entry: "Entry", finalTarget: "Final target", targets: "Targets", sweep: "Sweep",
+      noSetup: "No active setup", marketsTitle: "Markets", alertsTitle: "Alerts", settingsTitle: "Settings", calendarTitle: "Calendar",
+      alertSignal: "Notify me when a new signal appears", alertTp: "Notify me when a trade closes (win or loss)",
+      enableNotif: "Enable notifications", alertsNote: "Notifications appear only while the page is open in your browser.",
+      risk: "Risk profile", riskBalanced: "Balanced (targets 1.5R, 2.5R, 4R)", riskSniper: "Sniper (tight stop, far targets)",
+      riskNote: "Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.",
+      instrument: "Instrument", importCsv: "Import candles (CSV from MT5)",
+      sessLondon: "London session", sessNewYork: "New York session", sessAsia: "Asia session",
+      calendarNote: "Times are Riyadh time. Economic news appears once a data provider is connected.",
+      disclaimer: "Educational analysis, not financial advice. Trades do not guarantee profit, and leverage can cause large losses. Size your risk yourself.",
+      account: "Account", signIn: "Sign in", signOut: "Sign out", namePh: "Name", emailPh: "Email",
+      localAccount: "This sign-in is saved on this device only.", signedInAs: "Signed in as ", notSigned: "Not signed in.",
+      language: "Language", go: "Go to", menuSettings: "Settings and risk profile", about: "About",
+      aboutText: "Baqer Sniper is an educational market-structure tool. It does not place trades and does not guarantee results.",
+      navSettings: "Settings", navAlerts: "Alerts", navCalendar: "Calendar", navAnalysis: "Analysis", navMarkets: "Markets",
+      trend: "Trend", journal: "Trade journal", clearJournal: "Clear journal", noTrades: "No closed trades yet. Every signal is recorded and closes at its stop or first target.",
+      closedTrades: "Closed trades", wins: "wins", losses: "losses", winRate: "win rate", learnNote: "After recent losses, decisions need 2 more points.",
+      paused: "Paused patterns", loading: "Loading…", csvLoaded: " loaded ", candles: " candles.",
+      csvNeeds: "The file needs at least 60 candles.", csvColumns: "Could not find open, high, low, close columns.",
+      notifOff: "This browser does not support notifications.", notifOn: "Notifications are on.", notifNo: "Notifications were not enabled.",
+      waitWord: "Wait", buyWord: "BUY", sellWord: "SELL", ranging: "Ranging, accumulating",
+      bullTrend: "Institutional short-term uptrend", bearTrend: "Institutional short-term downtrend",
+      noActive: "No active setup", sourceLive: "Binance · live", sourceSample: "Sample", sourceCsv: "CSV file", sourceLinked: "Linked feed", sourceAuto: "Auto feed"
+    },
+    ar: {
+      tag: "ICT · SMC · الهيكل", sample: "عينة", live: "مباشر", swing: "سوينغ", scalp: "سكالب", dayIct: "يومي ICT",
+      bias: "الاتجاه", orderBlock: "كتلة الأوامر", fvgLbl: "فجوة القيمة العادلة", sslLbl: "سيولة البيع SSL", bslLbl: "سيولة الشراء BSL",
+      sniperEntry: "دخول القناص", stop: "وقف", entry: "دخول", finalTarget: "الهدف النهائي", targets: "الأهداف", sweep: "سحب",
+      noSetup: "لا توجد صفقة نشطة", marketsTitle: "الأسواق", alertsTitle: "التنبيهات", settingsTitle: "الإعدادات", calendarTitle: "التقويم",
+      alertSignal: "أخبرني عند ظهور إشارة جديدة", alertTp: "أخبرني عند إغلاق صفقة (ربح أو خسارة)",
+      enableNotif: "تفعيل الإشعارات", alertsNote: "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.",
+      risk: "نمط المخاطرة", riskBalanced: "متوازن (أهداف 1.5R و2.5R و4R)", riskSniper: "Sniper (وقف قريب وأهداف بعيدة)",
+      riskNote: "نمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل. هذا خيار وليس ضماناً لأي نتيجة.",
+      instrument: "الأصل", importCsv: "استيراد الشموع (CSV من MT5)",
+      sessLondon: "جلسة لندن", sessNewYork: "جلسة نيويورك", sessAsia: "جلسة آسيا",
+      calendarNote: "الأوقات بتوقيت الرياض. تظهر أخبار الاقتصاد عند ربط مزود بيانات.",
+      disclaimer: "تحليل تعليمي وليس نصيحة مالية. الصفقات لا تضمن ربحاً، والرافعة قد تسبب خسائر كبيرة. حدّد مخاطرتك بنفسك.",
+      account: "الحساب", signIn: "تسجيل الدخول", signOut: "تسجيل الخروج", namePh: "الاسم", emailPh: "البريد الإلكتروني",
+      localAccount: "يُحفظ تسجيل الدخول على هذا الجهاز فقط.", signedInAs: "مسجّل الدخول باسم ", notSigned: "غير مسجّل الدخول.",
+      language: "اللغة", go: "انتقل إلى", menuSettings: "الإعدادات ونمط المخاطرة", about: "عن التطبيق",
+      aboutText: "باقر سنايبر أداة تعليمية لتحليل هيكل السوق. لا تنفّذ صفقات ولا تضمن نتائج.",
+      navSettings: "الإعدادات", navAlerts: "التنبيهات", navCalendar: "التقويم", navAnalysis: "التحليل", navMarkets: "الأسواق",
+      trend: "الاتجاه", journal: "سجل الصفقات", clearJournal: "مسح السجل", noTrades: "لا توجد صفقات مغلقة بعد. تُسجَّل كل إشارة وتُغلق عند الوقف أو الهدف الأول.",
+      closedTrades: "صفقات مغلقة", wins: "ربح", losses: "خسارة", winRate: "نسبة النجاح", learnNote: "بعد خسائر حديثة يحتاج القرار إلى نقطتين إضافيتين.",
+      paused: "أنماط موقوفة", loading: "جارٍ التحميل…", csvLoaded: " تم تحميل ", candles: " شمعة.",
+      csvNeeds: "يحتاج الملف إلى 60 شمعة على الأقل.", csvColumns: "لم أجد أعمدة open وhigh وlow وclose.",
+      notifOff: "هذا المتصفح لا يدعم الإشعارات.", notifOn: "الإشعارات مفعّلة.", notifNo: "لم تُفعّل الإشعارات.",
+      waitWord: "انتظار", buyWord: "شراء", sellWord: "بيع", ranging: "عرضي، يتجمع السعر",
+      bullTrend: "اتجاه صاعد مؤسسي قصير المدى", bearTrend: "اتجاه هابط مؤسسي قصير المدى",
+      noActive: "لا توجد صفقة نشطة", sourceLive: "Binance · مباشر", sourceSample: "عينة", sourceCsv: "ملف CSV", sourceLinked: "رابط بيانات", sourceAuto: "بيانات تلقائية"
+    }
+  };
+  I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
+  I18N.en.welSub = "Market structure, explained simply.";
+  I18N.en.riskScalp = "Scalp (very tight stop, quick targets)";
+  I18N.en.analysisTitle = "Detailed ICT + SMC analysis";
+  I18N.ar.analysisTitle = "التحليل التفصيلي بنظام ICT + SMC";
+  I18N.ar.swing = "تداول متدرج"; I18N.ar.scalp = "مضاربة سريعة"; I18N.ar.dayIct = "تداول يومي ICT";
+  I18N.ar.bias = "اتجاه السوق"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL";
+  I18N.ar.orderBlock = "كتلة الأوامر"; I18N.ar.sniperEntry = "منطقة الدخول";
+  I18N.ar.tag = "تحليل الذهب والعملات الرقمية";
+  I18N.ar.riskScalp = "Scalp (وقف ضيق جداً وأهداف سريعة)";
+  I18N.en.welGuest = "Continue without signing in";
+  I18N.en.welContinue = "Continue";
+  I18N.en.welHint = "Your sign-in is saved on this device only.";
+  I18N.en.welBack = "Welcome back, ";
+  I18N.ar.welSub = "هيكل السوق، مشروحاً ببساطة.";
+  I18N.ar.welGuest = "المتابعة دون تسجيل دخول";
+  I18N.ar.welContinue = "متابعة";
+  I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
+  I18N.ar.welBack = "أهلاً بعودتك، ";
+  var NEW = {
+    en: { appName: "Radar", appSub: "Gold & crypto market analysis", live: "Live", structTitle: "ICT + SMC structure",
+          modeSwing: "Swing", modeScalp: "Scalp", modeDay: "Day ICT", marketTrend: "Market trend",
+          stopLoss: "Stop loss", entryZone: "Entry zone", tp1: "TP1", tp2: "TP2", tp3: "TP3",
+          detailTitle: "Detailed analysis (ICT + SMC)", signalBuy: "Buy signal", signalSell: "Sell signal", signalWait: "Wait" },
+    ar: { appName: "رادار الأسواق", appSub: "تحليل الذهب والعملات الرقمية", live: "مباشر", structTitle: "هيكل ICT + SMC الفوري",
+          modeSwing: "تداول متدرج", modeScalp: "مضاربة سريعة", modeDay: "تداول يومي ICT", marketTrend: "اتجاه السوق",
+          stopLoss: "وقف الخسارة", entryZone: "منطقة الدخول", tp1: "الهدف 1", tp2: "الهدف 2", tp3: "الهدف 3",
+          detailTitle: "التحليل التفصيلي بنظام ICT + SMC", signalBuy: "إشارة شراء", signalSell: "إشارة بيع", signalWait: "انتظار" }
+  };
+  Object.keys(NEW).forEach(function (l) { Object.keys(NEW[l]).forEach(function (k) { I18N[l][k] = NEW[l][k]; }); });
+  I18N.en.chartTitle = "Live chart"; I18N.ar.chartTitle = "الشارت المباشر";
+  I18N.en.zonesBtn = "Zones"; I18N.ar.zonesBtn = "المناطق";
+  I18N.en.levelsBtn = "Levels"; I18N.ar.levelsBtn = "المستويات";
+  I18N.en.sslLbl = "SSL liquidity"; I18N.en.bslLbl = "BSL liquidity"; I18N.en.fvgLbl = "FVG"; I18N.en.orderBlock = "Order block";
+  I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.orderBlock = "كتلة الأوامر";
+  I18N.en.dataUrl = "Live data link (CSV or JSON)";
+  I18N.en.dataSave = "Connect data";
+  I18N.en.dataClear = "Disconnect";
+  I18N.en.dataNote = "The app reads this link every minute. The file needs columns open, high, low, close (and time if available). Each instrument can have its own link.";
+  I18N.en.dataOk = "Connected. Last update: ";
+  I18N.en.dataFail = "Could not read this link. Check that it is public and returns candles.";
+  I18N.ar.dataUrl = "رابط البيانات الحية (CSV أو JSON)";
+  I18N.ar.dataSave = "ربط البيانات";
+  I18N.ar.dataClear = "فصل";
+  I18N.ar.dataNote = "يقرأ التطبيق هذا الرابط كل دقيقة. الأعمدة المطلوبة: open، high، low، close، والوقت إن توفّر. لكل أصل رابطه الخاص.";
+  I18N.ar.dataOk = "تم الربط. آخر تحديث: ";
+  I18N.ar.dataFail = "تعذّرت قراءة الرابط. تأكد أنه عام ويعيد شموعاً.";
+  var NEWS_TXT = {
+    en: { newsTitle: "Market news", econTitle: "Economic calendar today", high: "High", medium: "Medium", low: "Low",
+          upcoming: "Soon", forecast: "Forecast", previous: "Previous", actual: "Actual", refresh: "Refresh",
+          newsNeed: "News needs a provider key. Add FINNHUB_KEY in Netlify environment variables, then redeploy.",
+          noEvents: "No high or medium impact events in the next two days.", noNews: "No news available right now.",
+          todaySummary: "High-impact events in the next 2 days: ", rule: "Rule of thumb: an actual above forecast usually strengthens the currency, and below weakens it." },
+    ar: { newsTitle: "أخبار السوق", econTitle: "التقويم الاقتصادي اليوم", high: "تأثير عالٍ", medium: "تأثير متوسط", low: "تأثير منخفض",
+          upcoming: "قريباً", forecast: "المتوقع", previous: "السابق", actual: "الفعلي", refresh: "تحديث",
+          newsNeed: "الأخبار تحتاج مفتاح مزود. أضف FINNHUB_KEY في إعدادات Netlify ثم أعد النشر.",
+          noEvents: "لا توجد أحداث ذات تأثير عالٍ أو متوسط خلال يومين.", noNews: "لا توجد أخبار متاحة الآن.",
+          todaySummary: "أحداث عالية التأثير خلال يومين: ", rule: "قاعدة عامة: الفعلي أعلى من المتوقع يقوّي العملة غالباً، والأقل منه يضعفها." }
+  };
+  Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
+  I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.ar.noData = "لا توجد بيانات لهذا الأصل بعد. اربط مصدر بيانات من الإعدادات.";
+  I18N.ar.tvLoad = "جارٍ تحميل TradingView…";
+  I18N.ar.tvFail = "تعذّر تحميل TradingView (يحتاج اتصالاً بالإنترنت).";
+  I18N.ar.signedInAs = "مسجّل الدخول باسم ";
+
+  var feeds = {}; // id -> { url, updated, ok } (user-provided links)
+  var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
+  var autoOk = {}; // id -> true when the built-in data function returned candles
+  var MAS = [
+    { key: "ema9", type: "ema", len: 9, color: "#ffd166" },
+    { key: "ema21", type: "ema", len: 21, color: "#06d6a0" },
+    { key: "sma20", type: "sma", len: 20, color: "#8ecae6" },
+    { key: "sma100", type: "sma", len: 100, color: "#fb8500" }
+  ];
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, sma200: false, macd: false, ema9: false, ema21: false, sma20: false, sma100: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+             csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
+
+  function $(id) { return document.getElementById(id); }
+  function T(k) { return (I18N[st.lang] && I18N[st.lang][k]) || I18N.en[k] || k; }
+  function txt(id, t) { var e = $(id); if (e) e.textContent = t; }
+  function fmtD(v, d) {
+    if (v == null || isNaN(v)) return "—";
+    return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function fmt(v) { return fmtD(v, BY[st.inst].digits); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function store(key, val) { try { if (val === undefined) return JSON.parse(localStorage.getItem(key) || "null"); localStorage.setItem(key, JSON.stringify(val)); } catch (e) { return val === undefined ? null : undefined; } }
+
+  // ---------- candles ----------
+  function sampleFor(x) { return A.sampleCandles(x.base, x.vol, 500, x.seed); }
+  function candlesFor(id) {
+    if (id === "BTC") return st.btc || [];
+    return st.csv[id] || [];
+  }
+  function parseJSONCandles(text) {
+    var arr = JSON.parse(text);
+    if (arr && !Array.isArray(arr) && Array.isArray(arr.candles)) arr = arr.candles;
+    if (!Array.isArray(arr)) throw new Error("bad json");
+    var out = [];
+    arr.forEach(function (k, i) {
+      var o = +(k.o != null ? k.o : k.open), h = +(k.h != null ? k.h : k.high);
+      var l = +(k.l != null ? k.l : k.low), c = +(k.c != null ? k.c : k.close);
+      if ([o, h, l, c].some(isNaN)) return;
+      out.push({ t: k.t != null ? +k.t : i, o: o, h: h, l: l, c: c, v: +(k.v || 1) });
+    });
+    if (out.length < 60) throw new Error(T("csvNeeds"));
+    return out.slice(-500);
+  }
+  function loadFeed(id) {
+    var f = feeds[id]; if (!f || !f.url) return Promise.resolve();
+    return fetch(f.url, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (text) {
+        var t = text.trim();
+        st.csv[id] = (t[0] === "[" || t[0] === "{") ? parseJSONCandles(t) : parseCSV(t);
+        f.updated = new Date(); f.ok = true;
+        feedNote(id);
+      })
+      .catch(function () { f.ok = false; feedNote(id); });
+  }
+  function feedNote(id) {
+    var f = feeds[id];
+    if (!f) return;
+    txt("data-note", f.ok ? T("dataOk") + f.updated.toLocaleTimeString() : T("dataFail"));
+  }
+  function saveFeeds() { store("baqerFeeds", feeds); }
+  function connectedNow(id) { return !!(feeds[id] && feeds[id].ok); }
+  // Built-in feed: loads only the selected instrument (saves the provider quota) and
+  // reuses it for 2 minutes per timeframe.
+  var autoKey = {}, autoAt = {};
+  function autoLoad() {
+    var x = BY[st.inst];
+    if (!x || !AUTO[x.id] || connectedNow(x.id)) return Promise.resolve();
+    var key = x.id + "|" + st.tf;
+    if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 120000) return Promise.resolve();
+    var url = "/api/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
+    return fetch(url, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (text) {
+        st.csv[x.id] = parseJSONCandles(text);
+        autoOk[x.id] = true; autoKey[key] = true; autoAt[key] = Date.now();
+      })
+      .catch(function () { autoOk[x.id] = false; });
+  }
+  function refreshFeeds() {
+    var ids = Object.keys(feeds);
+    var userJobs = ids.map(loadFeed);
+    Promise.all(userJobs.concat([autoLoad()])).then(function () { analyzeAndRender(); });
+  }
+  function sourceFor(id) {
+    if (!candlesFor(id).length) return T("noSource");
+    if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
+    if (connectedNow(id)) return T("sourceLinked");
+    if (autoOk[id]) return T("sourceAuto");
+    return st.csv[id] ? T("sourceCsv") : T("sourceSample");
+  }
+  function changeFor(id) {
+    if (id === "BTC" && st.btcChange != null) return st.btcChange;
+    var c = candlesFor(id); if (c.length < 2) return null;
+    var from = c[Math.max(0, c.length - 25)].o, last = c[c.length - 1].c;
+    return (last - from) / from * 100;
+  }
+
+  // ---------- loading ----------
+  function klines(tf) {
+    return fetch("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=" + tf + "&limit=500")
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (rows) { return rows.map(function (k) { return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] }; }); });
+  }
+  function change24h() {
+    return fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
+      .then(function (r) { return r.json(); }).then(function (j) { return +j.priceChangePercent; });
+  }
+  function loadBtc() {
+    return klines(st.tf).then(function (c) { st.btc = c; st.btcFetchedTf = st.tf; live(true); })
+      .catch(function () { st.btc = null; st.btcFetchedTf = null; live(false); });
+  }
+  function parseCSV(text) {
+    var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length < 61) throw new Error(T("csvNeeds"));
+    var head = lines[0].split(/[,;\t]/).map(function (s) { return s.trim().toLowerCase().replace(/[<>]/g, ""); });
+    var idx = { o: 2, h: 3, l: 4, c: 5 }, start = 0;
+    if (/[a-z]/i.test(lines[0])) {
+      start = 1;
+      var f = function (names) { for (var k = 0; k < head.length; k++) if (names.indexOf(head[k]) >= 0) return k; return -1; };
+      idx = { o: f(["open"]), h: f(["high"]), l: f(["low"]), c: f(["close"]) };
+      if (idx.o < 0 || idx.h < 0 || idx.l < 0 || idx.c < 0) throw new Error(T("csvColumns"));
+    }
+    var out = [];
+    for (var i = start; i < lines.length; i++) {
+      var p = lines[i].split(/[,;\t]/);
+      var o = +p[idx.o], h = +p[idx.h], l = +p[idx.l], c = +p[idx.c];
+      if ([o, h, l, c].some(isNaN)) continue;
+      out.push({ t: i, o: o, h: h, l: l, c: c, v: 1 });
+    }
+    if (out.length < 60) throw new Error(T("csvNeeds"));
+    return out.slice(-500);
+  }
+  function live(on) { var box = $("live"); if (box) box.classList.toggle("off", !on); txt("live-text", on ? T("live") : T("sample")); }
+  function stopStreams() {
+    if (st.ws) { try { st.ws.close(); } catch (e) {} st.ws = null; }
+    if (st.poll) { clearInterval(st.poll); st.poll = null; }
+  }
+  function connect() {
+    stopStreams();
+    if (st.inst !== "BTC") return;
+    if (!("WebSocket" in window)) { st.poll = setInterval(refresh, 30000); return; }
+    try {
+      var ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_" + st.tf);
+      st.ws = ws;
+      ws.onmessage = function (ev) {
+        var k = JSON.parse(ev.data).k;
+        if (!k || !st.btc) return;
+        var bar = { t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v };
+        var last = st.btc[st.btc.length - 1];
+        if (last && last.t === bar.t) st.btc[st.btc.length - 1] = bar;
+        else if (bar.t > last.t) { st.btc.push(bar); if (st.btc.length > 500) st.btc.shift(); }
+        live(true);
+        analyzeAndRender();
+      };
+      ws.onerror = function () { live(false); };
+      ws.onclose = function () { if (st.ws === ws && st.inst === "BTC") st.poll = st.poll || setInterval(refresh, 30000); };
+    } catch (e) { st.poll = setInterval(refresh, 30000); }
+  }
+  function refresh() {
+    var p = st.inst === "BTC" && st.btcFetchedTf !== st.tf ? loadBtc() : Promise.resolve();
+    p.then(analyzeAndRender);
+  }
+
+  // ---------- analysis and render ----------
+  function analyzeAndRender() {
+    var c = candlesFor(st.inst);
+    st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
+    journalUpdate();
+    renderTickers();
+    render();
+    renderJournal();
+    renderMarkets();
+    notifyIfNew(st.res);
+  }
+
+  function renderTickers() {
+    var row = $("tickers"); if (!row) return;
+    row.textContent = "";
+    INST.forEach(function (x) {
+      var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
+      var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
+      b.type = "button"; b.setAttribute("aria-pressed", String(x.id === st.inst));
+      b.appendChild(el("span", "sym", x.name));
+      b.appendChild(el("span", "px", fmtD(last, x.digits)));
+      b.appendChild(el("span", "pct" + (ch != null && ch < 0 ? " neg" : ""), ch == null ? "—" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
+      b.addEventListener("click", function () { setInst(x.id); });
+      row.appendChild(b);
+    });
+    txt("asset-name", BY[st.inst].name);
+    txt("src", sourceFor(st.inst));
+  }
+
+  function render() {
+    var r = st.res;
+    if (!r || !r.ready) { var nt = $("trend-line"); nt.textContent = r ? r.reason : T("loading"); nt.className = "trend note"; return; }
+    var s = r.signal, sell = s && s.dir === "SHORT", buy = s && s.dir === "LONG";
+    var cls = buy ? "buy" : sell ? "sell" : "wait";
+    var conf = Math.min(99, Math.round(Math.max(r.longScore, r.shortScore) / 12 * 100));
+
+    txt("tf-name", TF_NAME[st.tf]);
+    txt("chart-title", T("bias") + " · " + TF_NAME[st.tf]);
+    document.querySelectorAll("[data-tf]").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-tf") === st.tf)); });
+
+    var badge = $("signal-badge");
+    badge.className = "badge " + cls;
+    badge.textContent = s ? T(sell ? "signalSell" : "signalBuy") + " • " + conf : T("signalWait") + " • " + conf;
+
+    var trendTxt = r.trend === "bear" ? T("bearTrend") : r.trend === "bull" ? T("bullTrend") : T("ranging");
+    if (!s && r.reasons.length && !r.trend) trendTxt = T("ranging");
+    var tl = $("trend-line"); tl.textContent = trendTxt; tl.className = "trend " + cls;
+
+    var tb = $("trend-bar");
+    tb.style.width = (s ? 100 : Math.min(100, Math.round(Math.abs(r.longScore - r.shortScore) / 12 * 100))) + "%";
+    tb.className = r.longScore > r.shortScore ? "buy" : "";
+
+    var arc = $("ring-arc");
+    arc.setAttribute("stroke", buy ? "#33d69a" : sell ? "#ff6b6b" : "#7d7a72");
+    arc.setAttribute("stroke-dasharray", (conf / 100 * 195).toFixed(1) + " 195");
+    txt("ring-num", String(conf));
+
+    renderChart(r);
+
+    txt("z-ob", r.ob ? fmt(r.ob.lo) + " – " + fmt(r.ob.hi) : "—");
+    txt("z-fvg", r.fvg ? fmt(r.fvg.lo) + " – " + fmt(r.fvg.hi) : "—");
+    txt("z-ssl", r.ssl != null ? fmt(r.ssl) : "—");
+    txt("z-bsl", r.bsl != null ? fmt(r.bsl) : "—");
+
+    if (s) {
+      var rr = function (x) { return ((Math.abs(x - s.entry)) / s.risk).toFixed(1) + "R"; };
+      txt("p-sl", fmt(s.sl)); txt("p-en", fmt(s.entry));
+      txt("p-t1", fmt(s.tp1)); txt("p-t2", fmt(s.tp2)); txt("p-t3", fmt(s.tp3));
+    } else {
+      txt("p-sl", "—"); txt("p-en", "—"); txt("p-t1", "—"); txt("p-t2", "—"); txt("p-t3", "—");
+    }
+    renderLevels(r);
+  }
+
+  // ---------- chart ----------
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
+    return e;
+  }
+  // ---------- three-level understanding ----------
+  function renderLevels(r) {
+    var box = $("analysis"); if (!box) return;
+    box.textContent = "";
+    var sty = A.story(r, st.lang);
+    if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
+    [sty.l1, sty.l2, sty.l3].forEach(function (lv, idx) {
+      var card = el("div", "lvl");
+      var head = el("div", "lvl-h");
+      head.appendChild(el("span", "lvl-n", String(idx + 1)));
+      head.appendChild(el("b", "", lv.title));
+      head.appendChild(el("span", "lvl-s", lv.state));
+      card.appendChild(head); card.appendChild(el("p", "lvl-p", lv.lines.join(" ")));
+      box.appendChild(card);
+    });
+  }
+
+  function renderMarkets() {
+    var box = $("markets"); if (!box) return;
+    box.textContent = "";
+    INST.forEach(function (x) {
+      var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
+      var d = el("div", "muted");
+      d.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)";
+      d.appendChild(el("span", "", x.name + " · " + sourceFor(x.id)));
+      d.appendChild(el("b", "", fmtD(last, x.digits) + "  " + (ch == null ? "" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%")));
+      box.appendChild(d);
+    });
+  }
+
+  // ---------- trade journal ----------
+  var JKEY = "baqerJournal";
+  function loadJournal() { return store(JKEY) || []; }
+  function saveJournal(j) { store(JKEY, j.slice(-300)); }
+  function journalStats(j) {
+    var closed = j.filter(function (e) { return e.status !== "open"; });
+    var wins = closed.filter(function (e) { return e.status === "win"; }).length;
+    var byKey = {};
+    closed.forEach(function (e) { var g = byKey[e.key] || (byKey[e.key] = { n: 0, w: 0 }); g.n++; if (e.status === "win") g.w++; });
+    return { closed: closed.length, wins: wins, losses: closed.length - wins, byKey: byKey };
+  }
+  // Visible rule: a pattern that lost most of its last trades (6+ closed, under 25% wins) is paused;
+  // poor overall results (5+ closed, under 40% wins) require 2 more points before a decision.
+  // Why did a loss happen? Tags are set when the trade closes:
+  //  against_ema   : entered against the EMA50 trend
+  //  tight_stop    : stopped out, then price reached TP1 within 20 candles
+  //  quick_reversal: stopped out within 3 candles of entry
+  function tagLoss(e) {
+    var tags = [];
+    var c = candlesFor(e.inst), long = e.dir === "LONG";
+    if (e.against) tags.push("against_ema");
+    var idx = -1;
+    for (var i = 0; i < c.length; i++) if (c[i].t === e.closeT) { idx = i; break; }
+    if (idx >= 0) {
+      for (var j = idx + 1; j < Math.min(c.length, idx + 21); j++) {
+        if (long ? c[j].h >= e.tp1 : c[j].l <= e.tp1) { tags.push("tight_stop"); break; }
+      }
+      var ent = -1;
+      for (var k = 0; k < c.length; k++) if (c[k].t === e.t) { ent = k; break; }
+      if (ent >= 0 && idx - ent <= 3) tags.push("quick_reversal");
+    }
+    return tags;
+  }
+  function learnFromJournal() {
+    var j = loadJournal(), s = journalStats(j), block = [];
+    Object.keys(s.byKey).forEach(function (k) { var g = s.byKey[k]; if (g.n >= 6 && g.w / g.n < 0.25) block.push(k); });
+    var overall = s.closed >= 5 ? s.wins / s.closed : 1;
+    var losses = j.filter(function (e) { return e.status === "loss"; });
+    var againstN = losses.filter(function (e) { return e.tags && e.tags.indexOf("against_ema") >= 0; }).length;
+    var tightN = losses.filter(function (e) { return e.tags && e.tags.indexOf("tight_stop") >= 0; }).length;
+    return {
+      extra: overall < 0.4 ? 2 : 0,
+      block: block,
+      requireEma: losses.length >= 4 && againstN / losses.length >= 0.6,
+      widen: tightN >= 3 ? 0.2 : 0,
+      lessons: [
+        losses.length && againstN / losses.length >= 0.6 ? "أغلب الخسائر كانت ضد اتجاه EMA50، لذلك لن تُفتح صفقة ضد المتوسط الآن." : null,
+        tightN >= 3 ? "عدة صفقات وصلت إلى الهدف الأول بعد ضرب الوقف، لذلك وُسّع الوقف 0.2 ATR." : null,
+        losses.filter(function (e) { return e.tags && e.tags.indexOf("quick_reversal") >= 0; }).length >= 3 ? "عدة خسائر انعكست خلال 3 شموع، فالدخول المبكر يحتاج تأكيداً أكبر." : null
+      ].filter(Boolean)
+    };
+  }
+  function journalUpdate() {
+    var j = loadJournal(), changed = false, r = st.res;
+    if (r && r.ready && r.signal) {
+      var sg = r.signal, d = BY[st.inst].digits, c = candlesFor(st.inst), t = c[c.length - 1].t;
+      var id = st.inst + "|" + sg.key + "|" + sg.entry.toFixed(d);
+      if (!j.some(function (e) { return e.id === id; })) {
+        var against = (sg.dir === "LONG" && !(r.price > r.ema50)) || (sg.dir === "SHORT" && !(r.price < r.ema50));
+        j.push({ id: id, inst: st.inst, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open", against: against });
+        changed = true;
+      }
+    }
+    j.forEach(function (e) {
+      if (e.status !== "open") return;
+      var c = candlesFor(e.inst), long = e.dir === "LONG";
+      for (var i = 0; i < c.length; i++) {
+        if (!(c[i].t > e.t)) continue;
+        var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
+        var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
+        if (hitStop) { e.status = "loss"; e.closed = true; e.closeT = c[i].t; e.closeIdx = i; e.entryIdx = null; changed = true; break; }
+        if (hitTP) { e.status = "win"; e.closed = true; e.closeT = c[i].t; changed = true; break; }
+      }
+    });
+    j.forEach(function (e) { if (e.status === "loss" && !e.tags) { e.tags = tagLoss(e); changed = true; } });
+    if (changed) saveJournal(j);
+  }
+  function renderJournal() {
+    var box = $("journal-box"); if (!box) return;
+    var s = journalStats(loadJournal()), L = learnFromJournal();
+    box.textContent = "";
+    box.appendChild(el("h2", "", T("journal")));
+    box.appendChild(el("p", "muted", s.closed
+      ? T("closedTrades") + ": " + s.closed + " · " + T("wins") + ": " + s.wins + " · " + T("losses") + ": " + s.losses + " · " + T("winRate") + ": " + Math.round(s.wins / s.closed * 100) + "%"
+      : T("noTrades")));
+    var extra = (L.extra ? T("learnNote") + " " : "") + (L.block.length ? T("paused") + ": " + L.block.length + "." : "");
+    if (extra) box.appendChild(el("p", "muted", extra));
+    L.lessons.forEach(function (t) { box.appendChild(el("p", "muted", "• " + t)); });
+    var btn = el("button", "btn", T("clearJournal")); btn.type = "button";
+    btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
+    box.appendChild(btn);
+  }
+
+  // ---------- alerts ----------
+  function notifyIfNew(r) {
+    if (!r || !r.signal || !st.prefs.signal) return;
+    var key = st.inst + ":" + r.signal.dir + ":" + r.signal.entry.toFixed(BY[st.inst].digits);
+    if (key === st.lastSig) return;
+    st.lastSig = key;
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("Baqer Sniper · " + BY[st.inst].name + ": " + (r.signal.dir === "LONG" ? "Buy" : "Sell"),
+        { body: "Entry " + fmt(r.signal.entry) + " · Stop " + fmt(r.signal.sl) });
+    }
+  }
+
+  // ---------- language ----------
+  function applyLang() {
+    document.documentElement.lang = st.lang;
+    document.documentElement.dir = st.lang === "ar" ? "rtl" : "ltr";
+    var bn = $("brand-name");
+    if (bn) bn.textContent = st.lang === "ar" ? "رادار الأسواق" : "BAQER SNIPER";
+    document.querySelectorAll("[data-i18n]").forEach(function (e) { e.textContent = T(e.getAttribute("data-i18n")); });
+    document.querySelectorAll("[data-i18nph]").forEach(function (e) { e.setAttribute("placeholder", T(e.getAttribute("data-i18nph"))); });
+    document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === st.lang)); });
+    var sel = $("inst-select"); if (sel) { sel.value = st.inst; }
+    document.title = st.lang === "ar" ? "باقر سنايبر" : "Baqer Sniper";
+    renderAccount();
+    analyzeAndRender();
+    setView(currentView());
+  }
+  function setLang(lang) {
+    st.lang = lang === "ar" ? "ar" : "en";
+    store("baqerLang", st.lang);
+    applyLang();
+  }
+
+  // ---------- account (local sign-in, saved on this device only) ----------
+  function renderAccount() {
+    var u = store("baqerUser");
+    txt("acct-state", u ? T("signedInAs") + u.name : T("notSigned"));
+    var out = $("signout"); if (out) out.hidden = !u;
+    var form = $("signin-form"); if (form) form.hidden = !!u;
+  }
+
+  // ---------- menu drawer ----------
+  function openMenu(open) {
+    $("drawer").hidden = !open; $("scrim").hidden = !open;
+    $("menu-btn").setAttribute("aria-expanded", String(open));
+  }
+
+  // ---------- views ----------
+  function currentView() { return $("app").getAttribute("data-view") || "analysis"; }
+  function setView(v) {
+    $("app").setAttribute("data-view", v);
+    document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
+    ["markets", "alerts", "settings", "calendar"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
+    if (v === "calendar") loadNews(false);
+    if (v === "analysis") render();
+  }
+  function setInst(id) {
+    st.inst = id; renderTV();
+    if (id === "BTC") { loadBtc().then(function () { connect(); analyzeAndRender(); }); }
+    else { stopStreams(); live(false); autoLoad().then(analyzeAndRender); }
+    var sel = $("inst-select"); if (sel) sel.value = id;
+  }
+  // Each trading style sets its timeframe and risk profile together.
+  var STYLE = { "15m": "scalp", "1h": "balanced", "4h": "balanced" };
+  function setTf(tf) {
+    st.tf = tf; tick(); renderTV();
+    st.profile = STYLE[tf] || "balanced";
+    var pr = $("profile"); if (pr) pr.value = st.profile;
+    autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); });
+    if (st.inst === "BTC") loadBtc().then(function () { connect(); analyzeAndRender(); });
+    else analyzeAndRender();
+  }
+
+  // ---------- welcome screen (shown on every open) ----------
+  function showWelcome() {
+    var u = store("baqerUser");
+    var back = $("wel-back"), fresh = $("wel-new");
+    if (u) {
+      back.hidden = false; fresh.hidden = true;
+      txt("wel-hi", T("welBack") + u.name);
+    } else {
+      back.hidden = true; fresh.hidden = false;
+    }
+    $("welcome").hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function hideWelcome() {
+    $("welcome").hidden = true;
+    document.body.style.overflow = "";
+  }
+  $("wel-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("wel-name").value.trim(), email = $("wel-email").value.trim();
+    if (!name || !email) return;
+    store("baqerUser", { name: name, email: email });
+    renderAccount();
+    hideWelcome();
+  });
+  $("wel-guest").addEventListener("click", hideWelcome);
+  $("wel-continue").addEventListener("click", hideWelcome);
+
+  // ---------- TradingView: the only chart ----------
+  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "OANDA:XAUUSD", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
+  var TV_INT = { "15m": "15", "1h": "60", "4h": "240" };
+  var MA_STUDY = {
+    ema9: { id: "MAExp@tv-basicstudies", length: 9 },
+    ema21: { id: "MAExp@tv-basicstudies", length: 21 },
+    ema: { id: "MAExp@tv-basicstudies", length: 50 },
+    sma20: { id: "MASimple@tv-basicstudies", length: 20 },
+    sma100: { id: "MASimple@tv-basicstudies", length: 100 },
+    sma200: { id: "MASimple@tv-basicstudies", length: 200 }
+  };
+  function tvStudies() {
+    return Object.keys(MA_STUDY).filter(function (k) { return st.show[k]; }).map(function (k) {
+      return { id: MA_STUDY[k].id, inputs: { length: MA_STUDY[k].length } };
+    });
+  }
+  var tvLoading = false, tvWaiting = false;
+  function renderTV() {
+    var box = $("tv"); if (!box) return;
+    if (typeof TradingView === "undefined") {
+      if (!tvWaiting) {
+        tvWaiting = true;
+        var s = document.createElement("script");
+        s.src = "https://s3.tradingview.com/tv.js";
+        s.onload = function () { tvWaiting = false; renderTV(); };
+        s.onerror = function () { box.textContent = T("tvFail"); };
+        document.head.appendChild(s);
+      }
+      box.textContent = T("tvLoad");
+      return;
+    }
+    box.textContent = "";
+    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "440px";
+    box.appendChild(holder);
+    new TradingView.widget({
+      autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
+      timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
+      toolbar_bg: "#0b1424", enable_publishing: false, hide_side_toolbar: false, allow_symbol_change: false,
+      container_id: "tv-holder", studies: tvStudies()
+    });
+  }
+  // Reading under the chart: what the structure shows right now.
+  function renderChart(r) {
+    txt("chart-price", r && r.ready ? fmt(r.price) : "—");
+    if (!r || !r.ready) { txt("chart-read", r ? r.reason : ""); return; }
+    var sty = A.story(r, st.lang);
+    if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
+  }
+
+  // ---------- news and economic calendar (via the news function) ----------
+  var NEWS = { cal: [], news: [], ok: null, at: 0 };
+  function loadNews(force) {
+    if (!force && NEWS.at && Date.now() - NEWS.at < 300000) return Promise.resolve();
+    return fetch("/api/news", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) { NEWS.cal = j.calendar || []; NEWS.news = j.news || []; NEWS.ok = true; })
+      .catch(function () { NEWS.ok = false; })
+      .then(function () { NEWS.at = Date.now(); renderNews(); });
+  }
+  function impactOf(e) { return e.impact === "high" ? "high" : e.impact === "medium" ? "medium" : "low"; }
+  function renderNews() {
+    var econ = $("econ"), list = $("newslist");
+    if (!econ || !list) return;
+    econ.textContent = ""; list.textContent = "";
+    if (NEWS.ok === false) { econ.appendChild(el("p", "muted", T("newsNeed"))); list.appendChild(el("p", "muted", T("newsNeed"))); return; }
+    var now = Date.now();
+    var events = NEWS.cal.filter(function (e) { return impactOf(e) !== "low"; })
+      .sort(function (x, y) { return String(x.time).localeCompare(String(y.time)); });
+    var highCount = events.filter(function (e) { return impactOf(e) === "high"; }).length;
+    econ.appendChild(el("h2", "", T("econTitle")));
+    econ.appendChild(el("p", "muted", T("todaySummary") + highCount));
+    if (!events.length) econ.appendChild(el("p", "muted", T("noEvents")));
+    events.forEach(function (e) {
+      var card = el("div", "ev");
+      var t = e.time ? new Date(e.time) : null;
+      var soon = t && t.getTime() > now && t.getTime() - now < 60 * 60e3;
+      var top = el("div", "ev-h");
+      top.appendChild(el("b", "", (e.country ? e.country + " · " : "") + (e.event || "")));
+      top.appendChild(el("span", "imp imp-" + impactOf(e), T(impactOf(e) === "high" ? "high" : "medium")));
+      card.appendChild(top);
+      var meta = el("div", "ev-m muted", (t ? t.toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "") + (soon ? "  ·  " + T("upcoming") : ""));
+      card.appendChild(meta);
+      var vals = el("div", "ev-v");
+      [[T("previous"), e.previous], [T("forecast"), e.forecast], [T("actual"), e.actual]].forEach(function (x) {
+        var c = el("div", "");
+        c.appendChild(el("span", "muted", x[0]));
+        c.appendChild(el("b", "", x[1] == null ? "—" : String(x[1]) + (e.unit || "")));
+        vals.appendChild(c);
+      });
+      card.appendChild(vals);
+      econ.appendChild(card);
+    });
+    econ.appendChild(el("p", "muted", T("rule")));
+    if (!NEWS.news.length) list.appendChild(el("p", "muted", T("noNews")));
+    NEWS.news.slice(0, 20).forEach(function (n) {
+      var card = el("a", "nw");
+      if (n.url) { card.href = n.url; card.target = "_blank"; card.rel = "noopener noreferrer"; }
+      card.appendChild(el("b", "", n.headline || ""));
+      var when = n.time ? new Date(n.time * 1000).toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }) : "";
+      card.appendChild(el("span", "muted", (n.source || "") + (when ? "  ·  " + when : "")));
+      list.appendChild(card);
+    });
+  }
+  var refreshBtn = $("news-refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", function () { loadNews(true); });
+  setInterval(function () { loadNews(false); }, 300000);
+
+  // ---------- wiring ----------
+  document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
+  document.querySelectorAll("[data-show]").forEach(function (b) {
+    var k = b.getAttribute("data-show");
+    b.setAttribute("aria-pressed", String(!!st.show[k]));
+    b.addEventListener("click", function () {
+      st.show[k] = !st.show[k];
+      b.setAttribute("aria-pressed", String(!!st.show[k]));
+      renderTV();
+    });
+  });
+  document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
+  document.querySelectorAll("[data-lang]").forEach(function (b) { b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); }); });
+  document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { openMenu(false); setView(b.getAttribute("data-go")); }); });
+  $("menu-btn").addEventListener("click", function () { openMenu(true); });
+  $("drawer-close").addEventListener("click", function () { openMenu(false); });
+  $("scrim").addEventListener("click", function () { openMenu(false); });
+  $("signin-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("su-name").value.trim(), email = $("su-email").value.trim();
+    if (!name || !email) return;
+    store("baqerUser", { name: name, email: email });
+    $("signin-form").reset();
+    renderAccount();
+  });
+  $("signout").addEventListener("click", function () { store("baqerUser", null); renderAccount(); });
+  $("notify-btn").addEventListener("click", function () {
+    if (!("Notification" in window)) { txt("alerts-note", T("notifOff")); return; }
+    Notification.requestPermission().then(function (p) { txt("alerts-note", p === "granted" ? T("notifOn") : T("notifNo")); });
+  });
+  var pSig = $("pref-signal"), pTp = $("pref-tp");
+  pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
+  pSig.addEventListener("change", function () { st.prefs.signal = pSig.checked; store("baqerPrefs", st.prefs); });
+  pTp.addEventListener("change", function () { st.prefs.tp = pTp.checked; store("baqerPrefs", st.prefs); });
+
+  var sel = $("inst-select");
+  INST.forEach(function (x) { var o = el("option", "", x.name); o.value = x.id; sel.appendChild(o); });
+  sel.value = st.inst;
+  sel.addEventListener("change", function () { setInst(sel.value); showFeedFor(sel.value); });
+  function showFeedFor(id) {
+    var f = feeds[id];
+    $("data-url").value = f ? f.url : "";
+    txt("data-note", f && f.ok ? T("dataOk") + f.updated.toLocaleTimeString() : (f ? T("dataFail") : ""));
+  }
+  $("data-save").addEventListener("click", function () {
+    var id = sel.value, url = $("data-url").value.trim();
+    if (!url) { txt("data-note", T("dataFail")); return; }
+    feeds[id] = { url: url, ok: false };
+    saveFeeds();
+    loadFeed(id).then(function () { if (st.inst === id) analyzeAndRender(); else renderTickers(); });
+  });
+  $("data-clear").addEventListener("click", function () {
+    var id = sel.value;
+    delete feeds[id]; delete st.csv[id]; saveFeeds();
+    $("data-url").value = "";
+    txt("data-note", "");
+    if (st.inst === id) analyzeAndRender(); else renderTickers();
+  });
+
+  $("csv").addEventListener("change", function (ev) {
+    var f = ev.target.files && ev.target.files[0]; if (!f) return;
+    var target = sel.value, rd = new FileReader();
+    rd.onload = function () {
+      try {
+        st.csv[target] = parseCSV(String(rd.result));
+        txt("csv-note", BY[target].name + T("csvLoaded") + st.csv[target].length + T("candles"));
+        if (st.inst === target) analyzeAndRender(); else renderTickers();
+      } catch (e) { txt("csv-note", e.message); }
+    };
+    rd.readAsText(f);
+  });
+
+  feeds = store("baqerFeeds") || {};
+  setInterval(refreshFeeds, 60000);
+  refreshFeeds();
+  setInterval(function () { autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); }); }, 120000);
+  showFeedFor(sel.value);
+  var prof = $("profile");
+  st.profile = store("sniperProfile") || "balanced";
+  prof.value = st.profile;
+  prof.addEventListener("change", function () { st.profile = prof.value; store("sniperProfile", st.profile); analyzeAndRender(); });
+
+  function tick() {
+    var ms = TF_MS[st.tf], left = ms - (Date.now() % ms), s = Math.floor(left / 1000);
+    txt("clock", [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(function (n) { return String(n).padStart(2, "0"); }).join(":"));
+  }
+
+  // ---------- boot ----------
+  st.lang = store("baqerLang") === "en" ? "en" : "ar";
+  st.prefs = store("baqerPrefs") || st.prefs;
+  pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
+  applyLang();
+  setView("analysis");
+  showWelcome();
+  setInterval(tick, 1000); tick();
+  renderTV();
+  loadBtc().then(function () { connect(); analyzeAndRender(); });
+  change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {});
+  setInterval(function () { change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {}); }, 60000);
+})();

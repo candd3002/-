@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06080b">
+  <meta name="description" content="Baqer Sniper: ICT and SMC market structure. Educational analysis, not financial advice.">
+  <title>Baqer Sniper</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=Tajawal:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<main class="phone" id="app" data-view="analysis">
+
+  <header class="top">
+    <button type="button" class="ico" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="title">
+      <h1 data-i18n="appName">Radar</h1>
+      <p data-i18n="appSub">Markets analysis</p>
+    </div>
+    <div class="live" id="live"><span class="dot"></span><span id="live-text" data-i18n="live">Live</span><span class="clock" id="clock">--:--:--</span><span class="rf" aria-hidden="true">&#8635;</span></div>
+  </header>
+
+  <section class="tickers" id="tickers" aria-label="Instruments"></section>
+
+  <div class="main-only">
+    <h3 class="sec-h" data-i18n="structTitle">ICT + SMC structure</h3>
+    <section class="card zones-card">
+      <div class="zgrid">
+        <div class="z"><span data-i18n="orderBlock">Order block</span><b id="z-ob">—</b></div>
+        <div class="z"><span data-i18n="fvgLbl">FVG</span><b id="z-fvg">—</b></div>
+        <div class="z"><span data-i18n="bslLbl">BSL liquidity</span><b class="blue" id="z-bsl">—</b></div>
+        <div class="z"><span data-i18n="sslLbl">SSL liquidity</span><b class="down" id="z-ssl">—</b></div>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="row"><span class="gold-t" data-i18n="chartTitle">Chart</span><span class="muted" id="chart-price">—</span></div>
+      <div id="tv" class="tv" aria-label="TradingView chart"></div>
+      <div class="ctl" role="group" aria-label="Moving averages">
+        <button type="button" data-show="ema9" aria-pressed="false">EMA 9</button>
+        <button type="button" data-show="ema21" aria-pressed="false">EMA 21</button>
+        <button type="button" data-show="ema" aria-pressed="true">EMA 50</button>
+        <button type="button" data-show="sma20" aria-pressed="false">SMA 20</button>
+        <button type="button" data-show="sma100" aria-pressed="false">SMA 100</button>
+        <button type="button" data-show="sma200" aria-pressed="false">SMA 200</button>
+      </div>
+      <p class="chart-read" id="chart-read"></p>
+    </section>
+
+    <div class="modes" role="tablist" aria-label="Trading style">
+      <button type="button" role="tab" data-tf="1h" aria-selected="true" data-i18n="modeDay">Day ICT</button>
+      <button type="button" role="tab" data-tf="15m" aria-selected="false" data-i18n="modeScalp">Scalp</button>
+      <button type="button" role="tab" data-tf="4h" aria-selected="false" data-i18n="modeSwing">Swing</button>
+    </div>
+
+    <section class="card trend-card">
+      <div class="row">
+        <span class="muted"><span data-i18n="marketTrend">Market trend</span> (<span id="tf-name">1H</span>)</span>
+        <span class="badge" id="signal-badge">—</span>
+      </div>
+      <div class="trend" id="trend-line">—</div>
+      <div class="bar"><i id="trend-bar"></i></div>
+      <div class="asset-row"><span id="asset-name">BTC/USDT</span><span id="src" class="muted">—</span></div>
+    </section>
+
+    <section class="plan">
+      <div class="pl"><span data-i18n="entryZone">Entry zone</span><b class="gold" id="p-en">—</b></div>
+      <div class="pl"><span data-i18n="stopLoss">Stop loss</span><b class="down" id="p-sl">—</b></div>
+    </section>
+    <section class="plan tps">
+      <div class="pl tp"><span data-i18n="tp1">TP1</span><b id="p-t1">—</b></div>
+      <div class="pl tp"><span data-i18n="tp2">TP2</span><b id="p-t2">—</b></div>
+      <div class="pl tp"><span data-i18n="tp3">TP3</span><b id="p-t3">—</b></div>
+    </section>
+    <span id="rr" hidden></span>
+
+    <section class="card analysis-card">
+      <h2 data-i18n="detailTitle">Detailed analysis (ICT + SMC)</h2>
+      <div id="analysis" class="levels"></div>
+    </section>
+  </div>
+
+  <section class="panel" id="markets-panel" hidden>
+    <h2 data-i18n="marketsTitle">Markets</h2>
+    <div id="markets"></div>
+  </section>
+
+  <section class="panel" id="alerts-panel" hidden>
+    <h2 data-i18n="alertsTitle">Alerts</h2>
+    <label class="toggle"><input type="checkbox" id="pref-signal"> <span data-i18n="alertSignal">Notify me when a new signal appears</span></label>
+    <label class="toggle"><input type="checkbox" id="pref-tp"> <span data-i18n="alertTp">Notify me when a trade closes (win or loss)</span></label>
+    <button type="button" class="btn" id="notify-btn" data-i18n="enableNotif">Enable notifications</button>
+    <p class="muted" id="alerts-note" data-i18n="alertsNote">Notifications appear only while the page is open in your browser.</p>
+  </section>
+
+  <section class="panel" id="settings-panel" hidden>
+    <h2 data-i18n="settingsTitle">Settings</h2>
+    <label class="field"><span data-i18n="risk">Risk profile</span>
+      <select id="profile">
+        <option value="balanced" data-i18n="riskBalanced">Balanced (targets 1.5R, 2.5R, 4R)</option>
+        <option value="sniper" data-i18n="riskSniper">Sniper (tight stop, far targets)</option>
+        <option value="scalp" data-i18n="riskScalp">Scalp (very tight stop, quick targets)</option>
+      </select>
+    </label>
+    <p class="muted" data-i18n="riskNote">Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.</p>
+    <label class="field"><span data-i18n="instrument">Instrument</span><select id="inst-select"></select></label>
+    <label class="field"><span data-i18n="importCsv">Import candles (CSV from MT5)</span><input type="file" id="csv" accept=".csv,text/csv"></label>
+    <label class="field"><span data-i18n="dataUrl">Live data link (CSV or JSON)</span><input type="url" id="data-url" placeholder="https://" inputmode="url"></label>
+    <div class="row-btns"><button type="button" class="btn" id="data-save" data-i18n="dataSave">Connect data</button><button type="button" class="ghost" id="data-clear" data-i18n="dataClear">Disconnect</button></div>
+    <p class="muted" data-i18n="dataNote">The app reads this link every minute. The file needs columns open, high, low, close (and time if available). Each instrument can have its own link.</p>
+    <p class="muted" id="data-note"></p>
+    <p class="muted" id="csv-note"></p>
+    <div id="journal-box" class="journal"></div>
+  </section>
+
+  <section class="panel" id="calendar-panel" hidden>
+    <h2 data-i18n="calendarTitle">Calendar</h2>
+    <ul class="sessions">
+      <li><b data-i18n="sessLondon">London session</b><span>10:00 – 19:00</span></li>
+      <li><b data-i18n="sessNewYork">New York session</b><span>16:30 – 23:30</span></li>
+      <li><b data-i18n="sessAsia">Asia session</b><span>03:00 – 12:00</span></li>
+    </ul>
+    <div id="econ" class="econ"></div>
+    <h2 class="mt" data-i18n="newsTitle">Market news</h2>
+    <div id="newslist" class="newslist"></div>
+    <button type="button" class="ghost" id="news-refresh" data-i18n="refresh">Refresh</button>
+    <p class="muted" data-i18n="calendarNote">Times are Riyadh time. Economic news appears once a data provider is connected.</p>
+  </section>
+
+  
+  <p class="disclaimer" data-i18n="disclaimer">Educational analysis, not financial advice.</p>
+  <svg hidden aria-hidden="true"><circle id="ring-arc" r="1"></circle></svg><span id="ring-num" hidden></span>
+</main>
+
+<section class="welcome" id="welcome" aria-labelledby="wel-title" hidden>
+  <div class="wel-card">
+    <img class="wel-logo" src="logo.svg" alt="" width="84" height="84">
+    <h1 id="wel-title" class="wel-title"><span class="wordmark">BAQER <span class="grad">SNIPER</span></span></h1>
+    <p class="wel-sub" data-i18n="welSub">Market structure, explained simply.</p>
+    <div class="seg2 wel-lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">English</button>
+      <button type="button" data-lang="ar" aria-pressed="false">العربية</button>
+    </div>
+    <div id="wel-new">
+      <form id="wel-form" class="signin">
+        <input id="wel-name" type="text" autocomplete="name" placeholder="Name" data-i18nph="namePh" required>
+        <input id="wel-email" type="email" autocomplete="email" placeholder="Email" data-i18nph="emailPh" required>
+        <button type="submit" class="btn" data-i18n="signIn">Sign in</button>
+      </form>
+      <button type="button" class="ghost" id="wel-guest" data-i18n="welGuest">Continue without signing in</button>
+    </div>
+    <div id="wel-back" hidden>
+      <p class="wel-hi" id="wel-hi"></p>
+      <button type="button" class="btn" id="wel-continue" data-i18n="welContinue">Continue</button>
+    </div>
+    <p class="muted wel-hint" data-i18n="welHint">Your sign-in is saved on this device only.</p>
+  </div>
+</section>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Menu">
+  <div class="dr-head">
+    <div class="wordmark">BAQER <span class="grad">SNIPER</span></div>
+    <button type="button" class="ico" id="drawer-close" aria-label="Close menu">×</button>
+  </div>
+
+  <section class="dr-sec">
+    <div class="dr-label" data-i18n="account">Account</div>
+    <div id="acct-state" class="muted"></div>
+    <form id="signin-form" class="signin">
+      <input id="su-name" type="text" autocomplete="name" placeholder="Name" data-i18nph="namePh" required>
+      <input id="su-email" type="email" autocomplete="email" placeholder="Email" data-i18nph="emailPh" required>
+      <button type="submit" class="btn" data-i18n="signIn">Sign in</button>
+    </form>
+    <button type="button" class="ghost" id="signout" hidden data-i18n="signOut">Sign out</button>
+    <p class="muted" data-i18n="localAccount">This sign-in is saved on this device only.</p>
+  </section>
+
+  <section class="dr-sec">
+    <div class="dr-label" data-i18n="language">Language</div>
+    <div class="seg2">
+      <button type="button" data-lang="en">English</button>
+      <button type="button" data-lang="ar">العربية</button>
+    </div>
+  </section>
+
+  <section class="dr-sec">
+    <div class="dr-label" data-i18n="go">Go to</div>
+    <button type="button" class="dr-item" data-go="settings" data-i18n="menuSettings">Settings and risk profile</button>
+    <button type="button" class="dr-item" data-go="alerts" data-i18n="alertsTitle">Alerts</button>
+    <button type="button" class="dr-item" data-go="markets" data-i18n="marketsTitle">Markets</button>
+    <button type="button" class="dr-item" data-go="calendar" data-i18n="calendarTitle">Calendar</button>
+  </section>
+
+  <section class="dr-sec">
+    <div class="dr-label" data-i18n="about">About</div>
+    <p class="muted" data-i18n="aboutText">Baqer Sniper is an educational market-structure tool. It does not place trades and does not guarantee results.</p>
+  </section>
+</aside>
+
+<nav class="nav" aria-label="Main navigation">
+  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span data-i18n="navSettings">Settings</span></button>
+  <button type="button" data-tab="alerts"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/></svg><span data-i18n="navAlerts">Alerts</span></button>
+  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span data-i18n="navCalendar">Calendar</span></button>
+  <button type="button" data-tab="analysis" class="on"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span data-i18n="navAnalysis">Analysis</span></button>
+  <button type="button" data-tab="markets"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3"/></svg><span data-i18n="navMarkets">Markets</span></button>
+</nav>
+
+<script src="analysis.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
