@@ -786,7 +786,7 @@
       top.appendChild(el("b", "", (lz.c ? lz.c + " · " : "") + lz.t));
       top.appendChild(el("span", "imp imp-" + impactOf(e), T(impactOf(e) === "high" ? "high" : "medium")));
       card.appendChild(top);
-      var meta = el("div", "ev-m muted", (t ? t.toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "") + (soon ? "  ·  " + T("upcoming") : ""));
+      var meta = el("div", "ev-m muted", (t ? t.toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "") + (soon ? "  ·  " + T("upcoming") : ""));
       card.appendChild(meta);
       var vals = el("div", "ev-v");
       [[T("previous"), e.previous], [T("forecast"), e.forecast], [T("actual"), e.actual]].forEach(function (x) {
