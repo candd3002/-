@@ -20,28 +20,33 @@ export async function onRequest(context) {
     // Free fallback (no key): weekly economic calendar used when Finnhub returns nothing on the free plan.
     let calSource = "finnhub";
     if (!calendar.length) {
+      let rows = null;
+      const ckey = "https://baqer-cache.internal/ff-calendar-v1";
+      let cache = null;
+      try { cache = caches.default; } catch (e) { cache = null; }
       try {
-        const cache = caches.default;
-        const ckey = new Request("https://baqer-cache.internal/ff-calendar-v1");
-        let rows = null;
-        const hit = await cache.match(ckey);
-        if (hit) { rows = await hit.json(); calSource = "faireconomy (cached)"; }
-        else {
+        if (cache) {
+          const hit = await cache.match(ckey);
+          if (hit) { rows = await hit.json(); calSource = "faireconomy (cached)"; }
+        }
+      } catch (e) { rows = null; }
+      if (!rows) {
+        try {
           const ffRes = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
           calSource = "faireconomy (HTTP " + ffRes.status + ")";
           if (ffRes.ok) {
             rows = await ffRes.json();
-            await cache.put(ckey, new Response(JSON.stringify(rows), { headers: { "cache-control": "max-age=3600" } }));
+            try { if (cache) await cache.put(ckey, new Response(JSON.stringify(rows), { headers: { "cache-control": "max-age=3600" } })); } catch (e) {}
           }
-        }
-        const today0 = ymd(today);
-        calendar = (Array.isArray(rows) ? rows : []).filter(function (e) {
-          const d = String(e.date || "").slice(0, 10);
-          return d >= today0 && d <= ymd(ahead);
-        }).map(function (e) {
-          return { time: e.date, country: e.country, event: e.title, impact: String(e.impact || "").toLowerCase(), actual: e.actual ?? null, forecast: e.forecast || null, previous: e.previous || null, unit: "" };
-        });
-      } catch (err) { calendar = []; calSource = "faireconomy (error)"; }
+        } catch (e) { calSource = "faireconomy (fetch error: " + String(e.message || e).slice(0, 80) + ")"; }
+      }
+      const today0 = ymd(today);
+      calendar = (Array.isArray(rows) ? rows : []).filter(function (e) {
+        const d = String(e.date || "").slice(0, 10);
+        return d >= today0 && d <= ymd(ahead);
+      }).map(function (e) {
+        return { time: e.date, country: e.country, event: e.title, impact: String(e.impact || "").toLowerCase(), actual: e.actual ?? null, forecast: e.forecast || null, previous: e.previous || null, unit: "" };
+      });
     }
     const items = (Array.isArray(news) ? news : []).slice(0, 30).map(function (n) {
       return { time: n.datetime, headline: n.headline, source: n.source, url: n.url, summary: n.summary };
