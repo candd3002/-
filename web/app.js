@@ -105,6 +105,8 @@
   };
   Object.keys(NEW).forEach(function (l) { Object.keys(NEW[l]).forEach(function (k) { I18N[l][k] = NEW[l][k]; }); });
   I18N.en.chartTitle = "Live chart"; I18N.ar.chartTitle = "الشارت المباشر";
+  I18N.en.zonesBtn = "Zones"; I18N.ar.zonesBtn = "المناطق";
+  I18N.en.levelsBtn = "Levels"; I18N.ar.levelsBtn = "المستويات";
   I18N.en.sslLbl = "SSL liquidity"; I18N.en.bslLbl = "BSL liquidity"; I18N.en.fvgLbl = "FVG"; I18N.en.orderBlock = "Order block";
   I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.orderBlock = "كتلة الأوامر";
   I18N.en.dataUrl = "Live data link (CSV or JSON)";
@@ -124,7 +126,7 @@
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
   var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
   var autoOk = {}; // id -> true when the built-in data function returned candles
-  var st = { inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var st = { show: { ema: true, zones: true, levels: true }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -405,6 +407,22 @@
       var t = svgEl("text", { x: areaR + 6, y: y + 3, "font-family": "Inter, sans-serif", "font-size": 9, fill: color });
       t.textContent = label; svg.appendChild(t);
     }
+    if (st.show.zones && r.eq != null) {
+      var yEq = Y(r.eq);
+      svg.appendChild(svgEl("rect", { x: padL, y: yEq, width: areaR - padL, height: Math.max(0, (H - padB) - yEq), fill: "#2fd08b", opacity: 0.07 }));
+      svg.appendChild(svgEl("rect", { x: padL, y: padT, width: areaR - padL, height: Math.max(0, yEq - padT), fill: "#ff6b6b", opacity: 0.05 }));
+      svg.appendChild(svgEl("line", { x1: padL, y1: yEq, x2: areaR, y2: yEq, stroke: "#ffffff", "stroke-width": 0.7, "stroke-dasharray": "3 4", opacity: 0.35 }));
+    }
+    if (st.show.ema && r.series && r.series.ema) {
+      var E = r.series.ema.slice(off), pts = [], firstX = null;
+      E.forEach(function (v, i) { if (v != null) { pts.push([X(i), Y(v)]); if (firstX == null) firstX = X(i); } });
+      if (pts.length > 1) {
+        var d = "M" + pts.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" L");
+        var area = d + " L" + pts[pts.length - 1][0].toFixed(1) + " " + (H - padB) + " L" + firstX.toFixed(1) + " " + (H - padB) + " Z";
+        svg.appendChild(svgEl("path", { d: area, fill: "#a77bff", opacity: 0.10 }));
+        svg.appendChild(svgEl("path", { d: d, fill: "none", stroke: "#b48cff", "stroke-width": 1.6, "stroke-linejoin": "round" }));
+      }
+    }
     vis.forEach(function (k, i) {
       var up = k.c >= k.o, x = X(i);
       svg.appendChild(svgEl("line", { x1: x, y1: Y(k.h), x2: x, y2: Y(k.l), stroke: up ? "#5ff0b5" : "#ff8a8a", "stroke-width": 1.1, opacity: 0.7 }));
@@ -427,7 +445,7 @@
       svg.appendChild(svgEl("circle", { cx: sx, cy: sy, r: 4, fill: "none", stroke: "#e8b44a", "stroke-width": 1.5 }));
       svg.appendChild(svgEl("circle", { cx: sx, cy: sy, r: 1.6, fill: "#e8b44a" }));
     }
-    if (r.signal) {
+    if (r.signal && st.show.levels) {
       var s = r.signal;
       hline(s.sl, "#ff6b6b", T("stop") + " " + fmt(s.sl));
       hline(s.entry, "#e8b44a", T("entry") + " " + fmt(s.entry));
@@ -440,7 +458,8 @@
     svg.appendChild(svgEl("line", { x1: 0, y1: ly, x2: areaR, y2: ly, stroke: "#ffffff", "stroke-width": 0.8, "stroke-dasharray": "2 3", opacity: 0.5 }));
     svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 7, fill: "#33d69a", class: "live-ring" }));
     svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 2.8, fill: "#33d69a" }));
-    var pl = svgEl("text", { x: areaR + 6, y: ly - 6, "font-family": "Tajawal, sans-serif", "font-size": 10, "font-weight": 700, fill: "#ffffff" });
+    svg.appendChild(svgEl("rect", { x: areaR + 2, y: ly - 9, width: W - areaR - 4, height: 18, rx: 5, fill: "#2fd08b" }));
+    var pl = svgEl("text", { x: areaR + 6, y: ly + 4, "font-family": "Tajawal, sans-serif", "font-size": 10, "font-weight": 800, fill: "#06110c" });
     pl.textContent = fmt(lastC.c); svg.appendChild(pl);
     var sty = A.story(r, st.lang);
     if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
@@ -635,6 +654,15 @@
 
   // ---------- wiring ----------
   document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
+  document.querySelectorAll("[data-show]").forEach(function (b) {
+    var k = b.getAttribute("data-show");
+    b.setAttribute("aria-pressed", String(!!st.show[k]));
+    b.addEventListener("click", function () {
+      st.show[k] = !st.show[k];
+      b.setAttribute("aria-pressed", String(!!st.show[k]));
+      analyzeAndRender();
+    });
+  });
   document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
   document.querySelectorAll("[data-lang]").forEach(function (b) { b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); }); });
   document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { openMenu(false); setView(b.getAttribute("data-go")); }); });

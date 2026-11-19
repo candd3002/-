@@ -343,3 +343,8 @@ body{background:#070d17}
 .live-ring{animation:liveRing 1.4s ease-out infinite; transform-box:fill-box; transform-origin:center}
 @keyframes liveRing{0%{transform:scale(.6); opacity:.9}100%{transform:scale(2.4); opacity:0}}
 @media (prefers-reduced-motion: reduce){ .live-ring{animation:none} }
+
+/* ---- Chart layer controls (gold) ---- */
+.ctl{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px}
+.ctl button{background:#0b1830; color:#e8c35a; border:1.5px solid rgba(232,195,90,.6); border-radius:999px; padding:6px 14px; font-size:12px; font-weight:700; cursor:pointer; min-height:34px}
+.ctl button[aria-pressed="true"]{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-color:#f0cc6e}
