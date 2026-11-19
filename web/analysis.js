@@ -1,0 +1,342 @@
+/* Market analysis engine: SMC + ICT + EMA50 + RSI + congestion breakout.
+ * Pure functions, no DOM. Works in the browser (window.Analysis) and in Node (module.exports).
+ * Candle shape: { t, o, h, l, c, v }. Only closed bars are used, so nothing repaints.
+ */
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory();
+  else root.Analysis = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
+
+  var CFG = {
+    emaLen: 50,
+    rsiLen: 14,
+    atrLen: 14,
+    pivot: 3,            // bars on each side to confirm a swing
+    congLen: 30,         // congestion window (same as Hamoody 1M)
+    congMaxRatio: 0.4,   // net move / range  (same as Hamoody 1M)
+    congMaxATR: 5,       // range in ATR      (same as Hamoody 1M)
+    bodyLen: 20,         // average body lookback
+    bodyMult: 1.5,       // breakout body multiplier (same as Hamoody 1M)
+    threshold: 6,        // minimum score to fire
+    minConfirm: 3,       // minimum confirmations ticked
+    rsiOB: 70, rsiOS: 30,
+    slMinATR: 0.5, slMaxATR: 4,
+    slBufferATR: 0.2
+  };
+
+  // ---------- indicators ----------
+  function ema(vals, len) {
+    var out = new Array(vals.length).fill(null);
+    if (vals.length < len) return out;
+    var s = 0;
+    for (var i = 0; i < len; i++) s += vals[i];
+    var prev = s / len; out[len - 1] = prev;
+    var k = 2 / (len + 1);
+    for (var j = len; j < vals.length; j++) { prev = vals[j] * k + prev * (1 - k); out[j] = prev; }
+    return out;
+  }
+
+  function rsi(closes, len) {
+    var out = new Array(closes.length).fill(null);
+    if (closes.length <= len) return out;
+    var g = 0, l = 0;
+    for (var i = 1; i <= len; i++) { var d = closes[i] - closes[i - 1]; if (d >= 0) g += d; else l -= d; }
+    var ag = g / len, al = l / len;
+    out[len] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+    for (var j = len + 1; j < closes.length; j++) {
+      var dd = closes[j] - closes[j - 1];
+      ag = (ag * (len - 1) + (dd > 0 ? dd : 0)) / len;
+      al = (al * (len - 1) + (dd < 0 ? -dd : 0)) / len;
+      out[j] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+    }
+    return out;
+  }
+
+  function atr(c, len) {
+    var out = new Array(c.length).fill(null);
+    if (c.length <= len) return out;
+    var tr = [];
+    for (var i = 0; i < c.length; i++) {
+      tr.push(i === 0 ? c[i].h - c[i].l
+        : Math.max(c[i].h - c[i].l, Math.abs(c[i].h - c[i - 1].c), Math.abs(c[i].l - c[i - 1].c)));
+    }
+    var s = 0;
+    for (var k = 1; k <= len; k++) s += tr[k];
+    var prev = s / len; out[len] = prev;
+    for (var j = len + 1; j < c.length; j++) { prev = (prev * (len - 1) + tr[j]) / len; out[j] = prev; }
+    return out;
+  }
+
+  // ---------- structure ----------
+  // A pivot at i is confirmed only once k bars after it have closed.
+  function swings(c, k) {
+    var H = [], L = [];
+    for (var i = k; i < c.length - k; i++) {
+      var hi = true, lo = true;
+      for (var j = i - k; j <= i + k; j++) {
+        if (j === i) continue;
+        if (c[j].h >= c[i].h) hi = false;
+        if (c[j].l <= c[i].l) lo = false;
+      }
+      if (hi) H.push({ i: i, p: c[i].h });
+      if (lo) L.push({ i: i, p: c[i].l });
+    }
+    return { H: H, L: L };
+  }
+
+  function fvgs(c, from) {
+    var out = [];
+    for (var g = Math.max(2, from); g < c.length; g++) {
+      if (c[g].l > c[g - 2].h) out.push({ dir: "bull", lo: c[g - 2].h, hi: c[g].l, i: g - 1 });
+      else if (c[g].h < c[g - 2].l) out.push({ dir: "bear", lo: c[g].h, hi: c[g - 2].l, i: g - 1 });
+    }
+    return out;
+  }
+
+  // Congestion box ending at the bar before the last closed bar, and a breakout on the last bar.
+  function congestion(c, A) {
+    var n = c.length, end = n - 2, start = end - CFG.congLen + 1;
+    if (start < 0 || A[end] == null) return null;
+    var hi = -Infinity, lo = Infinity;
+    for (var i = start; i <= end; i++) { hi = Math.max(hi, c[i].h); lo = Math.min(lo, c[i].l); }
+    var range = hi - lo;
+    if (range <= 0) return null;
+    var ratio = Math.abs(c[end].c - c[start].c) / range;
+    var sideways = ratio <= CFG.congMaxRatio && range <= CFG.congMaxATR * A[end];
+    if (!sideways) return null;
+    var bodySum = 0, cnt = 0;
+    for (var j = n - 1 - CFG.bodyLen; j < n - 1; j++) { if (j < 0) continue; bodySum += Math.abs(c[j].c - c[j].o); cnt++; }
+    var avgBody = cnt ? bodySum / cnt : 0;
+    var last = c[n - 1], body = Math.abs(last.c - last.o);
+    var breakout = null;
+    if (body >= CFG.bodyMult * avgBody) {
+      if (last.c > hi) breakout = "bull";
+      else if (last.c < lo) breakout = "bear";
+    }
+    return { hi: hi, lo: lo, start: start, end: end, breakout: breakout };
+  }
+
+  // ---------- main analysis ----------
+  function analyze(c) {
+    var n = c.length;
+    if (n < 60) return { ready: false, reason: "تحتاج 60 شمعة على الأقل" };
+
+    var closes = c.map(function (x) { return x.c; });
+    var E = ema(closes, CFG.emaLen), R = rsi(closes, CFG.rsiLen), A = atr(c, CFG.atrLen);
+    var i = n - 1, price = c[i].c, ema50 = E[i], rsiV = R[i], atrV = A[i];
+    if (ema50 == null || rsiV == null || atrV == null || E[i - 5] == null) {
+      return { ready: false, reason: "المؤشرات لم تكتمل بعد" };
+    }
+
+    var sw = swings(c, CFG.pivot), H = sw.H, L = sw.L;
+    var sh = H[H.length - 1], sh2 = H[H.length - 2], sl = L[L.length - 1], sl2 = L[L.length - 2];
+
+    // Market structure (ICT / SMC): HH+HL = bull, LH+LL = bear.
+    var trend = null;
+    if (sh && sh2 && sl && sl2) {
+      if (sh.p > sh2.p && sl.p > sl2.p) trend = "bull";
+      else if (sh.p < sh2.p && sl.p < sl2.p) trend = "bear";
+    }
+
+    // BOS / CHoCH: a close beyond the last confirmed swing in the last 20 bars.
+    var ev = null;
+    for (var j = Math.max(0, n - 20); j < n; j++) {
+      if (sh && j > sh.i && c[j].c > sh.p) ev = { dir: "bull", i: j, level: sh.p, type: trend === "bear" ? "CHoCH" : "BOS" };
+      if (sl && j > sl.i && c[j].c < sl.p) ev = { dir: "bear", i: j, level: sl.p, type: trend === "bull" ? "CHoCH" : "BOS" };
+    }
+
+    // Liquidity sweep: wick through a recent swing, close back inside (stop hunt).
+    var sweep = null;
+    for (var s = Math.max(0, n - 4); s < n; s++) {
+      H.slice(-3).forEach(function (p) {
+        if (s > p.i && c[s].h > p.p && c[s].c < p.p) sweep = { dir: "bear", i: s, level: p.p, wick: c[s].h };
+      });
+      L.slice(-3).forEach(function (p) {
+        if (s > p.i && c[s].l < p.p && c[s].c > p.p) sweep = { dir: "bull", i: s, level: p.p, wick: c[s].l };
+      });
+    }
+
+    // Fair value gap: most recent unfilled one from the last 40 bars.
+    var fvg = null, all = fvgs(c, n - 40);
+    for (var f = all.length - 1; f >= 0 && !fvg; f--) {
+      var z = all[f], filled = false;
+      for (var m = z.i + 2; m < n; m++) { if (c[m].l <= z.hi && c[m].h >= z.lo) { filled = true; break; } }
+      if (!filled) fvg = z;
+    }
+
+    // Order block: last opposite-colour candle before the structure break.
+    var ob = null;
+    if (ev) {
+      for (var o = ev.i - 1; o >= Math.max(0, ev.i - 12); o--) {
+        var k = c[o];
+        if (ev.dir === "bull" && k.c < k.o) { ob = { dir: "bull", lo: k.l, hi: k.h, i: o }; break; }
+        if (ev.dir === "bear" && k.c > k.o) { ob = { dir: "bear", lo: k.l, hi: k.h, i: o }; break; }
+      }
+    }
+
+    // Premium / discount inside the last swing range (ICT).
+    var rangeHi = H.length ? Math.max(H[H.length - 1].p, H.length > 1 ? H[H.length - 2].p : -Infinity) : null;
+    var rangeLo = L.length ? Math.min(L[L.length - 1].p, L.length > 1 ? L[L.length - 2].p : Infinity) : null;
+    var pd = null, eq = null;
+    if (rangeHi != null && rangeLo != null && rangeHi > rangeLo) {
+      eq = (rangeHi + rangeLo) / 2;
+      pd = price < eq ? "discount" : "premium";
+    }
+
+    // Equal highs / lows (liquidity pools).
+    var eqH = H.slice(-6).some(function (a, ai, arr) {
+      return arr.some(function (b, bi) { return bi > ai && Math.abs(a.p - b.p) / a.p < 0.0015; });
+    });
+    var eqL = L.slice(-6).some(function (a, ai, arr) {
+      return arr.some(function (b, bi) { return bi > ai && Math.abs(a.p - b.p) / a.p < 0.0015; });
+    });
+    var bsl = H.length ? Math.max.apply(null, H.slice(-5).map(function (x) { return x.p; })) : null;
+    var ssl = L.length ? Math.min.apply(null, L.slice(-5).map(function (x) { return x.p; })) : null;
+
+    var cong = congestion(c, A);
+    var tol = 0.3 * atrV;
+    function near(z) { return z && price >= z.lo - tol && price <= z.hi + tol; }
+
+    // Confirmations, built per side. Each item has a weight; the score is the sum of ticked items.
+    function checks(side) {
+      var up = side === "long", d = up ? "bull" : "bear";
+      var out = [];
+      out.push({ label: up ? "السعر فوق EMA50" : "السعر تحت EMA50", ok: up ? price > ema50 : price < ema50, w: 1 });
+      var rising = ema50 > E[i - 5];
+      out.push({ label: up ? "EMA50 مائل للأعلى" : "EMA50 مائل للأسفل", ok: up ? rising : !rising, w: 1 });
+      out.push({ label: up ? "RSI في منطقة الزخم الصاعد (45-68)" : "RSI في منطقة الزخم الهابط (32-55)",
+        ok: up ? (rsiV >= 45 && rsiV <= 68) : (rsiV >= 32 && rsiV <= 55), w: 1 });
+      out.push({ label: ev && ev.dir === d ? ev.type + " " + (up ? "صاعد" : "هابط") + " مؤكد" : "لا كسر هيكلي في الاتجاه",
+        ok: !!(ev && ev.dir === d), w: 2 });
+      out.push({ label: sweep && sweep.dir === d ? "سحب سيولة (Sweep) في الاتجاه" : "لا سحب سيولة في الاتجاه",
+        ok: !!(sweep && sweep.dir === d), w: 2 });
+      out.push({ label: fvg && fvg.dir === d && near(fvg) ? "السعر داخل FVG في الاتجاه" : "السعر ليس داخل FVG في الاتجاه",
+        ok: !!(fvg && fvg.dir === d && near(fvg)), w: 1 });
+      out.push({ label: ob && ob.dir === d && near(ob) ? "السعر داخل Order Block في الاتجاه" : "السعر ليس داخل Order Block",
+        ok: !!(ob && ob.dir === d && near(ob)), w: 1 });
+      out.push({ label: pd ? (up ? "منطقة الخصم Discount" : "منطقة Premium") + (pd === (up ? "discount" : "premium") ? " (مناسبة)" : " (غير مناسبة)") : "المدى غير واضح",
+        ok: pd === (up ? "discount" : "premium"), w: 1 });
+      out.push({ label: cong && cong.breakout === d ? "كسر نطاق تجميع بشمعة قوية" : "لا كسر لنطاق تجميع في الاتجاه",
+        ok: !!(cong && cong.breakout === d), w: 2 });
+      return out;
+    }
+
+    var longChecks = checks("long"), shortChecks = checks("short");
+    function tally(list) {
+      return list.reduce(function (acc, x) { if (x.ok) { acc.score += x.w; acc.count++; } return acc; }, { score: 0, count: 0 });
+    }
+    var lt = tally(longChecks), st = tally(shortChecks);
+    var blockLong = rsiV >= CFG.rsiOB, blockShort = rsiV <= CFG.rsiOS;
+
+    var qualLong = lt.score >= CFG.threshold && lt.count >= CFG.minConfirm && !blockLong;
+    var qualShort = st.score >= CFG.threshold && st.count >= CFG.minConfirm && !blockShort;
+
+    var status = "انتظار: لا توجد صفقة مكتملة الشروط";
+    var reasons = [];
+    var signal = null;
+    if (qualLong && !qualShort) { signal = build("LONG", lt); }
+    else if (qualShort && !qualLong) { signal = build("SHORT", st); }
+    else if (qualLong && qualShort) { status = "تضارب: شروط الشراء والبيع مكتملة معاً، لا صفقة"; }
+    if (!signal && !status.startsWith("تضارب")) {
+      if (blockLong && lt.score >= CFG.threshold) reasons.push("RSI في تشبع شرائي (" + rsiV.toFixed(1) + ")، الشراء ممنوع الآن");
+      if (blockShort && st.score >= CFG.threshold) reasons.push("RSI في تشبع بيعي (" + rsiV.toFixed(1) + ")، البيع ممنوع الآن");
+    }
+
+    function build(dir, t) {
+      var up = dir === "LONG", entry = price;
+      var stop;
+      var anchor = up ? (sl ? sl.p : null) : (sh ? sh.p : null);
+      var cands = [];
+      if (anchor != null) cands.push(anchor);
+      if (sweep && sweep.dir === (up ? "bull" : "bear")) cands.push(sweep.wick);
+      if (ob && ob.dir === (up ? "bull" : "bear")) cands.push(up ? ob.lo : ob.hi);
+      if (!cands.length) return null;
+      stop = up ? Math.min.apply(null, cands) - CFG.slBufferATR * atrV : Math.max.apply(null, cands) + CFG.slBufferATR * atrV;
+      var risk = Math.abs(entry - stop);
+      var valid = up ? stop < entry : stop > entry;
+      if (!valid || risk < CFG.slMinATR * atrV || risk > CFG.slMaxATR * atrV) {
+        reasons.push("الوقف المنطقي " + (risk / atrV).toFixed(2) + " ATR، خارج النطاق المسموح، لذلك لا صفقة");
+        return null;
+      }
+      var s = up ? 1 : -1;
+      status = dir === "LONG" ? "إشارة شراء مؤكدة" : "إشارة بيع مؤكدة";
+      return {
+        dir: dir, score: t.score, count: t.count,
+        grade: t.score >= 9 ? "A" : t.score >= 7 ? "B" : "C",
+        entry: entry, sl: stop,
+        tp1: entry + s * 1.5 * risk, tp2: entry + s * 2.5 * risk, tp3: entry + s * 4 * risk,
+        risk: risk
+      };
+    }
+
+    return {
+      ready: true, n: n, price: price, ema50: ema50, emaRising: ema50 > E[i - 5],
+      rsi: rsiV, atr: atrV, trend: trend, ev: ev, sweep: sweep, fvg: fvg, ob: ob,
+      pd: pd, eq: eq, bsl: bsl, ssl: ssl, eqH: eqH, eqL: eqL, cong: cong,
+      longChecks: longChecks, shortChecks: shortChecks,
+      longScore: lt.score, shortScore: st.score,
+      blockLong: blockLong, blockShort: blockShort,
+      signal: signal, status: status, reasons: reasons,
+      series: { ema: E }
+    };
+  }
+
+  // ---------- backtest (no lookahead: each decision sees only closed bars) ----------
+  // Simple rule: after a signal, first of {stop, TP1} wins. Same-bar ties count as stop (conservative).
+  function backtest(c, maxBars) {
+    maxBars = maxBars || 120;
+    var trades = [], busyUntil = -1;
+    for (var i = 60; i < c.length - 1; i++) {
+      if (i <= busyUntil) continue;
+      var r = analyze(c.slice(0, i + 1));
+      if (!r.ready || !r.signal) continue;
+      var s = r.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
+      for (var j = i + 1; j < Math.min(c.length, i + 1 + maxBars); j++) {
+        var b = c[j];
+        var hitStop = up ? b.l <= s.sl : b.h >= s.sl;
+        var hitTP1 = up ? b.h >= s.tp1 : b.l <= s.tp1;
+        if (hitStop) { outcome = "stop"; R = -1; exit = j; break; }
+        if (hitTP1) { outcome = "tp1"; R = 1.5; exit = j; break; }
+      }
+      if (exit == null) { exit = Math.min(c.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
+      trades.push({ i: i, dir: s.dir, grade: s.grade, outcome: outcome, R: R });
+      busyUntil = exit;
+    }
+    var wins = trades.filter(function (t) { return t.R > 0; }).length;
+    var grossW = trades.filter(function (t) { return t.R > 0; }).reduce(function (a, t) { return a + t.R; }, 0);
+    var grossL = Math.abs(trades.filter(function (t) { return t.R < 0; }).reduce(function (a, t) { return a + t.R; }, 0));
+    var decided = trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
+    return {
+      trades: trades,
+      count: trades.length,
+      wins: wins,
+      winRate: decided ? wins / decided : 0,
+      netR: trades.reduce(function (a, t) { return a + t.R; }, 0),
+      profitFactor: grossL > 0 ? grossW / grossL : (grossW > 0 ? Infinity : 0)
+    };
+  }
+
+  // ---------- sample data (clearly labelled as examples) ----------
+  function sampleCandles(base, vol, count, seed) {
+    var s = seed >>> 0;
+    function r() { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }
+    var p = base * 0.97, out = [];
+    for (var i = 0; i < count; i++) {
+      var o = p;
+      var drift = Math.sin(i / 40) * vol * 0.8 + Math.sin(i / 9) * vol * 0.3;
+      var c = o * (1 + (r() - 0.5) * 2 * vol + drift * 0.15);
+      var h = Math.max(o, c) * (1 + r() * vol * 0.6);
+      var l = Math.min(o, c) * (1 - r() * vol * 0.6);
+      out.push({ t: i, o: o, h: h, l: l, c: c, v: 1 });
+      p = c;
+    }
+    var f = base / out[out.length - 1].c;
+    return out.map(function (k) { return { t: k.t, o: k.o * f, h: k.h * f, l: k.l * f, c: k.c * f, v: k.v }; });
+  }
+
+  return {
+    CFG: CFG, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles
+  };
+});

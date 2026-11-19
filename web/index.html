@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e12">
+  <meta name="description" content="تحليل SMC وICT مع EMA50 وRSI وتأكيدات الدخول وكسر نطاقات التجميع">
+  <title>رادار SMC و ICT</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">◈</div>
+      <div>
+        <h1>رادار SMC و ICT</h1>
+        <p class="sub">هيكل السوق · السيولة · FVG · EMA50 · RSI · كسر التجميع</p>
+      </div>
+    </div>
+    <span class="chip" id="source-chip">—</span>
+  </header>
+
+  <section class="bar" aria-label="الإعدادات">
+    <div class="seg" role="group" aria-label="الأصل">
+      <button type="button" data-asset="BTC" aria-pressed="true">BTC/USDT</button>
+      <button type="button" data-asset="XAU" aria-pressed="false">XAU/USD</button>
+    </div>
+    <div class="seg" role="group" aria-label="الإطار الزمني">
+      <button type="button" data-tf="15m" aria-pressed="false">15 د</button>
+      <button type="button" data-tf="1h" aria-pressed="true">1 س</button>
+      <button type="button" data-tf="4h" aria-pressed="false">4 س</button>
+    </div>
+    <label class="file" id="csv-wrap" hidden>
+      <span>ملف CSV من MT5</span>
+      <input type="file" id="csv" accept=".csv,text/csv">
+    </label>
+  </section>
+  <p class="notice" id="notice" role="status"></p>
+
+  <section class="hero card" id="hero">
+    <div class="hero-main">
+      <div class="label">الحكم الآن</div>
+      <div class="verdict" id="verdict">—</div>
+      <div class="status" id="status"></div>
+    </div>
+    <div class="hero-side">
+      <div class="grade" id="grade" title="درجة الإشارة">—</div>
+      <div class="scorebars" aria-label="نتيجة الشراء والبيع">
+        <div class="sb"><span>شراء</span><div class="track"><i id="bar-long" class="up"></i></div><b id="val-long">0</b></div>
+        <div class="sb"><span>بيع</span><div class="track"><i id="bar-short" class="down"></i></div><b id="val-short">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="plan-card">
+    <h2>خطة الصفقة</h2>
+    <div class="plan" id="plan"></div>
+    <p class="note" id="plan-note"></p>
+  </section>
+
+  <section class="card chart-card">
+    <div class="chart-head">
+      <h2>الشارت</h2>
+      <div class="legend">
+        <span><i class="sw ema"></i>EMA50</span>
+        <span><i class="sw up"></i>الدخول والأهداف</span>
+        <span><i class="sw down"></i>الوقف</span>
+        <span><i class="sw fvg"></i>FVG و OB</span>
+        <span><i class="sw box"></i>التجميع</span>
+      </div>
+    </div>
+    <canvas id="chart" role="img" aria-label="شارت شموع مع EMA50 والمستويات"></canvas>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>المؤشرات</h2>
+      <dl class="rows">
+        <div><dt>السعر</dt><dd id="i-price">—</dd></div>
+        <div><dt>EMA50</dt><dd id="i-ema">—</dd></div>
+        <div><dt>RSI (14)</dt><dd id="i-rsi">—</dd></div>
+        <div><dt>ATR (14)</dt><dd id="i-atr">—</dd></div>
+        <div><dt>الاتجاه الهيكلي</dt><dd id="i-trend">—</dd></div>
+        <div><dt>Premium / Discount</dt><dd id="i-pd">—</dd></div>
+      </dl>
+      <div class="gauge" aria-label="مقياس RSI">
+        <div class="zone os"></div><div class="zone ob"></div>
+        <div class="marker" id="rsi-marker"></div>
+        <span class="g-l">30</span><span class="g-r">70</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>SMC و ICT</h2>
+      <dl class="rows">
+        <div><dt>آخر كسر هيكلي</dt><dd id="s-ev">—</dd></div>
+        <div><dt>سحب السيولة Sweep</dt><dd id="s-sweep">—</dd></div>
+        <div><dt>فجوة FVG</dt><dd id="s-fvg">—</dd></div>
+        <div><dt>Order Block</dt><dd id="s-ob">—</dd></div>
+        <div><dt>سيولة BSL / SSL</dt><dd id="s-liq">—</dd></div>
+        <div><dt>نطاق التجميع</dt><dd id="s-cong">—</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>التأكيدات</h2>
+    <div class="checks">
+      <div>
+        <h3 class="up">مع الشراء</h3>
+        <ul id="checks-long" class="checks-list"></ul>
+      </div>
+      <div>
+        <h3 class="down">مع البيع</h3>
+        <ul id="checks-short" class="checks-list"></ul>
+      </div>
+    </div>
+    <p class="note" id="reasons"></p>
+  </section>
+
+  <section class="card">
+    <div class="chart-head">
+      <h2>اختبار على البيانات المعروضة</h2>
+      <button type="button" class="btn" id="bt-run">تشغيل الاختبار</button>
+    </div>
+    <div id="bt-out" class="note">يطبق القواعد نفسها على كل شمعة مغلقة ويحسب نتيجة كل صفقة. ليس ضماناً لأي نتيجة مستقبلية.</div>
+  </section>
+
+  <p class="disclaimer">هذه أداة تعليمية لتحليل الرسوم البيانية، وليست توصية مالية ولا ضماناً لأرباح. التداول بالرافعة يحمل خسارة كبيرة. راجع مصدراً لحظياً وحدد حجم المخاطرة بنفسك قبل أي صفقة.</p>
+</div>
+<script src="analysis.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
