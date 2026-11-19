@@ -293,7 +293,7 @@
     row.textContent = "";
     INST.forEach(function (x) {
       var c = candlesFor(x.id), last = c[c.length - 1].c, ch = changeFor(x.id);
-      var b = el("button", "tk" + (x.id === st.inst ? " on" : ""));
+      var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
       b.type = "button"; b.setAttribute("aria-pressed", String(x.id === st.inst));
       b.appendChild(el("span", "sym", x.name));
       b.appendChild(el("span", "px", fmtD(last, x.digits)));
@@ -449,9 +449,7 @@
       head.appendChild(el("span", "lvl-n", String(idx + 1)));
       head.appendChild(el("b", "", lv.title));
       head.appendChild(el("span", "lvl-s", lv.state));
-      var ul = el("ul", "lvl-l");
-      lv.lines.forEach(function (t) { ul.appendChild(el("li", "", t)); });
-      card.appendChild(head); card.appendChild(ul);
+      card.appendChild(head); card.appendChild(el("p", "lvl-p", lv.lines.join(" ")));
       box.appendChild(card);
     });
   }
