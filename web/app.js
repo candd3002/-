@@ -76,6 +76,8 @@
   };
   I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
   I18N.en.welSub = "Market structure, explained simply.";
+  I18N.en.riskScalp = "Scalp (very tight stop, quick targets)";
+  I18N.ar.riskScalp = "Scalp (وقف ضيق جداً وأهداف سريعة)";
   I18N.en.welGuest = "Continue without signing in";
   I18N.en.welContinue = "Continue";
   I18N.en.welHint = "Your sign-in is saved on this device only.";
@@ -566,8 +568,12 @@
     else { stopStreams(); live(false); autoLoad().then(analyzeAndRender); }
     var sel = $("inst-select"); if (sel) sel.value = id;
   }
+  // Each trading style sets its timeframe and risk profile together.
+  var STYLE = { "15m": "scalp", "1h": "balanced", "4h": "balanced" };
   function setTf(tf) {
     st.tf = tf; tick();
+    st.profile = STYLE[tf] || "balanced";
+    var pr = $("profile"); if (pr) pr.value = st.profile;
     autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); });
     if (st.inst === "BTC") loadBtc().then(function () { connect(); analyzeAndRender(); });
     else analyzeAndRender();

@@ -28,7 +28,8 @@
   // Risk profiles. "sniper" = tight structural stop, far targets (lower hit rate, larger reward per win).
   var PROFILES = {
     balanced: { slMaxATR: 4, slBufferATR: 0.2, tp: [1.5, 2.5, 4] },
-    sniper:   { slMaxATR: 1.2, slBufferATR: 0.1, tp: [3, 5, 8] }
+    sniper:   { slMaxATR: 1.2, slBufferATR: 0.1, tp: [3, 5, 8] },
+    scalp:    { slMaxATR: 0.9, slBufferATR: 0.1, tp: [1.2, 2, 3] }
   };
 
   // ---------- indicators ----------
