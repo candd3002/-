@@ -104,6 +104,7 @@
           detailTitle: "التحليل التفصيلي بنظام ICT + SMC", signalBuy: "إشارة شراء", signalSell: "إشارة بيع", signalWait: "انتظار" }
   };
   Object.keys(NEW).forEach(function (l) { Object.keys(NEW[l]).forEach(function (k) { I18N[l][k] = NEW[l][k]; }); });
+  I18N.en.chartTitle = "Live chart"; I18N.ar.chartTitle = "الشارت المباشر";
   I18N.en.sslLbl = "SSL liquidity"; I18N.en.bslLbl = "BSL liquidity"; I18N.en.fvgLbl = "FVG"; I18N.en.orderBlock = "Order block";
   I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.orderBlock = "كتلة الأوامر";
   I18N.en.dataUrl = "Live data link (CSV or JSON)";
@@ -428,13 +429,21 @@
     }
     if (r.signal) {
       var s = r.signal;
-      hline(s.sl, "#ff6b6b", "SL " + fmt(s.sl));
-      hline(s.entry, "#e8b44a", "ENTRY " + fmt(s.entry));
+      hline(s.sl, "#ff6b6b", T("stop") + " " + fmt(s.sl));
+      hline(s.entry, "#e8b44a", T("entry") + " " + fmt(s.entry));
       hline(s.tp1, "#33d69a", "TP1 " + fmt(s.tp1), "4 4");
       hline(s.tp2, "#33d69a", "TP2 " + fmt(s.tp2), "4 4");
       hline(s.tp3, "#33d69a", "TP3 " + fmt(s.tp3), "4 4");
     }
     if (r.ssl != null) hline(r.ssl, "#ff8a8a", "SSL " + fmt(r.ssl), "4 4");
+    var lastC = vis[vis.length - 1], lx = X(vis.length - 1), ly = Y(lastC.c);
+    svg.appendChild(svgEl("line", { x1: 0, y1: ly, x2: areaR, y2: ly, stroke: "#ffffff", "stroke-width": 0.8, "stroke-dasharray": "2 3", opacity: 0.5 }));
+    svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 7, fill: "#33d69a", class: "live-ring" }));
+    svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 2.8, fill: "#33d69a" }));
+    var pl = svgEl("text", { x: areaR + 6, y: ly - 6, "font-family": "Tajawal, sans-serif", "font-size": 10, "font-weight": 700, fill: "#ffffff" });
+    pl.textContent = fmt(lastC.c); svg.appendChild(pl);
+    var sty = A.story(r, st.lang);
+    if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
   }
 
   // ---------- three-level understanding ----------
@@ -703,7 +712,7 @@
   }
 
   // ---------- boot ----------
-  st.lang = store("baqerLang") === "ar" ? "ar" : "en";
+  st.lang = store("baqerLang") === "en" ? "en" : "ar";
   st.prefs = store("baqerPrefs") || st.prefs;
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   applyLang();

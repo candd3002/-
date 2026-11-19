@@ -39,6 +39,19 @@
       </div>
     </section>
 
+    <section class="card chart-card">
+      <div class="row"><span class="gold-t" data-i18n="chartTitle">الشارت المباشر</span><span class="muted" id="chart-price">—</span></div>
+      <svg id="chart" viewBox="0 0 358 200" width="100%" role="img" aria-label="Live candle chart"></svg>
+      <div class="legend">
+        <span><i class="lg" style="background:#ff6b6b"></i><span data-i18n="stop">Stop</span></span>
+        <span><i class="lg" style="background:#e8c35a"></i><span data-i18n="entry">Entry</span></span>
+        <span><i class="lg" style="background:#2fd08b"></i><span data-i18n="targets">Targets</span></span>
+        <span><i class="lg" style="background:#4f9bff"></i>BSL / SSL</span>
+        <span><i class="lg" style="background:#e8c35a;border-radius:50%"></i><span data-i18n="sweep">Sweep</span></span>
+      </div>
+      <p class="chart-read" id="chart-read"></p>
+    </section>
+
     <div class="modes" role="tablist" aria-label="Trading style">
       <button type="button" role="tab" data-tf="1h" aria-selected="true" data-i18n="modeDay">Day ICT</button>
       <button type="button" role="tab" data-tf="15m" aria-selected="false" data-i18n="modeScalp">Scalp</button>

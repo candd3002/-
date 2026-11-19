@@ -332,3 +332,14 @@ body{background:#070d17}
 .nav button.on{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-radius:16px; margin:0 6px}
 .nav button.on svg{stroke:#15110a}
 .live{background:#0b1830; border:1.5px solid rgba(70,120,200,.5)}
+
+/* ---- Live chart ---- */
+.chart-card{background:#0b1424; border:1.5px solid rgba(232,195,90,.55); border-radius:20px; padding:14px}
+.gold-t{color:#e8c35a; font-weight:800; font-size:14px}
+#chart{display:block; margin-top:8px; height:auto}
+.legend{display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-size:11px; color:var(--muted)}
+.legend .lg{display:inline-block; width:10px; height:3px; margin-inline-end:5px; vertical-align:middle; border-radius:2px}
+.chart-read{margin:10px 0 0; font-size:12.5px; color:#c9d2e0; line-height:1.7; text-align:start}
+.live-ring{animation:liveRing 1.4s ease-out infinite; transform-box:fill-box; transform-origin:center}
+@keyframes liveRing{0%{transform:scale(.6); opacity:.9}100%{transform:scale(2.4); opacity:0}}
+@media (prefers-reduced-motion: reduce){ .live-ring{animation:none} }
