@@ -126,9 +126,11 @@
   // ---------- analysis & render ----------
   function analyzeAndRender() {
     var c = candlesFor(st.inst);
-    st.res = A.analyze(c, st.profile);
+    st.res = A.analyze(c, st.profile, learnFromJournal());
+    journalUpdate();
     renderTickers();
     render();
+    renderJournal();
     notifyIfNew(st.res);
   }
 
@@ -197,21 +199,22 @@
   }
 
   function renderAnalysis(r) {
-    var ul = $("analysis"); ul.textContent = "";
-    function item(head, body) {
-      var li = document.createElement("li");
-      var b = document.createElement("b"); b.textContent = head + ": ";
-      li.appendChild(b); li.appendChild(document.createTextNode(body));
-      ul.appendChild(li);
-    }
-    if (!r.ready) { item("الحالة", r.reason); return; }
-    item("هيكل السوق", r.trend === "bear" ? "قمم وقيعان أدنى، والسوق في هيكل هابط." : r.trend === "bull" ? "قمم وقيعان أعلى، والسوق في هيكل صاعد." : "لا توجد قمم وقيعان مرتبة بوضوح الآن.");
-    item("كسر الهيكل", r.ev ? r.ev.type + " " + (r.ev.dir === "bull" ? "صاعد" : "هابط") + " عند " + fmt(r.ev.level) + "." : "لا كسر حديث ضمن آخر 20 شمعة.");
-    item("السيولة", (r.sweep ? (r.sweep.dir === "bear" ? "سُحبت سيولة فوق القمم عند " : "سُحبت سيولة تحت القيعان عند ") + fmt(r.sweep.level) + "." : "لا سحب سيولة حديث.") + " BSL " + fmt(r.bsl) + " و SSL " + fmt(r.ssl) + ".");
-    item("الفجوة والكتلة", (r.fvg ? "فجوة FVG " + (r.fvg.dir === "bull" ? "صاعدة" : "هابطة") + " بين " + fmt(r.fvg.lo) + " و " + fmt(r.fvg.hi) + "." : "لا توجد فجوة غير مملوءة.") + " " + (r.ob ? "كتلة أوامر " + (r.ob.dir === "bull" ? "صاعدة" : "هابطة") + " عند " + fmt(r.ob.lo) + " – " + fmt(r.ob.hi) + "." : ""));
-    item("EMA50 و RSI", "السعر " + (r.price > r.ema50 ? "فوق" : "تحت") + " EMA50 (" + fmt(r.ema50) + ") " + (r.emaRising ? "والمتوسط مائل للأعلى" : "والمتوسط مائل للأسفل") + "، و RSI عند " + r.rsi.toFixed(1) + (r.rsi >= 70 ? " وفي تشبع شرائي." : r.rsi <= 30 ? " وفي تشبع بيعي." : "."));
-    item("التأكيدات", "مع الشراء " + r.longScore + "/12، مع البيع " + r.shortScore + "/12.");
-    item("الخلاصة", r.status + (r.reasons.length ? ". " + r.reasons.join(". ") : ""));
+    var box = $("analysis"); if (!box) return;
+    box.textContent = "";
+    var sty = A.story(r);
+    if (!sty) { box.textContent = r && r.reason ? r.reason : "جارٍ التحميل…"; return; }
+    [sty.l1, sty.l2, sty.l3].forEach(function (lv, idx) {
+      var card = document.createElement("div"); card.className = "lvl";
+      var head = document.createElement("div"); head.className = "lvl-h";
+      var num = document.createElement("span"); num.className = "lvl-n"; num.textContent = String(idx + 1);
+      var ttl = document.createElement("b"); ttl.textContent = lv.title;
+      var state = document.createElement("span"); state.className = "lvl-s"; state.textContent = lv.state;
+      head.appendChild(num); head.appendChild(ttl); head.appendChild(state);
+      var ul = document.createElement("ul"); ul.className = "lvl-l";
+      lv.lines.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+      card.appendChild(head); card.appendChild(ul);
+      box.appendChild(card);
+    });
   }
 
   function renderMarkets() {
@@ -227,6 +230,74 @@
       b.textContent = fmtD(last, x.digits) + "  " + (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%";
       d.appendChild(a); d.appendChild(b); box.appendChild(d);
     });
+  }
+
+  // ---------- trade journal: records every signal and learns from the wrong ones ----------
+  var JKEY = "baqerJournal";
+  function loadJournal() { try { return JSON.parse(localStorage.getItem(JKEY) || "[]"); } catch (e) { return []; } }
+  function saveJournal(j) { try { localStorage.setItem(JKEY, JSON.stringify(j.slice(-300))); } catch (e) {} }
+  function journalStats(j) {
+    var closed = j.filter(function (e) { return e.status !== "open"; });
+    var wins = closed.filter(function (e) { return e.status === "win"; }).length;
+    var byKey = {};
+    closed.forEach(function (e) {
+      var g = byKey[e.key] || (byKey[e.key] = { n: 0, w: 0 });
+      g.n++; if (e.status === "win") g.w++;
+    });
+    return { closed: closed.length, wins: wins, losses: closed.length - wins, byKey: byKey };
+  }
+  // Learning rule (kept deliberately simple and visible):
+  // - a setup pattern that lost most of its last trades (6+ closed, under 25% wins) is paused.
+  // - if overall results are poor (5+ closed, under 40% wins), decisions need 2 more points.
+  function learnFromJournal() {
+    var s = journalStats(loadJournal()), block = [];
+    Object.keys(s.byKey).forEach(function (k) {
+      var g = s.byKey[k];
+      if (g.n >= 6 && g.w / g.n < 0.25) block.push(k);
+    });
+    var overall = s.closed >= 5 ? s.wins / s.closed : 1;
+    return { extra: overall < 0.4 ? 2 : 0, block: block };
+  }
+  // Record the current signal once, then close open trades when stop or first target is hit.
+  function journalUpdate() {
+    var j = loadJournal(), changed = false, r = st.res;
+    if (r && r.ready && r.signal) {
+      var sg = r.signal, d = BY[st.inst].digits;
+      var c = candlesFor(st.inst), t = c[c.length - 1].t;
+      var id = st.inst + "|" + sg.key + "|" + sg.entry.toFixed(d);
+      if (!j.some(function (e) { return e.id === id; })) {
+        j.push({ id: id, inst: st.inst, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open" });
+        changed = true;
+      }
+    }
+    j.forEach(function (e) {
+      if (e.status !== "open") return;
+      var c = candlesFor(e.inst), long = e.dir === "LONG";
+      for (var i = 0; i < c.length; i++) {
+        if (!(c[i].t > e.t)) continue;
+        var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
+        var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
+        if (hitStop) { e.status = "loss"; e.closeT = c[i].t; changed = true; break; }
+        if (hitTP) { e.status = "win"; e.closeT = c[i].t; changed = true; break; }
+      }
+    });
+    if (changed) saveJournal(j);
+  }
+  function renderJournal() {
+    var box = $("journal-box"); if (!box) return;
+    var s = journalStats(loadJournal()), L = learnFromJournal();
+    box.textContent = "";
+    var h = document.createElement("h2"); h.textContent = "سجل الصفقات والتعلم";
+    var p = document.createElement("p"); p.className = "muted";
+    p.textContent = s.closed
+      ? "صفقات مغلقة: " + s.closed + " · ربح: " + s.wins + " · خسارة: " + s.losses + " · نسبة النجاح: " + Math.round(s.wins / s.closed * 100) + "%"
+      : "لا توجد صفقات مغلقة بعد. تُسجَّل كل إشارة تلقائياً وتُقفل عند الوقف أو الهدف الأول.";
+    var p2 = document.createElement("p"); p2.className = "muted";
+    p2.textContent = (L.extra ? "بعد خسائر سابقة يحتاج القرار إلى نقطتين إضافيتين. " : "") +
+      (L.block.length ? "أنماط موقوفة بسبب تكرار الخسارة: " + L.block.length + "." : "");
+    var btn = document.createElement("button"); btn.type = "button"; btn.className = "btn"; btn.textContent = "مسح السجل";
+    btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
+    box.appendChild(h); box.appendChild(p); box.appendChild(p2); box.appendChild(btn);
   }
 
   // ---------- clock & notifications ----------

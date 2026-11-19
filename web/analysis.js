@@ -123,8 +123,31 @@
     return { hi: hi, lo: lo, start: start, end: end, breakout: breakout };
   }
 
+  // A break is false if price closes back through the broken level within 3 closed bars.
+  function breakQuality(c, ev) {
+    if (!ev) return null;
+    var n = c.length, after = c.slice(ev.i + 1, Math.min(n, ev.i + 4));
+    var fail = after.some(function (k) { return ev.dir === "bull" ? k.c < ev.level : k.c > ev.level; });
+    if (fail) return "كاذب";
+    if (after.length < 3) return "قيد الاختبار";
+    return "صامد";
+  }
+
+  // An order block is strong when a fast impulse of at least 1 ATR leaves it within 3 bars.
+  function obQuality(c, ob, atrV) {
+    if (!ob || !atrV) return null;
+    var n = c.length, end = Math.min(n - 1, ob.i + 3), best = 0;
+    for (var j = ob.i + 1; j <= end; j++) {
+      var mv = ob.dir === "bull" ? c[j].h - ob.hi : ob.lo - c[j].l;
+      if (mv > best) best = mv;
+    }
+    var tested = false;
+    for (var k = ob.i + 4; k < n; k++) { if (c[k].l <= ob.hi && c[k].h >= ob.lo) { tested = true; break; } }
+    return { strong: best >= atrV, tested: tested };
+  }
+
   // ---------- main analysis ----------
-  function analyze(c, profileName) {
+  function analyze(c, profileName, learn) {
     var P = PROFILES[profileName] || PROFILES.balanced;
     var n = c.length;
     if (n < 60) return { ready: false, reason: "تحتاج 60 شمعة على الأقل" };
@@ -202,6 +225,7 @@
     var ssl = L.length ? Math.min.apply(null, L.slice(-5).map(function (x) { return x.p; })) : null;
 
     var cong = congestion(c, A);
+    var bq = breakQuality(c, ev), oq = obQuality(c, ob, atrV);
     var tol = 0.3 * atrV;
     function near(z) { return z && price >= z.lo - tol && price <= z.hi + tol; }
 
@@ -214,14 +238,17 @@
       out.push({ label: up ? "EMA50 مائل للأعلى" : "EMA50 مائل للأسفل", ok: up ? rising : !rising, w: 1 });
       out.push({ label: up ? "RSI في منطقة الزخم الصاعد (45-68)" : "RSI في منطقة الزخم الهابط (32-55)",
         ok: up ? (rsiV >= 45 && rsiV <= 68) : (rsiV >= 32 && rsiV <= 55), w: 1 });
-      out.push({ label: ev && ev.dir === d ? ev.type + " " + (up ? "صاعد" : "هابط") + " مؤكد" : "لا كسر هيكلي في الاتجاه",
-        ok: !!(ev && ev.dir === d), w: 2 });
+      var brkOK = !!(ev && ev.dir === d && bq !== "كاذب");
+      out.push({ label: brkOK ? ev.type + " " + (up ? "صاعد" : "هابط") + " (" + bq + ")"
+          : (ev && ev.dir === d ? "الكسر كاذب: السعر رجع خلف المستوى" : "لا كسر هيكلي في الاتجاه"),
+        ok: brkOK, w: 2 });
       out.push({ label: sweep && sweep.dir === d ? "سحب سيولة (Sweep) في الاتجاه" : "لا سحب سيولة في الاتجاه",
         ok: !!(sweep && sweep.dir === d), w: 2 });
       out.push({ label: fvg && fvg.dir === d && near(fvg) ? "السعر داخل FVG في الاتجاه" : "السعر ليس داخل FVG في الاتجاه",
         ok: !!(fvg && fvg.dir === d && near(fvg)), w: 1 });
-      out.push({ label: ob && ob.dir === d && near(ob) ? "السعر داخل Order Block في الاتجاه" : "السعر ليس داخل Order Block",
-        ok: !!(ob && ob.dir === d && near(ob)), w: 1 });
+      var obOK = !!(ob && ob.dir === d && near(ob) && oq && oq.strong);
+      out.push({ label: obOK ? "السعر داخل Order Block بإندفاع قوي" : (ob && ob.dir === d && near(ob) ? "Order Block بلا إندفاع كافٍ" : "السعر ليس داخل Order Block"),
+        ok: obOK, w: 1 });
       out.push({ label: pd ? (up ? "منطقة الخصم Discount" : "منطقة Premium") + (pd === (up ? "discount" : "premium") ? " (مناسبة)" : " (غير مناسبة)") : "المدى غير واضح",
         ok: pd === (up ? "discount" : "premium"), w: 1 });
       out.push({ label: cong && cong.breakout === d ? "كسر نطاق تجميع بشمعة قوية" : "لا كسر لنطاق تجميع في الاتجاه",
@@ -236,8 +263,12 @@
     var lt = tally(longChecks), st = tally(shortChecks);
     var blockLong = rsiV >= CFG.rsiOB, blockShort = rsiV <= CFG.rsiOS;
 
-    var qualLong = lt.score >= CFG.threshold && lt.count >= CFG.minConfirm && !blockLong;
-    var qualShort = st.score >= CFG.threshold && st.count >= CFG.minConfirm && !blockShort;
+    var thr = CFG.threshold + ((learn && learn.extra) || 0);
+    // ICT rule: no trade without a confirmed structure break in the trade direction (not a false break).
+    var brkLong = !!(ev && ev.dir === "bull" && bq !== "كاذب");
+    var brkShort = !!(ev && ev.dir === "bear" && bq !== "كاذب");
+    var qualLong = lt.score >= thr && lt.count >= CFG.minConfirm && !blockLong && brkLong;
+    var qualShort = st.score >= thr && st.count >= CFG.minConfirm && !blockShort && brkShort;
 
     var status = "انتظار: لا توجد صفقة مكتملة الشروط";
     var reasons = [];
@@ -252,6 +283,12 @@
 
     function build(dir, t) {
       var up = dir === "LONG", entry = price;
+      var key = dir + "|" + (sweep && sweep.dir === (up ? "bull" : "bear") ? "sweep" : "nosweep") + "|" +
+        (ob && ob.dir === (up ? "bull" : "bear") ? "ob" : "noob") + "|" + (bq || "none");
+      if (learn && learn.block && learn.block.indexOf(key) >= 0) {
+        reasons.push("هذا النمط موقوف بعد خسائر متكررة في سجلك، لذلك لا صفقة");
+        return null;
+      }
       var stop;
       var anchor = up ? (sl ? sl.p : null) : (sh ? sh.p : null);
       var cands = [];
@@ -269,7 +306,7 @@
       var s = up ? 1 : -1;
       status = dir === "LONG" ? "إشارة شراء مؤكدة" : "إشارة بيع مؤكدة";
       return {
-        dir: dir, score: t.score, count: t.count,
+        dir: dir, key: key, score: t.score, count: t.count,
         grade: t.score >= 9 ? "A" : t.score >= 7 ? "B" : "C",
         entry: entry, sl: stop,
         tp1: entry + s * P.tp[0] * risk, tp2: entry + s * P.tp[1] * risk, tp3: entry + s * P.tp[2] * risk,
@@ -284,9 +321,56 @@
       longChecks: longChecks, shortChecks: shortChecks,
       longScore: lt.score, shortScore: st.score,
       blockLong: blockLong, blockShort: blockShort,
-      signal: signal, status: status, reasons: reasons,
+      signal: signal, status: status, reasons: reasons, bq: bq, oq: oq,
+      learnExtra: (learn && learn.extra) || 0,
       series: { ema: E }
     };
+  }
+
+  // Plain-language story in three levels: trend, liquidity and zones, decision.
+  function story(r) {
+    if (!r || !r.ready) return null;
+    var L1 = [], L2 = [], L3 = [];
+    var trendName = r.trend === "bull" ? "صاعد" : r.trend === "bear" ? "هابط" : "عرضي";
+    L1.push(r.trend === "bull" ? "قمم وقيعان أعلى (HH و HL)" : r.trend === "bear" ? "قمم وقيعان أدنى (LH و LL)" : "القمم والقيعان غير مرتبة");
+    L1.push("السعر " + (r.price > r.ema50 ? "فوق" : "تحت") + " متوسط EMA50 والمتوسط " + (r.emaRising ? "مائل للأعلى" : "مائل للأسفل"));
+    L1.push("الاتجاه يتأكد فقط بكسر قمة أو قاع سابق مع إغلاق واضح");
+
+    if (r.sweep) L2.push((r.sweep.dir === "bear" ? "سُحبت سيولة فوق القمة" : "سُحبت سيولة تحت القاع") + " عند " + fmtN(r.sweep.level) + " ثم رجع السعر");
+    else L2.push("لا يوجد سحب سيولة حديث");
+    L2.push("سيولة الشراء فوق " + fmtN(r.bsl) + "، وسيولة البيع تحت " + fmtN(r.ssl) + " (أهداف محتملة للسعر)");
+    if (r.ob) L2.push("كتلة الأوامر " + (r.ob.dir === "bull" ? "صاعدة" : "هابطة") + " " + fmtN(r.ob.lo) + " – " + fmtN(r.ob.hi) +
+      (r.oq ? (r.oq.strong ? "، بإندفاع قوي" : "، بلا إندفاع كافٍ") + (r.oq.tested ? " وتم اختبارها" : " ولم تُختبر بعد") : ""));
+    else L2.push("لا توجد كتلة أوامر واضحة");
+    if (r.fvg) L2.push("فجوة FVG " + (r.fvg.dir === "bull" ? "صاعدة" : "هابطة") + " " + fmtN(r.fvg.lo) + " – " + fmtN(r.fvg.hi));
+
+    var bqTxt = r.bq === "كاذب" ? "كاذب، رجع السعر خلف المستوى"
+      : r.bq === "صامد" ? "صامد بعد 3 شموع"
+      : r.bq === "قيد الاختبار" ? "ينتظر تأكيد 3 شموع"
+      : "لا كسر حديث";
+    L3.push("الكسر الهيكلي: " + bqTxt);
+    L3.push("التأكيدات: شراء " + r.longScore + "/12 · بيع " + r.shortScore + "/12");
+    if (r.learnExtra) L3.push("تم رفع شرط القرار بعد خسائر سابقة في سجلك");
+    if (r.signal) {
+      L3.push("الخطة: دخول " + fmtN(r.signal.entry) + " · وقف " + fmtN(r.signal.sl) + " · هدف أول " + fmtN(r.signal.tp1));
+    } else if (r.trend === "bear") {
+      L3.push("الانتظار: ارتداد نحو كتلة الأوامر أو الفجوة ثم رفض هابط");
+    } else if (r.trend === "bull") {
+      L3.push("الانتظار: ارتداد نحو منطقة شراء ثم رفض صاعد");
+    } else {
+      L3.push("الانتظار: كسر واضح لنطاق العرض في أحد الاتجاهين");
+    }
+    return {
+      trend: trendName,
+      l1: { title: "الاتجاه", state: trendName, lines: L1 },
+      l2: { title: "السيولة والمناطق", state: r.sweep ? "سحب سيولة" : "بلا سحب", lines: L2 },
+      l3: { title: "القرار", state: r.signal ? (r.signal.dir === "LONG" ? "شراء" : "بيع") : "انتظار", lines: L3 }
+    };
+  }
+  function fmtN(v) {
+    if (v == null || isNaN(v)) return "—";
+    var d = Math.abs(v) < 2 ? 5 : Math.abs(v) < 100 ? 3 : 2;
+    return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
 
   // ---------- backtest (no lookahead: each decision sees only closed bars) ----------
@@ -344,6 +428,7 @@
 
   return {
     CFG: CFG, PROFILES: PROFILES, ema: ema, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
-    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles
+    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story,
+    breakQuality: breakQuality, obQuality: obQuality
   };
 });
