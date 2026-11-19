@@ -2,8 +2,6 @@
 // Key is read from the FINNHUB_KEY secret (never sent to the browser).
 const HEADERS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" };
 function ymd(d) { return d.toISOString().slice(0, 10); }
-// Free calendar is cached for 30 minutes to avoid hitting the provider's rate limit.
-let FF_CACHE = { at: 0, rows: null, status: "" };
 
 export async function onRequest(context) {
   const key = context.env.FINNHUB_KEY;
@@ -23,23 +21,27 @@ export async function onRequest(context) {
     let calSource = "finnhub";
     if (!calendar.length) {
       try {
-        if (!FF_CACHE.rows || Date.now() - FF_CACHE.at > 30 * 60e3) {
+        const cache = caches.default;
+        const ckey = new Request("https://baqer-cache.internal/ff-calendar-v1");
+        let rows = null;
+        const hit = await cache.match(ckey);
+        if (hit) { rows = await hit.json(); calSource = "faireconomy (cached)"; }
+        else {
           const ffRes = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
+          calSource = "faireconomy (HTTP " + ffRes.status + ")";
           if (ffRes.ok) {
-            FF_CACHE = { at: Date.now(), rows: await ffRes.json(), status: "HTTP " + ffRes.status };
-          } else {
-            FF_CACHE = { at: 0, rows: [], status: "HTTP " + ffRes.status };
+            rows = await ffRes.json();
+            await cache.put(ckey, new Response(JSON.stringify(rows), { headers: { "cache-control": "max-age=3600" } }));
           }
         }
-        const ff = FF_CACHE.rows;
-        calSource = "faireconomy (" + FF_CACHE.status + ")";
         const today0 = ymd(today);
-        calendar = (Array.isArray(ff) ? ff : []).filter(function (e) {
-          return String(e.date || "").slice(0, 10) >= today0 && String(e.date || "").slice(0, 10) <= ymd(ahead);
+        calendar = (Array.isArray(rows) ? rows : []).filter(function (e) {
+          const d = String(e.date || "").slice(0, 10);
+          return d >= today0 && d <= ymd(ahead);
         }).map(function (e) {
           return { time: e.date, country: e.country, event: e.title, impact: String(e.impact || "").toLowerCase(), actual: e.actual ?? null, forecast: e.forecast || null, previous: e.previous || null, unit: "" };
         });
-      } catch (err) { calendar = []; }
+      } catch (err) { calendar = []; calSource = "faireconomy (error)"; }
     }
     const items = (Array.isArray(news) ? news : []).slice(0, 30).map(function (n) {
       return { time: n.datetime, headline: n.headline, source: n.source, url: n.url, summary: n.summary };

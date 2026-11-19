@@ -777,7 +777,7 @@
     econ.appendChild(el("p", "muted", T("todaySummary") + highCount));
     if (!events.length) econ.appendChild(el("p", "muted", T("noEvents")));
     events.forEach(function (e) {
-      var card = el("div", "ev");
+      var card = el("div", "ev imp-h-" + impactOf(e));
       var t = e.time ? new Date(e.time) : null;
       var soon = t && t.getTime() > now && t.getTime() - now < 60 * 60e3;
       var top = el("div", "ev-h");

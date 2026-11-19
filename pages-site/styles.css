@@ -390,3 +390,19 @@ body{background:#070d17}
 .sess-state.on{color:#2fd08b; border-color:#2fd08b}
 
 .tv-cal{min-height:520px; margin-bottom:12px; border-radius:14px; overflow:hidden}
+
+/* polished economic calendar cards */
+.econ h2{font-size:17px; margin:4px 0 2px}
+.ev{position:relative; padding:14px 14px 12px 16px; border-radius:16px; background:linear-gradient(180deg,#0e1d3a,#0a1528); border:1px solid rgba(70,120,200,.35); overflow:hidden}
+.ev::before{content:""; position:absolute; inset:0 auto 0 0; width:4px; background:#3b6fd0}
+.ev.imp-h-high::before{background:#ff6b6b}
+.ev.imp-h-medium::before{background:#e8c35a}
+.ev-h b{line-height:1.45}
+.ev-m{color:#8ea3c4; font-size:12px}
+.ev-v{background:rgba(255,255,255,.03); border-radius:12px; padding:8px 6px}
+.ev-v span{color:#8ea3c4}
+.ev-v b{color:#f2f5fb}
+.econ > p.muted{font-size:12.5px; line-height:1.7}
+.nw{transition:transform .15s ease, border-color .15s ease}
+.nw:active{transform:scale(.99)}
+.nw b{color:#f2f5fb}
