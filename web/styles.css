@@ -362,3 +362,4 @@ body{background:#070d17}
 /* keep the bottom navigation above chart canvases */
 .nav{z-index:45; isolation:isolate}
 .lw canvas, .lw-rsi canvas{position:relative; z-index:1}
+.trend.note{font-size:14px; font-weight:600; color:var(--muted); line-height:1.6}

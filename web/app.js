@@ -323,7 +323,7 @@
 
   function render() {
     var r = st.res;
-    if (!r || !r.ready) { txt("trend-line", r ? r.reason : T("loading")); return; }
+    if (!r || !r.ready) { var nt = $("trend-line"); nt.textContent = r ? r.reason : T("loading"); nt.className = "trend note"; return; }
     var s = r.signal, sell = s && s.dir === "SHORT", buy = s && s.dir === "LONG";
     var cls = buy ? "buy" : sell ? "sell" : "wait";
     var conf = Math.min(99, Math.round(Math.max(r.longScore, r.shortScore) / 12 * 100));
