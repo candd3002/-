@@ -25,7 +25,11 @@ export async function onRequest(context) {
       try {
         if (!FF_CACHE.rows || Date.now() - FF_CACHE.at > 30 * 60e3) {
           const ffRes = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
-          FF_CACHE = { at: Date.now(), rows: ffRes.ok ? await ffRes.json() : [], status: "HTTP " + ffRes.status };
+          if (ffRes.ok) {
+            FF_CACHE = { at: Date.now(), rows: await ffRes.json(), status: "HTTP " + ffRes.status };
+          } else {
+            FF_CACHE = { at: 0, rows: [], status: "HTTP " + ffRes.status };
+          }
         }
         const ff = FF_CACHE.rows;
         calSource = "faireconomy (" + FF_CACHE.status + ")";
