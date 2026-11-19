@@ -336,7 +336,7 @@
     arc.setAttribute("stroke-dasharray", (conf / 100 * 195).toFixed(1) + " 195");
     txt("ring-num", String(conf));
 
-    txt("chart-price", fmt(r.price));
+    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     renderChart(r);
 
     txt("z-ob", r.ob ? fmt(r.ob.lo) + " – " + fmt(r.ob.hi) : "—");
@@ -455,10 +455,14 @@
     }
     if (r.ssl != null) hline(r.ssl, "#ff8a8a", "SSL " + fmt(r.ssl), "4 4");
     var lastC = vis[vis.length - 1], lx = X(vis.length - 1), ly = Y(lastC.c);
-    svg.appendChild(svgEl("line", { x1: 0, y1: ly, x2: areaR, y2: ly, stroke: "#ffffff", "stroke-width": 0.8, "stroke-dasharray": "2 3", opacity: 0.5 }));
+    svg.appendChild(svgEl("line", { x1: 0, y1: ly, x2: areaR, y2: ly, stroke: "#ffffff", "stroke-width": 0.9, "stroke-dasharray": "3 4", opacity: 0.55, class: "march" }));
     svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 7, fill: "#33d69a", class: "live-ring" }));
     svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 2.8, fill: "#33d69a" }));
-    svg.appendChild(svgEl("rect", { x: areaR + 2, y: ly - 9, width: W - areaR - 4, height: 18, rx: 5, fill: "#2fd08b" }));
+    var prevC = st.prevLast, boxCol = "#e8c35a";
+    if (prevC != null && lastC.c > prevC) boxCol = "#2fd08b";
+    else if (prevC != null && lastC.c < prevC) boxCol = "#ff6b6b";
+    st.prevLast = lastC.c;
+    svg.appendChild(svgEl("rect", { x: areaR + 2, y: ly - 9, width: W - areaR - 4, height: 18, rx: 5, fill: boxCol }));
     var pl = svgEl("text", { x: areaR + 6, y: ly + 4, "font-family": "Tajawal, sans-serif", "font-size": 10, "font-weight": 800, fill: "#06110c" });
     pl.textContent = fmt(lastC.c); svg.appendChild(pl);
     var sty = A.story(r, st.lang);
@@ -747,6 +751,7 @@
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
+  setInterval(function () { if (st.res && st.res.ready) renderChart(st.res); }, 1000);
   loadBtc().then(function () { connect(); analyzeAndRender(); });
   change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {});
   setInterval(function () { change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {}); }, 60000);

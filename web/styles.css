@@ -348,3 +348,8 @@ body{background:#070d17}
 .ctl{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px}
 .ctl button{background:#0b1830; color:#e8c35a; border:1.5px solid rgba(232,195,90,.6); border-radius:999px; padding:6px 14px; font-size:12px; font-weight:700; cursor:pointer; min-height:34px}
 .ctl button[aria-pressed="true"]{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-color:#f0cc6e}
+
+/* ---- Moving live chart ---- */
+.march{animation:march 1s linear infinite}
+@keyframes march{to{stroke-dashoffset:-14}}
+@media (prefers-reduced-motion: reduce){ .march{animation:none} }
