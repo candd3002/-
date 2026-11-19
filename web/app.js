@@ -77,6 +77,12 @@
   I18N.ar.alertsNote = "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.";
   I18N.en.welSub = "Market structure, explained simply.";
   I18N.en.riskScalp = "Scalp (very tight stop, quick targets)";
+  I18N.en.analysisTitle = "Detailed ICT + SMC analysis";
+  I18N.ar.analysisTitle = "التحليل التفصيلي بنظام ICT + SMC";
+  I18N.ar.swing = "تداول متدرج"; I18N.ar.scalp = "مضاربة سريعة"; I18N.ar.dayIct = "تداول يومي ICT";
+  I18N.ar.bias = "اتجاه السوق"; I18N.ar.fvgLbl = "فجوة FVG"; I18N.ar.sslLbl = "سيولة بيعية SSL"; I18N.ar.bslLbl = "سيولة شرائية BSL";
+  I18N.ar.orderBlock = "كتلة الأوامر"; I18N.ar.sniperEntry = "منطقة الدخول";
+  I18N.ar.tag = "تحليل الذهب والعملات الرقمية";
   I18N.ar.riskScalp = "Scalp (وقف ضيق جداً وأهداف سريعة)";
   I18N.en.welGuest = "Continue without signing in";
   I18N.en.welContinue = "Continue";
@@ -525,6 +531,8 @@
   function applyLang() {
     document.documentElement.lang = st.lang;
     document.documentElement.dir = st.lang === "ar" ? "rtl" : "ltr";
+    var bn = $("brand-name");
+    if (bn) bn.textContent = st.lang === "ar" ? "رادار الأسواق" : "BAQER SNIPER";
     document.querySelectorAll("[data-i18n]").forEach(function (e) { e.textContent = T(e.getAttribute("data-i18n")); });
     document.querySelectorAll("[data-i18nph]").forEach(function (e) { e.setAttribute("placeholder", T(e.getAttribute("data-i18nph"))); });
     document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === st.lang)); });

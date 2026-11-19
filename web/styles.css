@@ -152,3 +152,29 @@ html[dir="rtl"] .tk{text-align:right}
 .wel-hint{margin:0; font-size:12px}
 .row-btns{display:flex; gap:8px; flex-wrap:wrap}
 .row-btns .btn,.row-btns .ghost{flex:1}
+
+/* ---- Arabic look: matches the "رادار الأسواق" reference screen ---- */
+html[dir="rtl"] body{background:radial-gradient(600px 380px at 50% -10%,rgba(217,165,58,.10),transparent 60%),linear-gradient(180deg,#0b0f15,#06080b)}
+html[dir="rtl"] .wordmark{font-family:Tajawal,"Segoe UI",sans-serif; font-size:24px; font-weight:800; letter-spacing:0; background:linear-gradient(90deg,#f6d27a,#d9a53a); -webkit-background-clip:text; background-clip:text; color:transparent}
+html[dir="rtl"] .tag{font-family:Tajawal,sans-serif; letter-spacing:0; font-size:12px; color:#8c8a82}
+html[dir="rtl"] .live{font-family:Tajawal,sans-serif}
+html[dir="rtl"] .tk{text-align:right; border-color:rgba(217,165,58,.28)}
+html[dir="rtl"] .tk.on,html[dir="rtl"] .tk.gold{border:1.5px solid #d9a53a; box-shadow:0 0 18px rgba(217,165,58,.18)}
+html[dir="rtl"] .tk .sym{font-family:Tajawal,sans-serif}
+html[dir="rtl"] .tabs{background:rgba(255,255,255,.02)}
+html[dir="rtl"] .tabs button{font-family:Tajawal,sans-serif; font-size:14px}
+html[dir="rtl"] .tabs button[aria-selected="true"]{background:linear-gradient(180deg,#e4b452,#b8842a)}
+html[dir="rtl"] .card,html[dir="rtl"] .z,html[dir="rtl"] .pl{border-color:rgba(217,165,58,.22)}
+html[dir="rtl"] .trend{font-family:Tajawal,sans-serif; font-weight:800; font-size:22px}
+html[dir="rtl"] .badge{font-family:Tajawal,sans-serif}
+html[dir="rtl"] .z span{font-family:Tajawal,sans-serif; font-size:11.5px; color:#c9b27a}
+html[dir="rtl"] .z b{font-family:Tajawal,sans-serif; font-size:16px}
+html[dir="rtl"] .sec-title{font-family:Tajawal,sans-serif; font-size:17px; font-weight:800; color:#e4b452; margin:6px 2px 0; text-align:right}
+html[dir="rtl"] .lvl{border-color:rgba(217,165,58,.25); background:rgba(14,18,25,.9)}
+html[dir="rtl"] .lvl-l li{font-family:Tajawal,sans-serif; font-size:13.5px}
+html[dir="rtl"] .nav{background:rgba(7,9,12,.94); border-top-color:rgba(217,165,58,.25)}
+html[dir="rtl"] .nav button{font-family:Tajawal,sans-serif; font-size:12px}
+html[dir="rtl"] .nav button.on{color:#e4b452}
+html[dir="rtl"] .nav button.on svg{filter:drop-shadow(0 0 6px rgba(217,165,58,.6))}
+html[dir="rtl"] .entry{background:linear-gradient(180deg,rgba(217,165,58,.10),rgba(255,255,255,.006))}
+html[dir="rtl"] .eyebrow{font-family:Tajawal,sans-serif; letter-spacing:0; font-size:12px}
