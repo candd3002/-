@@ -242,3 +242,39 @@ html[dir="rtl"] .nav button.on svg{filter:drop-shadow(0 0 6px rgba(217,165,58,.6
 html[dir="rtl"] .entry{background:linear-gradient(180deg,rgba(217,165,58,.10),rgba(255,255,255,.006))}
 html[dir="rtl"] .eyebrow{font-family:Tajawal,sans-serif; letter-spacing:0; font-size:12px}
 
+
+/* ---- Closer match to the reference ---- */
+.top{grid-template-columns:auto 1fr auto}
+.title{text-align:center}
+.live{background:#0f141b; border-color:rgba(255,255,255,.1)}
+.tickers{gap:10px}
+.tk{flex:0 0 auto; min-width:0; flex-direction:row; align-items:center; gap:8px; border-radius:999px; padding:10px 16px; background:#0f141b}
+.tk .pct{order:0; font-size:12.5px}
+.tk .px{order:1; font-size:15px}
+.tk .sym{order:2; font-size:11px}
+.tk .sym{display:none}
+.tk.on{border-color:var(--gold); box-shadow:0 0 0 1px rgba(217,177,90,.25)}
+.tk-name{font-size:11px; color:var(--muted)}
+.modes{background:transparent; border:0; padding:0; gap:8px}
+.modes button{border:1px solid var(--line); background:#0f141b; color:#aab1bd; border-radius:12px; font-size:13px}
+.modes button[aria-selected="true"]{border:1px solid var(--gold); background:rgba(217,177,90,.06); color:var(--gold); box-shadow:none}
+.trend-card{background:linear-gradient(180deg,#131a23,#0f141b)}
+.badge.sell{border-color:rgba(255,100,100,.6); background:rgba(255,100,100,.08); color:#ff7b7b; font-size:12.5px; padding:4px 12px}
+.badge.buy{border-color:rgba(47,208,139,.6); background:rgba(47,208,139,.08); color:#41e2a0}
+.trend{font-size:21px; font-weight:800}
+.bar{height:5px}
+.bar i{background:var(--down)}
+.plan .pl{background:#0f141b}
+.pl.tp{background:#0f141b}
+.analysis-card{background:#0f141b}
+.analysis-card h2{text-align:center; font-size:15px; color:var(--gold); margin-bottom:12px}
+.lvl{background:transparent; border:0; border-bottom:1px solid var(--line); border-radius:0; padding:12px 2px}
+.lvl:last-child{border-bottom:0}
+.lvl-h b{font-size:14px}
+.lvl:nth-child(1) .lvl-h b, .lvl:nth-child(3) .lvl-h b{color:#6fb4ff}
+.lvl:nth-child(2) .lvl-h b{color:var(--gold)}
+.lvl-s{display:none}
+.lvl-l{list-style:none; padding:0; gap:6px}
+.lvl-l li{color:#d8dce3; font-size:13px; line-height:1.75}
+.lvl-l li::before{content:none}
+.nav button.on{color:var(--gold)}
