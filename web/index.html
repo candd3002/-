@@ -26,10 +26,7 @@
     </button>
   </header>
 
-  <section class="tickers" aria-label="الأسعار">
-    <div class="tk" id="tk-btc"><span class="pct" id="btc-pct">—</span><span class="px" id="btc-px">—</span><span class="sym">BTC/USDT</span></div>
-    <div class="tk gold" id="tk-xau"><span class="pct" id="xau-pct">—</span><span class="px" id="xau-px">—</span><span class="sym">XAU/USD</span></div>
-  </section>
+  <section class="tickers" id="tickers" aria-label="الأسعار"></section>
 
   <section class="tabs main-only" role="tablist" aria-label="نمط التداول">
     <button type="button" role="tab" data-tf="4h" aria-selected="false">تداول متدرج</button>
@@ -83,7 +80,7 @@
   </section>
   <section class="panel" id="settings-panel" hidden>
     <h2>الإعدادات</h2>
-    <label class="field">ملف الذهب CSV (تصدير MT5)<input type="file" id="csv" accept=".csv,text/csv"></label><label class="field">نمط المخاطرة<select id="profile"><option value="balanced">متوازن (أهداف 1.5R و2.5R و4R)</option><option value="sniper">Sniper (وقف قريب وأهداف بعيدة)</option></select></label><p class="muted">النمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل، لذلك قد تخسر أكثر من الصفقات الصغيرة. هذا خيار في الإعدادات وليس ضماناً لأي نتيجة.</p>
+    <label class="field">الأصل<select id="inst-select"></select></label><label class="field">ملف CSV (تصدير MT5)<input type="file" id="csv" accept=".csv,text/csv"></label><label class="field">نمط المخاطرة<select id="profile"><option value="balanced">متوازن (أهداف 1.5R و2.5R و4R)</option><option value="sniper">Sniper (وقف قريب وأهداف بعيدة)</option></select></label><p class="muted">النمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل، لذلك قد تخسر أكثر من الصفقات الصغيرة. هذا خيار في الإعدادات وليس ضماناً لأي نتيجة.</p>
     <p class="muted" id="csv-note"></p>
   </section>
   <section class="panel" id="calendar-panel" hidden>

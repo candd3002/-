@@ -112,3 +112,11 @@ body{
 select{width:100%; font:inherit; color:var(--fg); background:var(--card2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; min-height:44px}
 select option{background:#0e141c; color:#eef1f5}
 .logo{display:block}
+
+/* ---- Multi-instrument ticker row ---- */
+.tickers{display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; padding:2px 2px 4px; margin:0 -2px; -webkit-overflow-scrolling:touch}
+.tickers::-webkit-scrollbar{display:none}
+.tickers .tk{flex:0 0 auto; min-width:132px; cursor:pointer; text-align:start}
+.tickers .tk.on{border-color:rgba(232,180,74,.7); box-shadow:0 0 0 1px rgba(232,180,74,.25), 0 12px 30px rgba(232,180,74,.12)}
+.tk .px{font-size:16px}
+.tk .sym{font-size:11.5px}
