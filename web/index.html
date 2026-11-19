@@ -41,6 +41,11 @@
 
     <section class="card chart-card">
       <div class="row"><span class="gold-t" data-i18n="chartTitle">الشارت المباشر</span><span class="muted" id="chart-price">—</span></div>
+      <div class="src-tabs" role="tablist" aria-label="Chart source">
+        <button type="button" role="tab" data-chart="ours" aria-selected="true">Radar chart</button>
+        <button type="button" role="tab" data-chart="tv" aria-selected="false">TradingView</button>
+      </div>
+      <div id="tv" class="tv" hidden></div>
       <div id="lw" class="lw" aria-label="Live candle chart"></div>
       <div id="lw-rsi" class="lw lw-rsi" hidden></div>
       <div id="lw-macd" class="lw lw-rsi" hidden></div>
@@ -60,6 +65,10 @@
         <button type="button" data-show="bb" aria-pressed="false">Bollinger</button>
         <button type="button" data-show="sma200" aria-pressed="false">SMA 200</button>
         <button type="button" data-show="macd" aria-pressed="false">MACD</button>
+        <button type="button" data-show="ema9" aria-pressed="false">EMA 9</button>
+        <button type="button" data-show="ema21" aria-pressed="false">EMA 21</button>
+        <button type="button" data-show="sma20" aria-pressed="false">SMA 20</button>
+        <button type="button" data-show="sma100" aria-pressed="false">SMA 100</button>
       </div>
       <p class="chart-read" id="chart-read"></p>
     </section>

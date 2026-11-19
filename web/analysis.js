@@ -258,6 +258,7 @@
 
     var cong = congestion(c, A);
     var bq = breakQuality(c, ev), oq = obQuality(c, ob, atrV);
+    var emaOkL = price > ema50, emaOkS = price < ema50;
     var tol = 0.3 * atrV;
     function near(z) { return z && price >= z.lo - tol && price <= z.hi + tol; }
 
@@ -299,8 +300,8 @@
     // ICT rule: no trade without a confirmed structure break in the trade direction (not a false break).
     var brkLong = !!(ev && ev.dir === "bull" && bq !== "false");
     var brkShort = !!(ev && ev.dir === "bear" && bq !== "false");
-    var qualLong = lt.score >= thr && lt.count >= CFG.minConfirm && !blockLong && brkLong;
-    var qualShort = st.score >= thr && st.count >= CFG.minConfirm && !blockShort && brkShort;
+    var qualLong = lt.score >= thr && lt.count >= CFG.minConfirm && !blockLong && brkLong && (!(learn && learn.requireEma) || emaOkL);
+    var qualShort = st.score >= thr && st.count >= CFG.minConfirm && !blockShort && brkShort && (!(learn && learn.requireEma) || emaOkS);
 
     var status = "Wait: no trade with all conditions met";
     var reasons = [];
@@ -328,7 +329,7 @@
       if (sweep && sweep.dir === (up ? "bull" : "bear")) cands.push(sweep.wick);
       if (ob && ob.dir === (up ? "bull" : "bear")) cands.push(up ? ob.lo : ob.hi);
       if (!cands.length) return null;
-      stop = up ? Math.min.apply(null, cands) - P.slBufferATR * atrV : Math.max.apply(null, cands) + P.slBufferATR * atrV;
+      stop = up ? Math.min.apply(null, cands) - (P.slBufferATR + ((learn && learn.widen) || 0)) * atrV : Math.max.apply(null, cands) + (P.slBufferATR + ((learn && learn.widen) || 0)) * atrV;
       var risk = Math.abs(entry - stop);
       var valid = up ? stop < entry : stop > entry;
       if (!valid || risk < CFG.slMinATR * atrV || risk > P.slMaxATR * atrV) {

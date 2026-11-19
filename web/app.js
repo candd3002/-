@@ -126,7 +126,13 @@
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
   var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
   var autoOk = {}; // id -> true when the built-in data function returned candles
-  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, sma200: false, macd: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var MAS = [
+    { key: "ema9", type: "ema", len: 9, color: "#ffd166" },
+    { key: "ema21", type: "ema", len: 21, color: "#06d6a0" },
+    { key: "sma20", type: "sma", len: 20, color: "#8ecae6" },
+    { key: "sma100", type: "sma", len: 100, color: "#fb8500" }
+  ];
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, sma200: false, macd: false, ema9: false, ema21: false, sma20: false, sma100: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -360,7 +366,7 @@
     return e;
   }
   // ---------- real chart (lightweight-charts) with fallback to the SVG chart ----------
-  var LW = { chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null, bbUp: null, bbMid: null, bbLo: null, sma: null, macdChart: null, macdHist: null, macdLine: null, macdSig: null };
+  var LW = { ma: {}, chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null, bbUp: null, bbMid: null, bbLo: null, sma: null, macdChart: null, macdHist: null, macdLine: null, macdSig: null };
   var CH_OPTS = function (height) {
     return {
       height: height, width: 300,
@@ -386,6 +392,7 @@
     LW.rsi.createPriceLine({ price: 70, color: "rgba(255,107,107,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "70" });
     LW.rsi.createPriceLine({ price: 30, color: "rgba(47,208,139,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30" });
     var noLast = { priceLineVisible: false, lastValueVisible: false };
+    MAS.forEach(function (m) { LW.ma[m.key] = LW.chart.addLineSeries(Object.assign({ color: m.color, lineWidth: 1.3 }, noLast)); });
     LW.bbUp = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
     LW.bbMid = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.45)", lineWidth: 1, lineStyle: 1 }, noLast));
     LW.bbLo = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
@@ -427,6 +434,11 @@
     LW.bbUp.setData(pts(bb.up)); LW.bbMid.setData(pts(bb.mid)); LW.bbLo.setData(pts(bb.lo));
     LW.bbUp.applyOptions({ visible: !!st.show.bb }); LW.bbMid.applyOptions({ visible: !!st.show.bb }); LW.bbLo.applyOptions({ visible: !!st.show.bb });
     LW.sma.setData(pts(A.sma(closes, 200))); LW.sma.applyOptions({ visible: !!st.show.sma200 });
+    MAS.forEach(function (m) {
+      var vals = m.type === "ema" ? A.ema(closes, m.len) : A.sma(closes, m.len);
+      LW.ma[m.key].setData(pts(vals));
+      LW.ma[m.key].applyOptions({ visible: !!st.show[m.key] });
+    });
     var md = A.macd(closes, 12, 26, 9);
     var hist = []; md.hist.forEach(function (v, i) { if (v != null) hist.push({ time: data[i].time, value: v, color: v >= 0 ? "rgba(47,208,139,.6)" : "rgba(255,100,100,.6)" }); });
     LW.macdHist.setData(hist); LW.macdLine.setData(pts(md.line)); LW.macdSig.setData(pts(md.signal));
@@ -464,6 +476,7 @@
     return true;
   }
   function renderChart(r) {
+    if (chartSource === "tv") return;
     txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     if (renderLW(r)) {
       var sty = A.story(r, st.lang);
@@ -626,11 +639,44 @@
   }
   // Visible rule: a pattern that lost most of its last trades (6+ closed, under 25% wins) is paused;
   // poor overall results (5+ closed, under 40% wins) require 2 more points before a decision.
+  // Why did a loss happen? Tags are set when the trade closes:
+  //  against_ema   : entered against the EMA50 trend
+  //  tight_stop    : stopped out, then price reached TP1 within 20 candles
+  //  quick_reversal: stopped out within 3 candles of entry
+  function tagLoss(e) {
+    var tags = [];
+    var c = candlesFor(e.inst), long = e.dir === "LONG";
+    if (e.against) tags.push("against_ema");
+    var idx = -1;
+    for (var i = 0; i < c.length; i++) if (c[i].t === e.closeT) { idx = i; break; }
+    if (idx >= 0) {
+      for (var j = idx + 1; j < Math.min(c.length, idx + 21); j++) {
+        if (long ? c[j].h >= e.tp1 : c[j].l <= e.tp1) { tags.push("tight_stop"); break; }
+      }
+      var ent = -1;
+      for (var k = 0; k < c.length; k++) if (c[k].t === e.t) { ent = k; break; }
+      if (ent >= 0 && idx - ent <= 3) tags.push("quick_reversal");
+    }
+    return tags;
+  }
   function learnFromJournal() {
-    var s = journalStats(loadJournal()), block = [];
+    var j = loadJournal(), s = journalStats(j), block = [];
     Object.keys(s.byKey).forEach(function (k) { var g = s.byKey[k]; if (g.n >= 6 && g.w / g.n < 0.25) block.push(k); });
     var overall = s.closed >= 5 ? s.wins / s.closed : 1;
-    return { extra: overall < 0.4 ? 2 : 0, block: block };
+    var losses = j.filter(function (e) { return e.status === "loss"; });
+    var againstN = losses.filter(function (e) { return e.tags && e.tags.indexOf("against_ema") >= 0; }).length;
+    var tightN = losses.filter(function (e) { return e.tags && e.tags.indexOf("tight_stop") >= 0; }).length;
+    return {
+      extra: overall < 0.4 ? 2 : 0,
+      block: block,
+      requireEma: losses.length >= 4 && againstN / losses.length >= 0.6,
+      widen: tightN >= 3 ? 0.2 : 0,
+      lessons: [
+        losses.length && againstN / losses.length >= 0.6 ? "أغلب الخسائر كانت ضد اتجاه EMA50، لذلك لن تُفتح صفقة ضد المتوسط الآن." : null,
+        tightN >= 3 ? "عدة صفقات وصلت إلى الهدف الأول بعد ضرب الوقف، لذلك وُسّع الوقف 0.2 ATR." : null,
+        losses.filter(function (e) { return e.tags && e.tags.indexOf("quick_reversal") >= 0; }).length >= 3 ? "عدة خسائر انعكست خلال 3 شموع، فالدخول المبكر يحتاج تأكيداً أكبر." : null
+      ].filter(Boolean)
+    };
   }
   function journalUpdate() {
     var j = loadJournal(), changed = false, r = st.res;
@@ -638,7 +684,8 @@
       var sg = r.signal, d = BY[st.inst].digits, c = candlesFor(st.inst), t = c[c.length - 1].t;
       var id = st.inst + "|" + sg.key + "|" + sg.entry.toFixed(d);
       if (!j.some(function (e) { return e.id === id; })) {
-        j.push({ id: id, inst: st.inst, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open" });
+        var against = (sg.dir === "LONG" && !(r.price > r.ema50)) || (sg.dir === "SHORT" && !(r.price < r.ema50));
+        j.push({ id: id, inst: st.inst, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open", against: against });
         changed = true;
       }
     }
@@ -649,10 +696,11 @@
         if (!(c[i].t > e.t)) continue;
         var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
         var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
-        if (hitStop) { e.status = "loss"; e.closed = true; changed = true; break; }
-        if (hitTP) { e.status = "win"; e.closed = true; changed = true; break; }
+        if (hitStop) { e.status = "loss"; e.closed = true; e.closeT = c[i].t; e.closeIdx = i; e.entryIdx = null; changed = true; break; }
+        if (hitTP) { e.status = "win"; e.closed = true; e.closeT = c[i].t; changed = true; break; }
       }
     });
+    j.forEach(function (e) { if (e.status === "loss" && !e.tags) { e.tags = tagLoss(e); changed = true; } });
     if (changed) saveJournal(j);
   }
   function renderJournal() {
@@ -665,6 +713,7 @@
       : T("noTrades")));
     var extra = (L.extra ? T("learnNote") + " " : "") + (L.block.length ? T("paused") + ": " + L.block.length + "." : "");
     if (extra) box.appendChild(el("p", "muted", extra));
+    L.lessons.forEach(function (t) { box.appendChild(el("p", "muted", "• " + t)); });
     var btn = el("button", "btn", T("clearJournal")); btn.type = "button";
     btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
     box.appendChild(btn);
@@ -769,6 +818,44 @@
   });
   $("wel-guest").addEventListener("click", hideWelcome);
   $("wel-continue").addEventListener("click", hideWelcome);
+
+  // ---------- TradingView chart (optional source, moving averages only) ----------
+  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "OANDA:XAUUSD", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
+  var TV_INT = { "15m": "15", "1h": "60", "4h": "240" };
+  var chartSource = "ours";
+  function showChartSource(src) {
+    chartSource = src;
+    document.querySelectorAll("[data-chart]").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-chart") === src)); });
+    var tvEl = $("tv"), ours = src === "ours";
+    tvEl.hidden = ours;
+    ["lw", "lw-rsi", "lw-macd", "chart"].forEach(function (id) { var e = $(id); if (e) e.hidden = !ours || (id === "lw-rsi" && !st.show.rsi) || (id === "lw-macd" && !st.show.macd) || (id === "chart" && true); });
+    if (!ours) renderTV();
+    else analyzeAndRender();
+  }
+  function renderTV() {
+    var box = $("tv"); if (!box) return;
+    box.textContent = "";
+    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "420px";
+    box.appendChild(holder);
+    function build() {
+      if (typeof TradingView === "undefined") { box.textContent = st.lang === "ar" ? "تعذّر تحميل TradingView (يحتاج اتصالاً بالإنترنت)." : "TradingView could not load (needs an internet connection)."; return; }
+      new TradingView.widget({
+        autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
+        timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
+        toolbar_bg: "#0b1424", enable_publishing: false, hide_side_toolbar: false, allow_symbol_change: true,
+        container_id: "tv-holder", studies: ["MASimple@tv-basicstudies", "MAExp@tv-basicstudies"]
+      });
+    }
+    if (typeof TradingView !== "undefined") { build(); return; }
+    var s = document.createElement("script");
+    s.src = "https://s3.tradingview.com/tv.js";
+    s.onload = build;
+    s.onerror = function () { box.textContent = st.lang === "ar" ? "تعذّر تحميل TradingView." : "TradingView could not load."; };
+    document.head.appendChild(s);
+  }
+  document.querySelectorAll("[data-chart]").forEach(function (b) {
+    b.addEventListener("click", function () { showChartSource(b.getAttribute("data-chart")); });
+  });
 
   // ---------- wiring ----------
   document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
