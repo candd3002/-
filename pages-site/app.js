@@ -210,7 +210,7 @@
     var x = BY[forId || st.inst];
     if (!x || !AUTO[x.id] || connectedNow(x.id)) return Promise.resolve();
     var key = x.id + "|" + st.tf;
-    if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 120000) return Promise.resolve();
+    if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 55000) return Promise.resolve();
     var url = "/api/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
     return fetch(url, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
@@ -911,7 +911,7 @@
   renderSessions();
   setInterval(renderSessions, 60000);
   loadAllForMarkets();
-  setInterval(loadAllForMarkets, 120000);
+  setInterval(loadAllForMarkets, 60000);
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
