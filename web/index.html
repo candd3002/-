@@ -40,35 +40,15 @@
     </section>
 
     <section class="card chart-card">
-      <div class="row"><span class="gold-t" data-i18n="chartTitle">الشارت المباشر</span><span class="muted" id="chart-price">—</span></div>
-      <div class="src-tabs" role="tablist" aria-label="Chart source">
-        <button type="button" role="tab" data-chart="ours" aria-selected="true">Radar chart</button>
-        <button type="button" role="tab" data-chart="tv" aria-selected="false">TradingView</button>
-      </div>
-      <div id="tv" class="tv" hidden></div>
-      <div id="lw" class="lw" aria-label="Live candle chart"></div>
-      <div id="lw-rsi" class="lw lw-rsi" hidden></div>
-      <div id="lw-macd" class="lw lw-rsi" hidden></div>
-      <svg id="chart" viewBox="0 0 358 200" width="100%" role="img" aria-label="Live candle chart (fallback)" hidden></svg>
-      <div class="legend">
-        <span><i class="lg" style="background:#ff6b6b"></i><span data-i18n="stop">Stop</span></span>
-        <span><i class="lg" style="background:#e8c35a"></i><span data-i18n="entry">Entry</span></span>
-        <span><i class="lg" style="background:#2fd08b"></i><span data-i18n="targets">Targets</span></span>
-        <span><i class="lg" style="background:#4f9bff"></i>BSL / SSL</span>
-        <span><i class="lg" style="background:#e8c35a;border-radius:50%"></i><span data-i18n="sweep">Sweep</span></span>
-      </div>
-      <div class="ctl" role="group" aria-label="Chart layers">
-        <button type="button" data-show="ema" aria-pressed="true">EMA 50</button>
-        <button type="button" data-show="zones" aria-pressed="true" data-i18n="zonesBtn">Zones</button>
-        <button type="button" data-show="levels" aria-pressed="true" data-i18n="levelsBtn">Levels</button>
-        <button type="button" data-show="rsi" aria-pressed="true">RSI</button>
-        <button type="button" data-show="bb" aria-pressed="false">Bollinger</button>
-        <button type="button" data-show="sma200" aria-pressed="false">SMA 200</button>
-        <button type="button" data-show="macd" aria-pressed="false">MACD</button>
+      <div class="row"><span class="gold-t" data-i18n="chartTitle">Chart</span><span class="muted" id="chart-price">—</span></div>
+      <div id="tv" class="tv" aria-label="TradingView chart"></div>
+      <div class="ctl" role="group" aria-label="Moving averages">
         <button type="button" data-show="ema9" aria-pressed="false">EMA 9</button>
         <button type="button" data-show="ema21" aria-pressed="false">EMA 21</button>
+        <button type="button" data-show="ema" aria-pressed="true">EMA 50</button>
         <button type="button" data-show="sma20" aria-pressed="false">SMA 20</button>
         <button type="button" data-show="sma100" aria-pressed="false">SMA 100</button>
+        <button type="button" data-show="sma200" aria-pressed="false">SMA 200</button>
       </div>
       <p class="chart-read" id="chart-read"></p>
     </section>
@@ -228,7 +208,6 @@
 </nav>
 
 <script src="analysis.js"></script>
-<script src="lightweight-charts.standalone.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

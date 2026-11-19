@@ -22,6 +22,7 @@
     en: {
       tag: "ICT · SMC · STRUCTURE", sample: "Sample", live: "Live", swing: "Swing", scalp: "Scalp", dayIct: "Day ICT",
       bias: "Bias", orderBlock: "ORDER BLOCK", fvgLbl: "FAIR VALUE GAP", sslLbl: "SELL-SIDE LIQ.", bslLbl: "BUY-SIDE LIQ.",
+      noSource: "No data source", noData: "No data for this instrument yet. Connect a data source in Settings.", tvLoad: "Loading TradingView…", tvFail: "TradingView could not load (needs internet).", chartTitle2: "Chart",
       sniperEntry: "SNIPER ENTRY", stop: "Stop", entry: "Entry", finalTarget: "Final target", targets: "Targets", sweep: "Sweep",
       noSetup: "No active setup", marketsTitle: "Markets", alertsTitle: "Alerts", settingsTitle: "Settings", calendarTitle: "Calendar",
       alertSignal: "Notify me when a new signal appears", alertTp: "Notify me when a trade closes (win or loss)",
@@ -121,6 +122,10 @@
   I18N.ar.dataNote = "يقرأ التطبيق هذا الرابط كل دقيقة. الملف يحتاج أعمدة open وhigh وlow وclose، والوقت إن توفّر. لكل أصل رابطه الخاص.";
   I18N.ar.dataOk = "تم الربط. آخر تحديث: ";
   I18N.ar.dataFail = "تعذّرت قراءة الرابط. تأكد أنه عام ويعيد شموعاً.";
+  I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.ar.noData = "لا توجد بيانات لهذا الأصل بعد. اربط مصدر بيانات من الإعدادات.";
+  I18N.ar.tvLoad = "جارٍ تحميل TradingView…";
+  I18N.ar.tvFail = "تعذّر تحميل TradingView (يحتاج اتصالاً بالإنترنت).";
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
@@ -149,8 +154,8 @@
   // ---------- candles ----------
   function sampleFor(x) { return A.sampleCandles(x.base, x.vol, 500, x.seed); }
   function candlesFor(id) {
-    if (id === "BTC") return st.btc || sampleFor(BY.BTC);
-    return st.csv[id] || sampleFor(BY[id]);
+    if (id === "BTC") return st.btc || [];
+    return st.csv[id] || [];
   }
   function parseJSONCandles(text) {
     var arr = JSON.parse(text);
@@ -208,6 +213,7 @@
     Promise.all(userJobs.concat([autoLoad()])).then(function () { analyzeAndRender(); });
   }
   function sourceFor(id) {
+    if (!candlesFor(id).length) return T("noSource");
     if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
     if (connectedNow(id)) return T("sourceLinked");
     if (autoOk[id]) return T("sourceAuto");
@@ -215,7 +221,8 @@
   }
   function changeFor(id) {
     if (id === "BTC" && st.btcChange != null) return st.btcChange;
-    var c = candlesFor(id), from = c[Math.max(0, c.length - 25)].o, last = c[c.length - 1].c;
+    var c = candlesFor(id); if (c.length < 2) return null;
+    var from = c[Math.max(0, c.length - 25)].o, last = c[c.length - 1].c;
     return (last - from) / from * 100;
   }
 
@@ -288,7 +295,7 @@
   // ---------- analysis and render ----------
   function analyzeAndRender() {
     var c = candlesFor(st.inst);
-    st.res = A.analyze(c, st.profile, learnFromJournal());
+    st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
     journalUpdate();
     renderTickers();
     render();
@@ -301,12 +308,12 @@
     var row = $("tickers"); if (!row) return;
     row.textContent = "";
     INST.forEach(function (x) {
-      var c = candlesFor(x.id), last = c[c.length - 1].c, ch = changeFor(x.id);
+      var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
       var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
       b.type = "button"; b.setAttribute("aria-pressed", String(x.id === st.inst));
       b.appendChild(el("span", "sym", x.name));
       b.appendChild(el("span", "px", fmtD(last, x.digits)));
-      b.appendChild(el("span", "pct" + (ch < 0 ? " neg" : ""), (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
+      b.appendChild(el("span", "pct" + (ch != null && ch < 0 ? " neg" : ""), ch == null ? "—" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
       b.addEventListener("click", function () { setInst(x.id); });
       row.appendChild(b);
     });
@@ -365,237 +372,6 @@
     Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
     return e;
   }
-  // ---------- real chart (lightweight-charts) with fallback to the SVG chart ----------
-  var LW = { ma: {}, chart: null, candle: null, ema: null, rsiChart: null, rsi: null, lines: [], fitKey: null, bbUp: null, bbMid: null, bbLo: null, sma: null, macdChart: null, macdHist: null, macdLine: null, macdSig: null };
-  var CH_OPTS = function (height) {
-    return {
-      height: height, width: 300,
-      layout: { background: { type: "solid", color: "transparent" }, textColor: "#c9d2e0", fontFamily: "Tajawal, sans-serif" },
-      grid: { vertLines: { color: "rgba(70,120,200,.10)" }, horzLines: { color: "rgba(70,120,200,.10)" } },
-      timeScale: { timeVisible: true, borderColor: "rgba(70,120,200,.35)" },
-      rightPriceScale: { borderColor: "rgba(70,120,200,.35)" },
-      crosshair: { mode: 1 }
-    };
-  };
-  function ensureLW() {
-    if (LW.chart) return true;
-    if (typeof LightweightCharts === "undefined") return false;
-    var el = $("lw"); if (!el) return false;
-    LW.chart = LightweightCharts.createChart(el, CH_OPTS(300));
-    LW.chart.applyOptions({ width: el.clientWidth || 300 });
-    LW.candle = LW.chart.addCandlestickSeries({ upColor: "#33d69a", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#33d69a", wickDownColor: "#ff6b6b" });
-    LW.ema = LW.chart.addLineSeries({ color: "#b48cff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
-    var rel = $("lw-rsi");
-    LW.rsiChart = LightweightCharts.createChart(rel, CH_OPTS(110));
-    LW.rsiChart.applyOptions({ width: rel.clientWidth || 300, timeScale: { visible: false } });
-    LW.rsi = LW.rsiChart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, priceLineVisible: false });
-    LW.rsi.createPriceLine({ price: 70, color: "rgba(255,107,107,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "70" });
-    LW.rsi.createPriceLine({ price: 30, color: "rgba(47,208,139,.7)", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30" });
-    var noLast = { priceLineVisible: false, lastValueVisible: false };
-    MAS.forEach(function (m) { LW.ma[m.key] = LW.chart.addLineSeries(Object.assign({ color: m.color, lineWidth: 1.3 }, noLast)); });
-    LW.bbUp = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
-    LW.bbMid = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.45)", lineWidth: 1, lineStyle: 1 }, noLast));
-    LW.bbLo = LW.chart.addLineSeries(Object.assign({ color: "rgba(79,155,255,.75)", lineWidth: 1 }, noLast));
-    LW.sma = LW.chart.addLineSeries(Object.assign({ color: "#ff9f43", lineWidth: 1.6 }, noLast));
-    var mel = $("lw-macd");
-    LW.macdChart = LightweightCharts.createChart(mel, CH_OPTS(120));
-    LW.macdChart.applyOptions({ width: mel.clientWidth || 300, timeScale: { visible: false } });
-    LW.macdHist = LW.macdChart.addHistogramSeries(noLast);
-    LW.macdLine = LW.macdChart.addLineSeries(Object.assign({ color: "#4f9bff", lineWidth: 1.4 }, noLast));
-    LW.macdSig = LW.macdChart.addLineSeries(Object.assign({ color: "#ff9f43", lineWidth: 1.2 }, noLast));
-    window.addEventListener("resize", function () {
-      var w = el.clientWidth || 300;
-      LW.chart.applyOptions({ width: w }); LW.rsiChart.applyOptions({ width: rel.clientWidth || w });
-      LW.macdChart.applyOptions({ width: mel.clientWidth || w });
-    });
-    return true;
-  }
-  // Candle times in seconds. Live candles carry real timestamps; sample and file candles are spaced by the timeframe.
-  function toTime(c, i, n) {
-    if (c.t > 1e11) return Math.floor(c.t / 1000);
-    return Math.floor(Date.now() / 1000) - (n - 1 - i) * Math.floor(TF_MS[st.tf] / 1000);
-  }
-  function renderLW(r) {
-    if (!ensureLW()) return false;
-    var c = candlesFor(st.inst), n = c.length;
-    var data = c.map(function (k, i) { return { time: toTime(k, i, n), open: k.o, high: k.h, low: k.l, close: k.c }; });
-    LW.candle.setData(data);
-    var emaData = [];
-    if (r.series && r.series.ema) r.series.ema.forEach(function (v, i) { if (v != null) emaData.push({ time: data[i].time, value: v }); });
-    LW.ema.setData(emaData);
-    LW.ema.applyOptions({ visible: !!st.show.ema });
-    var closes = c.map(function (k) { return k.c; }), R = A.rsi(closes, 14), rsiData = [];
-    R.forEach(function (v, i) { if (v != null) rsiData.push({ time: data[i].time, value: v }); });
-    LW.rsi.setData(rsiData);
-    $("lw-rsi").hidden = !st.show.rsi;
-    // optional indicators
-    function pts(arr) { var o = []; arr.forEach(function (v, i) { if (v != null) o.push({ time: data[i].time, value: v }); }); return o; }
-    var bb = A.bollinger(closes, 20, 2);
-    LW.bbUp.setData(pts(bb.up)); LW.bbMid.setData(pts(bb.mid)); LW.bbLo.setData(pts(bb.lo));
-    LW.bbUp.applyOptions({ visible: !!st.show.bb }); LW.bbMid.applyOptions({ visible: !!st.show.bb }); LW.bbLo.applyOptions({ visible: !!st.show.bb });
-    LW.sma.setData(pts(A.sma(closes, 200))); LW.sma.applyOptions({ visible: !!st.show.sma200 });
-    MAS.forEach(function (m) {
-      var vals = m.type === "ema" ? A.ema(closes, m.len) : A.sma(closes, m.len);
-      LW.ma[m.key].setData(pts(vals));
-      LW.ma[m.key].applyOptions({ visible: !!st.show[m.key] });
-    });
-    var md = A.macd(closes, 12, 26, 9);
-    var hist = []; md.hist.forEach(function (v, i) { if (v != null) hist.push({ time: data[i].time, value: v, color: v >= 0 ? "rgba(47,208,139,.6)" : "rgba(255,100,100,.6)" }); });
-    LW.macdHist.setData(hist); LW.macdLine.setData(pts(md.line)); LW.macdSig.setData(pts(md.signal));
-    $("lw-macd").hidden = !st.show.macd;
-    // markers: break of structure and liquidity sweep
-    var markers = [];
-    if (r.ev && r.ev.i < n) markers.push({ time: data[r.ev.i].time, position: r.ev.dir === "bull" ? "belowBar" : "aboveBar", color: r.ev.dir === "bull" ? "#2fd08b" : "#ff6b6b", shape: r.ev.dir === "bull" ? "arrowUp" : "arrowDown", text: r.ev.type });
-    if (r.sweep && r.sweep.i < n) markers.push({ time: data[r.sweep.i].time, position: r.sweep.dir === "bear" ? "aboveBar" : "belowBar", color: "#e8c35a", shape: "circle", text: "Sweep" });
-    markers.sort(function (x, y) { return x.time - y.time; });
-    LW.candle.setMarkers(markers);
-    // price lines: levels, liquidity and zones
-    LW.lines.forEach(function (l) { try { LW.candle.removePriceLine(l); } catch (e) {} });
-    LW.lines = [];
-    function line(price, color, title, style) {
-      if (price == null || isNaN(price)) return;
-      LW.lines.push(LW.candle.createPriceLine({ price: price, color: color, lineWidth: 1, lineStyle: style || 2, axisLabelVisible: true, title: title }));
-    }
-    if (st.show.levels) {
-      line(r.bsl, "#4f9bff", "BSL");
-      line(r.ssl, "#ff6b6b", "SSL");
-      if (r.signal) {
-        var s = r.signal;
-        line(s.entry, "#e8c35a", T("entry"));
-        line(s.sl, "#ff6b6b", T("stop"));
-        line(s.tp1, "#2fd08b", "TP1"); line(s.tp2, "#2fd08b", "TP2"); line(s.tp3, "#2fd08b", "TP3");
-      }
-    }
-    if (st.show.zones) {
-      if (r.ob) { line(r.ob.hi, "#e8c35a", "OB", 3); line(r.ob.lo, "#e8c35a", "OB", 3); }
-      if (r.fvg) { line(r.fvg.hi, "#4f9bff", "FVG", 3); line(r.fvg.lo, "#4f9bff", "FVG", 3); }
-    }
-    var key = st.inst + "|" + st.tf;
-    if (LW.fitKey !== key) { LW.chart.timeScale().fitContent(); LW.fitKey = key; }
-    $("chart").hidden = true;
-    return true;
-  }
-  function renderChart(r) {
-    if (chartSource === "tv") return;
-    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    if (renderLW(r)) {
-      var sty = A.story(r, st.lang);
-      if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
-      return;
-    }
-    $("chart").hidden = false;
-    drawSvgChart(r);
-  }
-  function drawSvgChart(r) {
-    var svg = $("chart"); if (!svg) return;
-    svg.textContent = "";
-    txt("chart-price", fmt(r.price) + "  ·  " + new Date().toLocaleTimeString(st.lang === "ar" ? "ar" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    var c = candlesFor(st.inst), N = 60, off = Math.max(0, c.length - N), vis = c.slice(off);
-    var W = 358, H = 170, padL = 4, areaR = 286, padT = 10, padB = 12;
-    var lo = Infinity, hi = -Infinity;
-    vis.forEach(function (k) { lo = Math.min(lo, k.l); hi = Math.max(hi, k.h); });
-    var extra = [];
-    if (r.signal) extra.push(r.signal.tp3, r.signal.sl);
-    if (r.bsl != null) extra.push(r.bsl);
-    if (r.ssl != null) extra.push(r.ssl);
-    extra.forEach(function (v) { lo = Math.min(lo, v); hi = Math.max(hi, v); });
-    var pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
-    function Y(p) { return padT + (hi - p) / (hi - lo) * (H - padT - padB); }
-    var cw = (areaR - padL) / vis.length;
-    function X(i) { return padL + i * cw + cw / 2; }
-
-    var defs = svgEl("defs", {});
-    var gu = svgEl("linearGradient", { id: "cUp", x1: 0, x2: 0, y1: 0, y2: 1 });
-    gu.appendChild(svgEl("stop", { offset: 0, "stop-color": "#7ff5c8" })); gu.appendChild(svgEl("stop", { offset: 1, "stop-color": "#1ea877" }));
-    var gd = svgEl("linearGradient", { id: "cDn", x1: 0, x2: 0, y1: 0, y2: 1 });
-    gd.appendChild(svgEl("stop", { offset: 0, "stop-color": "#ffa3a3" })); gd.appendChild(svgEl("stop", { offset: 1, "stop-color": "#d93d48" }));
-    var go = svgEl("linearGradient", { id: "obFill", x1: 0, x2: 0, y1: 0, y2: 1 });
-    go.appendChild(svgEl("stop", { offset: 0, "stop-color": "#e8b44a", "stop-opacity": ".28" })); go.appendChild(svgEl("stop", { offset: 1, "stop-color": "#e8b44a", "stop-opacity": ".06" }));
-    var glow = svgEl("filter", { id: "glow", x: "-20%", y: "-20%", width: "140%", height: "140%" });
-    glow.appendChild(svgEl("feGaussianBlur", { stdDeviation: "1.1", result: "b" }));
-    var mg = svgEl("feMerge", {}); mg.appendChild(svgEl("feMergeNode", { in: "b" })); mg.appendChild(svgEl("feMergeNode", { in: "SourceGraphic" }));
-    glow.appendChild(mg);
-    [gu, gd, go, glow].forEach(function (d) { defs.appendChild(d); });
-    svg.appendChild(defs);
-
-    function zone(z, fill, stroke, label) {
-      if (!z) return;
-      var s0 = Math.max(0, z.i - off), x0 = padL + s0 * cw, y0 = Y(z.hi), y1 = Y(z.lo);
-      svg.appendChild(svgEl("rect", { x: x0, y: y0, width: areaR - x0, height: Math.max(2, y1 - y0), rx: 3, fill: fill, stroke: stroke || "none", "stroke-dasharray": stroke ? "3 3" : null }));
-      var t = svgEl("text", { x: x0 + 4, y: y0 + 10, "font-family": "Inter, sans-serif", "font-size": 9, fill: stroke || "#e8b44a" });
-      t.textContent = label; svg.appendChild(t);
-    }
-    if (r.ob) zone(r.ob.i >= off ? r.ob : { lo: r.ob.lo, hi: r.ob.hi, i: off }, "url(#obFill)", null, T("orderBlock"));
-    if (r.fvg) zone(r.fvg.i >= off ? r.fvg : { lo: r.fvg.lo, hi: r.fvg.hi, i: off }, "rgba(127,184,255,.14)", "rgba(127,184,255,.45)", "FVG");
-
-    function hline(price, color, label, dash) {
-      var y = Y(price);
-      svg.appendChild(svgEl("line", { x1: 0, y1: y, x2: W, y2: y, stroke: color, "stroke-width": 1, "stroke-dasharray": dash || null, opacity: dash ? 0.75 : 1 }));
-      var t = svgEl("text", { x: areaR + 6, y: y + 3, "font-family": "Inter, sans-serif", "font-size": 9, fill: color });
-      t.textContent = label; svg.appendChild(t);
-    }
-    if (st.show.zones && r.eq != null) {
-      var yEq = Y(r.eq);
-      svg.appendChild(svgEl("rect", { x: padL, y: yEq, width: areaR - padL, height: Math.max(0, (H - padB) - yEq), fill: "#2fd08b", opacity: 0.07 }));
-      svg.appendChild(svgEl("rect", { x: padL, y: padT, width: areaR - padL, height: Math.max(0, yEq - padT), fill: "#ff6b6b", opacity: 0.05 }));
-      svg.appendChild(svgEl("line", { x1: padL, y1: yEq, x2: areaR, y2: yEq, stroke: "#ffffff", "stroke-width": 0.7, "stroke-dasharray": "3 4", opacity: 0.35 }));
-    }
-    if (st.show.ema && r.series && r.series.ema) {
-      var E = r.series.ema.slice(off), pts = [], firstX = null;
-      E.forEach(function (v, i) { if (v != null) { pts.push([X(i), Y(v)]); if (firstX == null) firstX = X(i); } });
-      if (pts.length > 1) {
-        var d = "M" + pts.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" L");
-        var area = d + " L" + pts[pts.length - 1][0].toFixed(1) + " " + (H - padB) + " L" + firstX.toFixed(1) + " " + (H - padB) + " Z";
-        svg.appendChild(svgEl("path", { d: area, fill: "#a77bff", opacity: 0.10 }));
-        svg.appendChild(svgEl("path", { d: d, fill: "none", stroke: "#b48cff", "stroke-width": 1.6, "stroke-linejoin": "round" }));
-      }
-    }
-    vis.forEach(function (k, i) {
-      var up = k.c >= k.o, x = X(i);
-      svg.appendChild(svgEl("line", { x1: x, y1: Y(k.h), x2: x, y2: Y(k.l), stroke: up ? "#5ff0b5" : "#ff8a8a", "stroke-width": 1.1, opacity: 0.7 }));
-    });
-    var g = svgEl("g", { filter: "url(#glow)" });
-    vis.forEach(function (k, i) {
-      var up = k.c >= k.o, x = X(i), top = Y(Math.max(k.o, k.c)), bot = Y(Math.min(k.o, k.c));
-      g.appendChild(svgEl("rect", { x: x - cw * 0.32, y: top, width: cw * 0.64, height: Math.max(1, bot - top), rx: 1.5, fill: up ? "url(#cUp)" : "url(#cDn)" }));
-    });
-    svg.appendChild(g);
-
-    if (r.bsl != null) hline(r.bsl, "#7fb8ff", "BSL " + fmt(r.bsl), "4 4");
-    if (r.ev && r.ev.i >= off) {
-      var ex = X(r.ev.i - off);
-      var bos = svgEl("text", { x: Math.max(4, ex - 14), y: Y(r.ev.level) - 5, "font-family": "Inter, sans-serif", "font-size": 9, "font-weight": 700, fill: "#ff6b6b" });
-      bos.textContent = r.ev.type; svg.appendChild(bos);
-    }
-    if (r.sweep && r.sweep.i >= off) {
-      var sx = X(r.sweep.i - off), sy = Y(r.sweep.wick);
-      svg.appendChild(svgEl("circle", { cx: sx, cy: sy, r: 4, fill: "none", stroke: "#e8b44a", "stroke-width": 1.5 }));
-      svg.appendChild(svgEl("circle", { cx: sx, cy: sy, r: 1.6, fill: "#e8b44a" }));
-    }
-    if (r.signal && st.show.levels) {
-      var s = r.signal;
-      hline(s.sl, "#ff6b6b", T("stop") + " " + fmt(s.sl));
-      hline(s.entry, "#e8b44a", T("entry") + " " + fmt(s.entry));
-      hline(s.tp1, "#33d69a", "TP1 " + fmt(s.tp1), "4 4");
-      hline(s.tp2, "#33d69a", "TP2 " + fmt(s.tp2), "4 4");
-      hline(s.tp3, "#33d69a", "TP3 " + fmt(s.tp3), "4 4");
-    }
-    if (r.ssl != null) hline(r.ssl, "#ff8a8a", "SSL " + fmt(r.ssl), "4 4");
-    var lastC = vis[vis.length - 1], lx = X(vis.length - 1), ly = Y(lastC.c);
-    svg.appendChild(svgEl("line", { x1: 0, y1: ly, x2: areaR, y2: ly, stroke: "#ffffff", "stroke-width": 0.9, "stroke-dasharray": "3 4", opacity: 0.55, class: "march" }));
-    svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 7, fill: "#33d69a", class: "live-ring" }));
-    svg.appendChild(svgEl("circle", { cx: lx, cy: ly, r: 2.8, fill: "#33d69a" }));
-    var prevC = st.prevLast, boxCol = "#e8c35a";
-    if (prevC != null && lastC.c > prevC) boxCol = "#2fd08b";
-    else if (prevC != null && lastC.c < prevC) boxCol = "#ff6b6b";
-    st.prevLast = lastC.c;
-    svg.appendChild(svgEl("rect", { x: areaR + 2, y: ly - 9, width: W - areaR - 4, height: 18, rx: 5, fill: boxCol }));
-    var pl = svgEl("text", { x: areaR + 6, y: ly + 4, "font-family": "Tajawal, sans-serif", "font-size": 10, "font-weight": 800, fill: "#06110c" });
-    pl.textContent = fmt(lastC.c); svg.appendChild(pl);
-    var sty = A.story(r, st.lang);
-    if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
-  }
-
   // ---------- three-level understanding ----------
   function renderLevels(r) {
     var box = $("analysis"); if (!box) return;
@@ -617,11 +393,11 @@
     var box = $("markets"); if (!box) return;
     box.textContent = "";
     INST.forEach(function (x) {
-      var c = candlesFor(x.id), last = c[c.length - 1].c, ch = changeFor(x.id);
+      var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
       var d = el("div", "muted");
       d.style.cssText = "display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)";
       d.appendChild(el("span", "", x.name + " · " + sourceFor(x.id)));
-      d.appendChild(el("b", "", fmtD(last, x.digits) + "  " + (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
+      d.appendChild(el("b", "", fmtD(last, x.digits) + "  " + (ch == null ? "" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%")));
       box.appendChild(d);
     });
   }
@@ -775,7 +551,7 @@
     if (v === "analysis") render();
   }
   function setInst(id) {
-    st.inst = id;
+    st.inst = id; renderTV();
     if (id === "BTC") { loadBtc().then(function () { connect(); analyzeAndRender(); }); }
     else { stopStreams(); live(false); autoLoad().then(analyzeAndRender); }
     var sel = $("inst-select"); if (sel) sel.value = id;
@@ -783,7 +559,7 @@
   // Each trading style sets its timeframe and risk profile together.
   var STYLE = { "15m": "scalp", "1h": "balanced", "4h": "balanced" };
   function setTf(tf) {
-    st.tf = tf; tick();
+    st.tf = tf; tick(); renderTV();
     st.profile = STYLE[tf] || "balanced";
     var pr = $("profile"); if (pr) pr.value = st.profile;
     autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); });
@@ -819,43 +595,54 @@
   $("wel-guest").addEventListener("click", hideWelcome);
   $("wel-continue").addEventListener("click", hideWelcome);
 
-  // ---------- TradingView chart (optional source, moving averages only) ----------
+  // ---------- TradingView: the only chart ----------
   var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "OANDA:XAUUSD", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
   var TV_INT = { "15m": "15", "1h": "60", "4h": "240" };
-  var chartSource = "ours";
-  function showChartSource(src) {
-    chartSource = src;
-    document.querySelectorAll("[data-chart]").forEach(function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-chart") === src)); });
-    var tvEl = $("tv"), ours = src === "ours";
-    tvEl.hidden = ours;
-    ["lw", "lw-rsi", "lw-macd", "chart"].forEach(function (id) { var e = $(id); if (e) e.hidden = !ours || (id === "lw-rsi" && !st.show.rsi) || (id === "lw-macd" && !st.show.macd) || (id === "chart" && true); });
-    if (!ours) renderTV();
-    else analyzeAndRender();
+  var MA_STUDY = {
+    ema9: { id: "MAExp@tv-basicstudies", length: 9 },
+    ema21: { id: "MAExp@tv-basicstudies", length: 21 },
+    ema: { id: "MAExp@tv-basicstudies", length: 50 },
+    sma20: { id: "MASimple@tv-basicstudies", length: 20 },
+    sma100: { id: "MASimple@tv-basicstudies", length: 100 },
+    sma200: { id: "MASimple@tv-basicstudies", length: 200 }
+  };
+  function tvStudies() {
+    return Object.keys(MA_STUDY).filter(function (k) { return st.show[k]; }).map(function (k) {
+      return { id: MA_STUDY[k].id, inputs: { length: MA_STUDY[k].length } };
+    });
   }
+  var tvLoading = false, tvWaiting = false;
   function renderTV() {
     var box = $("tv"); if (!box) return;
-    box.textContent = "";
-    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "420px";
-    box.appendChild(holder);
-    function build() {
-      if (typeof TradingView === "undefined") { box.textContent = st.lang === "ar" ? "تعذّر تحميل TradingView (يحتاج اتصالاً بالإنترنت)." : "TradingView could not load (needs an internet connection)."; return; }
-      new TradingView.widget({
-        autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
-        timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
-        toolbar_bg: "#0b1424", enable_publishing: false, hide_side_toolbar: false, allow_symbol_change: true,
-        container_id: "tv-holder", studies: ["MASimple@tv-basicstudies", "MAExp@tv-basicstudies"]
-      });
+    if (typeof TradingView === "undefined") {
+      if (!tvWaiting) {
+        tvWaiting = true;
+        var s = document.createElement("script");
+        s.src = "https://s3.tradingview.com/tv.js";
+        s.onload = function () { tvWaiting = false; renderTV(); };
+        s.onerror = function () { box.textContent = T("tvFail"); };
+        document.head.appendChild(s);
+      }
+      box.textContent = T("tvLoad");
+      return;
     }
-    if (typeof TradingView !== "undefined") { build(); return; }
-    var s = document.createElement("script");
-    s.src = "https://s3.tradingview.com/tv.js";
-    s.onload = build;
-    s.onerror = function () { box.textContent = st.lang === "ar" ? "تعذّر تحميل TradingView." : "TradingView could not load."; };
-    document.head.appendChild(s);
+    box.textContent = "";
+    var holder = document.createElement("div"); holder.id = "tv-holder"; holder.style.height = "440px";
+    box.appendChild(holder);
+    new TradingView.widget({
+      autosize: true, symbol: TV_SYM[st.inst] || "BINANCE:BTCUSDT", interval: TV_INT[st.tf] || "60",
+      timezone: "Etc/UTC", theme: "dark", style: "1", locale: st.lang === "ar" ? "ar_AE" : "en",
+      toolbar_bg: "#0b1424", enable_publishing: false, hide_side_toolbar: false, allow_symbol_change: false,
+      container_id: "tv-holder", studies: tvStudies()
+    });
   }
-  document.querySelectorAll("[data-chart]").forEach(function (b) {
-    b.addEventListener("click", function () { showChartSource(b.getAttribute("data-chart")); });
-  });
+  // Reading under the chart: what the structure shows right now.
+  function renderChart(r) {
+    txt("chart-price", r && r.ready ? fmt(r.price) : "—");
+    if (!r || !r.ready) { txt("chart-read", r ? r.reason : ""); return; }
+    var sty = A.story(r, st.lang);
+    if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
+  }
 
   // ---------- wiring ----------
   document.querySelectorAll("[data-tf]").forEach(function (b) { b.addEventListener("click", function () { setTf(b.getAttribute("data-tf")); }); });
@@ -865,7 +652,7 @@
     b.addEventListener("click", function () {
       st.show[k] = !st.show[k];
       b.setAttribute("aria-pressed", String(!!st.show[k]));
-      analyzeAndRender();
+      renderTV();
     });
   });
   document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
@@ -952,7 +739,7 @@
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
-  setInterval(function () { if (st.res && st.res.ready) renderChart(st.res); }, 1000);
+  renderTV();
   loadBtc().then(function () { connect(); analyzeAndRender(); });
   change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {});
   setInterval(function () { change24h().then(function (c) { st.btcChange = c; renderTickers(); }).catch(function () {}); }, 60000);
