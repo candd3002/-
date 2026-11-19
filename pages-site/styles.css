@@ -383,3 +383,8 @@ body{background:#070d17}
 .nw{display:grid; gap:4px; background:#0b1830; border:1.5px solid rgba(70,120,200,.45); border-radius:14px; padding:12px; color:var(--fg); text-decoration:none}
 .nw b{font-size:14px; line-height:1.5}
 .nw span{font-size:11.5px}
+
+.sessions li{flex-direction:column; gap:4px}
+.sessions li > div{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.sess-state{font-size:12px; padding:2px 9px; border-radius:999px; border:1px solid #3a4a66; color:#8a97ad}
+.sess-state.on{color:#2fd08b; border-color:#2fd08b}

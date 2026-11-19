@@ -134,6 +134,8 @@
   };
   Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
   I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.en.sessOpen = "Open now"; I18N.en.sessClosed = "Closed"; I18N.en.sessTz = "Your time zone: ";
+  I18N.ar.sessOpen = "مفتوحة الآن"; I18N.ar.sessClosed = "مغلقة"; I18N.ar.sessTz = "توقيتك: ";
   I18N.ar.noData = "لا توجد بيانات لهذا الأصل بعد. اربط مصدر بيانات من الإعدادات.";
   I18N.ar.tvLoad = "جارٍ تحميل TradingView…";
   I18N.ar.tvFail = "تعذّر تحميل TradingView (يحتاج اتصالاً بالإنترنت).";
@@ -537,6 +539,8 @@
     st.lang = lang === "ar" ? "ar" : "en";
     store("baqerLang", st.lang);
     applyLang();
+    renderSessions();
+    if (NEWS.ok !== null) renderNews();
   }
 
   // ---------- account (local sign-in, saved on this device only) ----------
@@ -666,6 +670,85 @@
       .catch(function () { NEWS.ok = false; })
       .then(function () { NEWS.at = Date.now(); renderNews(); });
   }
+  // ---------- sessions: computed from the visitor's device time zone ----------
+  var SESS = [
+    { k: "sessLondon", tz: "Europe/London", s: 8, e: 17 },
+    { k: "sessNewYork", tz: "America/New_York", s: 8, e: 17 },
+    { k: "sessAsia", tz: "Asia/Tokyo", s: 9, e: 18 }
+  ];
+  function zoneInfo(d, tz) {
+    var p = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, weekday: "short" })
+      .formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
+    var asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second);
+    p.offset = asUtc - Math.floor(d.getTime() / 1000) * 1000;
+    return p;
+  }
+  function sessionAt(now, tz, hour) {
+    var p = zoneInfo(now, tz);
+    return Date.UTC(+p.year, +p.month - 1, +p.day, hour, 0, 0) - p.offset;
+  }
+  function renderSessions() {
+    var ul = $("sessions"); if (!ul) return;
+    var now = new Date(), userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    var loc = st.lang === "ar" ? "ar" : "en-GB";
+    var fmt = function (ms) { return new Date(ms).toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" }); };
+    ul.textContent = "";
+    SESS.forEach(function (x) {
+      var p = zoneInfo(now, x.tz);
+      var weekend = p.weekday === "Sat" || p.weekday === "Sun";
+      var start = sessionAt(now, x.tz, x.s), end = sessionAt(now, x.tz, x.e);
+      var open = !weekend && now.getTime() >= start && now.getTime() < end;
+      var li = el("li", "");
+      var top = el("div", "");
+      top.appendChild(el("b", "", T(x.k)));
+      top.appendChild(el("span", open ? "sess-state on" : "sess-state", T(open ? "sessOpen" : "sessClosed")));
+      li.appendChild(top);
+      li.appendChild(el("span", "muted", fmt(start) + " – " + fmt(end)));
+      ul.appendChild(li);
+    });
+    txt("sess-tz", T("sessTz") + userTz);
+  }
+
+  // ---------- event names and countries in Arabic (fallback: original English) ----------
+  var CTRY_AR = { USD: "أمريكا", EUR: "منطقة اليورو", GBP: "بريطانيا", CAD: "كندا", JPY: "اليابان", CNY: "الصين", AUD: "أستراليا", NZD: "نيوزيلندا", CHF: "سويسرا" };
+  var EVT_AR = [
+    [/non-?farm|nfp/i, "الوظائف غير الزراعية"],
+    [/unemployment claims|jobless claims/i, "طلبات إعانة البطالة"],
+    [/unemployment rate/i, "معدل البطالة"],
+    [/average hourly earnings/i, "متوسط الأجور بالساعة"],
+    [/employment change/i, "التغير في التوظيف"],
+    [/\badp\b/i, "تقرير ADP للتوظيف"],
+    [/core pce/i, "مؤشر PCE الأساسي"],
+    [/\bpce\b/i, "مؤشر PCE"],
+    [/cpi/i, "مؤشر أسعار المستهلك CPI"],
+    [/ppi/i, "مؤشر أسعار المنتجين PPI"],
+    [/gdp/i, "الناتج المحلي الإجمالي"],
+    [/retail sales/i, "مبيعات التجزئة"],
+    [/ism manufacturing/i, "مؤشر ISM للتصنيع"],
+    [/ism services/i, "مؤشر ISM للخدمات"],
+    [/philly fed/i, "مؤشر فيلادلفيا الصناعي"],
+    [/empire state/i, "مؤشر ولاية نيويورك الصناعي"],
+    [/industrial production/i, "الإنتاج الصناعي"],
+    [/trade balance/i, "الميزان التجاري"],
+    [/current account/i, "الحساب الجاري"],
+    [/housing starts/i, "بدء الإسكان"],
+    [/building permits/i, "تصاريح البناء"],
+    [/consumer confidence|michigan/i, "ثقة المستهلك"],
+    [/interest rate decision|rate decision|main refinancing/i, "قرار سعر الفائدة"],
+    [/fomc/i, "الاحتياطي الفيدرالي (FOMC)"],
+    [/\becb\b/i, "البنك المركزي الأوروبي"],
+    [/\bboe\b|bank of england/i, "بنك إنجلترا"],
+    [/\bboj\b|bank of japan/i, "بنك اليابان"]
+  ];
+  function localEvent(e) {
+    var title = e.event || "";
+    if (st.lang !== "ar") return { c: e.country || "", t: title };
+    var c = CTRY_AR[e.country] || e.country || "";
+    if (/speaks|speech|testif|press conference/i.test(title)) return { c: c, t: "تصريح: " + title };
+    for (var i = 0; i < EVT_AR.length; i++) { if (EVT_AR[i][0].test(title)) return { c: c, t: EVT_AR[i][1] }; }
+    return { c: c, t: title };
+  }
   function impactOf(e) { return e.impact === "high" ? "high" : e.impact === "medium" ? "medium" : "low"; }
   function renderNews() {
     var econ = $("econ"), list = $("newslist");
@@ -684,7 +767,8 @@
       var t = e.time ? new Date(e.time) : null;
       var soon = t && t.getTime() > now && t.getTime() - now < 60 * 60e3;
       var top = el("div", "ev-h");
-      top.appendChild(el("b", "", (e.country ? e.country + " · " : "") + (e.event || "")));
+      var lz = localEvent(e);
+      top.appendChild(el("b", "", (lz.c ? lz.c + " · " : "") + lz.t));
       top.appendChild(el("span", "imp imp-" + impactOf(e), T(impactOf(e) === "high" ? "high" : "medium")));
       card.appendChild(top);
       var meta = el("div", "ev-m muted", (t ? t.toLocaleString(st.lang === "ar" ? "ar" : "en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "") + (soon ? "  ·  " + T("upcoming") : ""));
@@ -806,6 +890,8 @@
   st.prefs = store("baqerPrefs") || st.prefs;
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   applyLang();
+  renderSessions();
+  setInterval(renderSessions, 60000);
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
