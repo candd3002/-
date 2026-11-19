@@ -206,8 +206,8 @@
   // Built-in feed: loads only the selected instrument (saves the provider quota) and
   // reuses it for 2 minutes per timeframe.
   var autoKey = {}, autoAt = {};
-  function autoLoad() {
-    var x = BY[st.inst];
+  function autoLoad(forId) {
+    var x = BY[forId || st.inst];
     if (!x || !AUTO[x.id] || connectedNow(x.id)) return Promise.resolve();
     var key = x.id + "|" + st.tf;
     if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 120000) return Promise.resolve();
@@ -402,6 +402,10 @@
     });
   }
 
+  // Loads every automatic instrument so the markets table shows live prices for all of them.
+  function loadAllForMarkets() {
+    return Promise.all(INST.map(function (x) { return autoLoad(x.id); })).then(function () { renderMarkets(); });
+  }
   function renderMarkets() {
     var box = $("markets"); if (!box) return;
     box.textContent = "";
@@ -906,6 +910,8 @@
   applyLang();
   renderSessions();
   setInterval(renderSessions, 60000);
+  loadAllForMarkets();
+  setInterval(loadAllForMarkets, 120000);
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
