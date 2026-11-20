@@ -187,6 +187,24 @@ function historyHtml(h) {
     (rows || '<tr><td colspan="6">لا توجد صفقات بعد</td></tr>') + "</table></body></html>";
 }
 
+// CSV export for MT5 (Custom Symbols import). Usage: /export.csv?symbol=XAU&tf=15m
+async function exportCsv(url) {
+  const id = url.searchParams.get("symbol") || "XAU";
+  const tf = url.searchParams.get("tf") || "15m";
+  const inst = INSTR.find(x => x.id === id);
+  if (!inst || !TF_MS[tf]) return new Response("usage: /export.csv?symbol=XAU|EURUSD|GBPUSD|BTC&tf=15m|1h|4h", { status: 400 });
+  const bars = await fetchBars(inst.sym, tf);
+  const pad = n => String(n).padStart(2, "0");
+  const lines = ["Date,Time,Open,High,Low,Close,Volume"];
+  for (const b of bars) {
+    const d = new Date(b.t);
+    const date = d.getUTCFullYear() + "." + pad(d.getUTCMonth() + 1) + "." + pad(d.getUTCDate());
+    const time = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00";
+    lines.push([date, time, b.o.toFixed(inst.digits), b.h.toFixed(inst.digits), b.l.toFixed(inst.digits), b.c.toFixed(inst.digits), b.v].join(","));
+  }
+  return new Response(lines.join("\n") + "\n", { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "inline; filename=" + inst.sym + "_" + tf + ".csv" } });
+}
+
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runSafe(env)); },
   async fetch(req, env) {
@@ -194,6 +212,7 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
     if (url.pathname === "/history") { const h = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
+    if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
     if (url.pathname === "/subscribe" && req.method === "POST") {
