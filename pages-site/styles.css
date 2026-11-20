@@ -725,3 +725,17 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 
 .wel-notify{width:100%; margin-top:6px}
 .wel-notify-note{font-size:12px; text-align:center; margin:4px 0 0; min-height:16px}
+
+/* first-page step notice: red until notifications are enabled */
+.wel-step{display:grid; gap:4px; text-align:center; padding:10px 12px; border-radius:14px; font-size:13px; line-height:1.6; border:1.5px solid #ff3b3b; background:rgba(255,59,59,.12); color:#ffd6d6; animation:wel-pulse 1.6s ease-in-out infinite}
+.wel-step b{font-size:14px; color:#ff6b6b}
+.wel-step span{font-size:12px; color:#ffd6d6}
+.wel-step.ok{border-color:#2fd08b; background:rgba(47,208,139,.12); color:#c7f7e3; animation:none}
+.wel-step.ok b{color:#2fd08b}
+.wel-step.warn{border-color:#e8c35a; background:rgba(232,195,90,.12); color:#f6e7b3}
+.wel-step.warn b{color:#e8c35a}
+.wel-step.bad{border-color:#ff3b3b; background:rgba(255,59,59,.16)}
+@keyframes wel-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,.45)}50%{box-shadow:0 0 0 6px rgba(255,59,59,0)}}
+
+.welcome .wel-enter:disabled{opacity:.4 !important; filter:grayscale(.6); cursor:not-allowed; box-shadow:none !important}
+.welcome .wel-notify{background:linear-gradient(180deg,#f3d27a,#c99a33) !important; color:#15110a !important; font-weight:900 !important}
