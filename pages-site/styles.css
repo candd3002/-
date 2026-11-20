@@ -411,3 +411,10 @@ body{background:#070d17}
 
 /* keep the tall chart clear of the fixed bottom navigation */
 .tv{margin-bottom:110px}
+
+/* own chart with analysis zones */
+.own-wrap{position:relative; width:100%; height:540px}
+.own-chart{position:absolute; inset:0}
+.own-ov{position:absolute; inset:0; pointer-events:none; overflow:hidden}
+.own-z{position:absolute; border-radius:2px}
+.own-zl{position:absolute; left:6px; top:2px; font-size:10px; font-weight:800; color:#e8edf6; letter-spacing:.06em}

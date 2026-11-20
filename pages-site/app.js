@@ -330,6 +330,7 @@
     render();
     renderJournal();
     renderMarkets();
+    if (OWN) paintOwn();
     notifyIfNew(st.res);
   }
 
@@ -650,8 +651,88 @@
     });
   }
   var tvLoading = false, tvWaiting = false;
+
+  // ---------- own chart: candles, EMA 50, order block, FVG, BSL and SSL drawn from our analysis ----------
+  var LWC_URL = "https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.2.0/lightweight-charts.standalone.production.js";
+  var OWN = null, owcFailed = false, owcLoading = false;
+  function loadOwnLib(cb) {
+    if (window.LightweightCharts) return cb();
+    if (owcLoading) return;
+    owcLoading = true;
+    var s = document.createElement("script");
+    s.src = LWC_URL;
+    s.onload = function () { owcLoading = false; cb(); };
+    s.onerror = function () { owcLoading = false; owcFailed = true; renderTV(); };
+    document.head.appendChild(s);
+  }
+  function ownData() {
+    var c = candlesFor(st.inst), out = [], prev = -Infinity;
+    c.forEach(function (k, i) {
+      var t = k.t > 1e12 ? Math.floor(k.t / 1000) : (k.t > 0 ? Math.floor(k.t / 1000) : i + 1);
+      if (t <= prev) t = prev + 1;
+      prev = t;
+      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c, _i: i });
+    });
+    return out;
+  }
+  function renderOwn(box) {
+    box.textContent = "";
+    var wrap = el("div", "own-wrap");
+    var host = el("div", "own-chart");
+    var ov = el("div", "own-ov");
+    wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
+    var chart = LightweightCharts.createChart(host, {
+      width: host.clientWidth || 340, height: 540,
+      layout: { background: { type: "solid", color: "#07090c" }, textColor: "#8fa0bb", fontSize: 11 },
+      grid: { vertLines: { color: "rgba(120,140,170,.07)" }, horzLines: { color: "rgba(120,140,170,.07)" } },
+      rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4 },
+      crosshair: { mode: 0 }, handleScroll: true, handleScale: true
+    });
+    var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6b6b" });
+    var ema = chart.addLineSeries({ color: "#4f9bff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+    OWN = { chart: chart, cs: cs, ema: ema, ov: ov, host: host, lines: [] };
+    chart.timeScale().subscribeVisibleTimeRangeChange(paintOverlays);
+    window.addEventListener("resize", function () { if (OWN) OWN.chart.applyOptions({ width: host.clientWidth }); paintOverlays(); });
+    paintOwn();
+  }
+  function paintOwn() {
+    if (!OWN) return;
+    var data = ownData();
+    OWN.cs.setData(data.map(function (d) { return { time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }; }));
+    var closes = data.map(function (d) { return d.close; }), e = A.ema(closes, 50);
+    OWN.ema.setData(data.map(function (d, i) { return e[i] != null ? { time: d.time, value: e[i] } : null; }).filter(Boolean));
+    OWN.data = data;
+    OWN.lines.forEach(function (l) { try { OWN.cs.removePriceLine(l); } catch (x) {} });
+    OWN.lines = [];
+    var r = st.res || {};
+    if (r.bsl) OWN.lines.push(OWN.cs.createPriceLine({ price: r.bsl, color: "#4f9bff", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "BSL" }));
+    if (r.ssl) OWN.lines.push(OWN.cs.createPriceLine({ price: r.ssl, color: "#ff6b6b", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "SSL" }));
+    paintOverlays();
+  }
+  function paintOverlays() {
+    if (!OWN || !OWN.data) return;
+    var ov = OWN.ov, r = st.res || {}, d = OWN.data, ts = OWN.chart.timeScale(), cs = OWN.cs;
+    ov.textContent = "";
+    function box(lo, hi, x0, color, label) {
+      var y1 = cs.priceToCoordinate(hi), y2 = cs.priceToCoordinate(lo);
+      if (y1 == null || y2 == null) return;
+      var x1 = x0 == null ? 0 : (ts.timeToCoordinate(x0) == null ? 0 : ts.timeToCoordinate(x0));
+      var w = OWN.host.clientWidth - x1;
+      var b = el("div", "own-z");
+      b.style.cssText = "left:" + x1 + "px;width:" + Math.max(0, w) + "px;top:" + Math.min(y1, y2) + "px;height:" + Math.max(2, Math.abs(y2 - y1)) + "px;background:" + color;
+      if (label) b.appendChild(el("span", "own-zl", label));
+      ov.appendChild(b);
+    }
+    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.22)" : "rgba(255,107,107,.22)", r.ob.dir === "bull" ? "OB" : "OB");
+    if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(160,110,255,.30)", "FVG");
+  }
   function renderTV() {
     var box = $("tv"); if (!box) return;
+    if (!owcFailed) {
+      if (!window.LightweightCharts) { box.textContent = T("tvLoad"); loadOwnLib(renderTV); return; }
+      OWN = null;
+      return renderOwn(box);
+    }
     if (typeof TradingView === "undefined") {
       if (!tvWaiting) {
         tvWaiting = true;
