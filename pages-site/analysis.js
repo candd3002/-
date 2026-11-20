@@ -227,9 +227,10 @@
     for (var i = 120; i < c.length - 1; i++) {
       if (i <= busy) continue;
       var r = analyze(c.slice(0, i + 1), "scalp");
-      if (!r.ready || !r.ob || !r.oq || !r.oq.strong || !r.ev) continue;
+      // Entry happens BEFORE the break: the zone is a strong-move candle and price touches it.
+      // BOS/CHoCH is only a confirmation that is recorded, not a condition for entry.
+      if (!r.ready || !r.ob || !r.oq || !r.oq.strong) continue;
       var up = r.ob.dir === "bull";
-      if (r.ev.dir !== (up ? "bull" : "bear")) continue;
       var tol = 0.3 * r.atr, p = c[i].c;
       if (p < r.ob.lo - tol || p > r.ob.hi + tol) continue;
       var entry = p, stop = up ? r.ob.lo : r.ob.hi, risk = Math.abs(entry - stop);
@@ -243,7 +244,7 @@
       }
       if (exit == null) { exit = Math.min(c.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
       var cost = outcome !== "timeout" ? costPct * entry / risk : 0;
-      trades.push({ outcome: outcome, R: R - cost, grossR: R, cost: cost, risk: risk });
+      trades.push({ outcome: outcome, R: R - cost, grossR: R, cost: cost, risk: risk, confirmed: !!(r.ev && r.ev.dir === (up ? "bull" : "bear")) });
       busy = exit;
     }
     var wins = trades.filter(function (x) { return x.R > 0; }).length;
@@ -252,6 +253,7 @@
     var decided = trades.filter(function (x) { return x.outcome !== "timeout"; }).length;
     return {
       trades: trades, count: trades.length, wins: wins, winRate: decided ? wins / decided : 0,
+      confirmedShare: trades.length ? trades.filter(function (x) { return x.confirmed; }).length / trades.length : 0,
       netR: trades.reduce(function (a, x) { return a + x.R; }, 0),
       grossR: trades.reduce(function (a, x) { return a + x.grossR; }, 0),
       avgCostR: trades.length ? trades.reduce(function (a, x) { return a + x.cost; }, 0) / trades.length : 0,
