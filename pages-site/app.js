@@ -254,12 +254,40 @@
   // Built-in feed: loads only the selected instrument (saves the provider quota) and
   // reuses it for 2 minutes per timeframe.
   var autoKey = {}, autoAt = {};
+  // Gold history from biquote OHLC (mid-price bars). Used for XAU instead of Twelve Data.
+  var BQ_INTERVAL = { "15m": "15m", "1h": "1h", "4h": "4h" };
+  function bqHistory(id, tf) {
+    var sym = BQ_SYM[id];
+    if (!sym || !BQ_INTERVAL[tf]) return Promise.reject(new Error("no biquote history"));
+    return fetch("https://biquote.io/api/" + sym + "/ohlc?interval=" + BQ_INTERVAL[tf], { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var bars = (j && j.bars) || [];
+        var out = bars.map(function (b) {
+          return { t: Date.parse(b.openTime), o: +b.open, h: +b.high, l: +b.low, c: +b.close, v: +(b.tickVolume || 1) };
+        }).filter(function (b) { return isFinite(b.t) && isFinite(b.c); });
+        out.sort(function (a, b) { return a.t - b.t; });
+        if (out.length < 60) throw new Error("not enough bars");
+        return out;
+      });
+  }
   function autoLoad(forId) {
     var x = BY[forId || st.inst];
     if (!x || !AUTO[x.id] || connectedNow(x.id)) return Promise.resolve();
     var key = x.id + "|" + st.tf;
     // Free data plan allows ~800 requests a day: refresh each instrument at most every 15 minutes.
     if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 900000) return Promise.resolve();
+    if (x.id === "XAU") {
+      return bqHistory("XAU", st.tf).then(function (hist) {
+        var prev = LV[x.id], keepLive = prev && prev.tf === st.tf && prev.live && prev.c && prev.c.length;
+        LV[x.id] = { c: hist, tf: st.tf, live: keepLive ? prev.live : null };
+        st.csv[x.id] = hist;
+        autoOk[x.id] = true; autoKey[key] = true; autoAt[key] = Date.now();
+      }).catch(function () { return fallbackTd(x, key); });
+    }
+    return fallbackTd(x, key);
+  }
+  function fallbackTd(x, key) {
     var url = "/api/candles?symbol=" + AUTO[x.id] + "&interval=" + st.tf;
     return fetch(url, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
