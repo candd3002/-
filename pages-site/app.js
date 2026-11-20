@@ -850,12 +850,15 @@
     btnXau.addEventListener("click", function () { runScalpMTF(btnXau, out, 0, "XAU"); });
     var btnEur = el("button", "btn", ar ? "مضاربة متعددة الأطر: اليورو EUR/USD" : "Scalp multi-timeframe: EUR/USD"); btnEur.type = "button";
     btnEur.addEventListener("click", function () { runScalpMTF(btnEur, out, 0, "EURUSD"); });
+    var btnGbp = el("button", "btn", ar ? "مضاربة متعددة الأطر: الجنيه GBP/USD" : "Scalp multi-timeframe: GBP/USD"); btnGbp.type = "button";
+    btnGbp.addEventListener("click", function () { runScalpMTF(btnGbp, out, 0, "GBPUSD"); });
     box.appendChild(btn);
     box.appendChild(btnLong);
     box.appendChild(btnMtf);
     box.appendChild(btnMtf90);
     box.appendChild(btnXau);
     box.appendChild(btnEur);
+    box.appendChild(btnGbp);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------
