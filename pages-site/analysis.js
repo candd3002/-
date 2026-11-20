@@ -194,9 +194,12 @@
     var tol = 0.3 * r15.atr, p1 = r1.price;
     var inZone = p1 >= ob15.lo - tol && p1 <= ob15.hi + tol;
     if (!inZone) return { ready: false, reason: "price not at the 15m order block yet" };
-    if (r1.trend !== (up ? "bull" : "bear")) return { ready: false, reason: "1m trend does not agree" };
+    // 1m confirmation: a break of structure (BOS) or change of character (CHoCH) in the trade direction,
+    // and the order block candle that produced it. A full HH/HL trend is not required.
+    var want = up ? "bull" : "bear";
+    if (!r1.ev || r1.ev.dir !== want) return { ready: false, reason: "no 1m break of structure in direction" };
     var ob1 = r1.ob;
-    if (!ob1 || ob1.dir !== (up ? "bull" : "bear")) return { ready: false, reason: "no 1m order block in direction" };
+    if (!ob1 || ob1.dir !== want) return { ready: false, reason: "no 1m order block in direction" };
     var k = c1[ob1.i];
     if (!k) return { ready: false, reason: "1m order block candle missing" };
     var entry = k.o;
