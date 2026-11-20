@@ -134,6 +134,7 @@
   };
   Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
   I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.en.sourcePaxg = "Binance live (PAXG, gold-backed)"; I18N.ar.sourcePaxg = "Binance مباشر (PAXG مدعوم بالذهب)";
   I18N.en.sessOpen = "Open now"; I18N.en.sessClosed = "Closed"; I18N.en.sessTz = "Your time zone: ";
   I18N.ar.sessOpen = "مفتوحة الآن"; I18N.ar.sessClosed = "مغلقة"; I18N.ar.sessTz = "توقيتك: ";
   I18N.ar.noData = "لا توجد بيانات لهذا الأصل بعد. اربط مصدر بيانات من الإعدادات.";
@@ -142,7 +143,10 @@
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
-  var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
+  var AUTO = { XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
+  // Gold is live from Binance via PAXG (gold-backed token, free public stream).
+  var LIVE_SYM = { BTC: "BTCUSDT", XAU: "PAXGUSDT" };
+  var LV = {};
   var autoOk = {}; // id -> true when the built-in data function returned candles
   var MAS = [
     { key: "ema9", type: "ema", len: 9, color: "#ffd166" },
@@ -168,8 +172,10 @@
   function sampleFor(x) { return A.sampleCandles(x.base, x.vol, 500, x.seed); }
   function candlesFor(id) {
     if (id === "BTC") return st.btc || [];
+    if (LIVE_SYM[id]) return (LV[id] && LV[id].c) || [];
     return st.csv[id] || [];
   }
+  function arrFor(id) { return id === "BTC" ? st.btc : (LV[id] && LV[id].c); }
   function parseJSONCandles(text) {
     var arr = JSON.parse(text);
     if (arr && !Array.isArray(arr) && Array.isArray(arr.candles)) arr = arr.candles;
@@ -227,6 +233,7 @@
   }
   function sourceFor(id) {
     if (!candlesFor(id).length) return T("noSource");
+    if (LIVE_SYM[id] && id !== "BTC") return T("sourcePaxg");
     if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
     if (connectedNow(id)) return T("sourceLinked");
     if (autoOk[id]) return T("sourceAuto");
@@ -240,14 +247,19 @@
   }
 
   // ---------- loading ----------
-  function klines(tf) {
-    return fetch("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=" + tf + "&limit=500")
+  function klines(tf, sym) {
+    return fetch("https://api.binance.com/api/v3/klines?symbol=" + (sym || "BTCUSDT") + "&interval=" + tf + "&limit=500")
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (rows) { return rows.map(function (k) { return { t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] }; }); });
   }
   function change24h() {
     return fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
       .then(function (r) { return r.json(); }).then(function (j) { return +j.priceChangePercent; });
+  }
+  function loadLive(id) {
+    var tf = st.tf;
+    return klines(tf, LIVE_SYM[id]).then(function (c) { LV[id] = { c: c, tf: tf }; if (id === "BTC") live(true); })
+      .catch(function () { LV[id] = null; });
   }
   function loadBtc() {
     return klines(st.tf).then(function (c) { st.btc = c; st.btcFetchedTf = st.tf; live(true); })
@@ -281,27 +293,31 @@
   }
   function connect() {
     stopStreams();
-    if (st.inst !== "BTC") return;
+    var id = st.inst;
+    if (!LIVE_SYM[id]) return;
     if (!("WebSocket" in window)) { st.poll = setInterval(refresh, 30000); return; }
     try {
-      var ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_" + st.tf);
+      var ws = new WebSocket("wss://stream.binance.com:9443/ws/" + LIVE_SYM[id].toLowerCase() + "@kline_" + st.tf);
       st.ws = ws;
       ws.onmessage = function (ev) {
         var k = JSON.parse(ev.data).k;
-        if (!k || !st.btc) return;
+        var arr = arrFor(id);
+        if (!k || !arr) return;
         var bar = { t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v };
-        var last = st.btc[st.btc.length - 1];
-        if (last && last.t === bar.t) st.btc[st.btc.length - 1] = bar;
-        else if (bar.t > last.t) { st.btc.push(bar); if (st.btc.length > 500) st.btc.shift(); }
-        live(true);
+        var last = arr[arr.length - 1];
+        if (last && last.t === bar.t) arr[arr.length - 1] = bar;
+        else if (last && bar.t > last.t) { arr.push(bar); if (arr.length > 500) arr.shift(); }
+        if (id === "BTC") live(true);
         analyzeAndRender();
       };
-      ws.onerror = function () { live(false); };
-      ws.onclose = function () { if (st.ws === ws && st.inst === "BTC") st.poll = st.poll || setInterval(refresh, 30000); };
+      ws.onerror = function () { if (id === "BTC") live(false); };
+      ws.onclose = function () { if (st.ws === ws && st.inst === id) st.poll = st.poll || setInterval(refresh, 30000); };
     } catch (e) { st.poll = setInterval(refresh, 30000); }
   }
   function refresh() {
-    var p = st.inst === "BTC" && st.btcFetchedTf !== st.tf ? loadBtc() : Promise.resolve();
+    var id = st.inst, p = Promise.resolve();
+    if (id === "BTC" && st.btcFetchedTf !== st.tf) p = loadBtc();
+    else if (LIVE_SYM[id] && id !== "BTC" && (!LV[id] || LV[id].tf !== st.tf)) p = loadLive(id);
     p.then(analyzeAndRender);
   }
 
@@ -404,7 +420,7 @@
 
   // Loads every automatic instrument so the markets table shows live prices for all of them.
   function loadAllForMarkets() {
-    return Promise.all(INST.map(function (x) { return autoLoad(x.id); })).then(function () { renderMarkets(); });
+    return Promise.all(INST.map(function (x) { return LIVE_SYM[x.id] && x.id !== "BTC" ? loadLive(x.id) : autoLoad(x.id); })).then(function () { renderMarkets(); });
   }
   function renderMarkets() {
     var box = $("markets"); if (!box) return;
@@ -573,6 +589,7 @@
   function setInst(id) {
     st.inst = id; renderTV();
     if (id === "BTC") { loadBtc().then(function () { connect(); analyzeAndRender(); }); }
+    else if (LIVE_SYM[id]) { loadLive(id).then(function () { connect(); analyzeAndRender(); }); }
     else { stopStreams(); live(false); autoLoad().then(analyzeAndRender); }
     var sel = $("inst-select"); if (sel) sel.value = id;
   }
@@ -584,6 +601,7 @@
     var pr = $("profile"); if (pr) pr.value = st.profile;
     autoLoad().then(function () { if (st.inst !== "BTC") analyzeAndRender(); });
     if (st.inst === "BTC") loadBtc().then(function () { connect(); analyzeAndRender(); });
+    else if (LIVE_SYM[st.inst]) loadLive(st.inst).then(function () { connect(); analyzeAndRender(); });
     else analyzeAndRender();
   }
 
@@ -616,7 +634,7 @@
   $("wel-continue").addEventListener("click", hideWelcome);
 
   // ---------- TradingView: the only chart ----------
-  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "OANDA:XAUUSD", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
+  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "BINANCE:PAXGUSDT", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
   var TV_INT = { "15m": "15", "1h": "60", "4h": "240" };
   var MA_STUDY = {
     ema9: { id: "MAExp@tv-basicstudies", length: 9 },
