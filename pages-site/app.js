@@ -394,7 +394,13 @@
       txt("p-sl", fmt(s.sl)); txt("p-en", fmt(s.entry));
       txt("p-t1", fmt(s.tp1)); txt("p-t2", fmt(s.tp2)); txt("p-t3", fmt(s.tp3));
     } else {
-      txt("p-sl", "—"); txt("p-en", "—"); txt("p-t1", "—"); txt("p-t2", "—"); txt("p-t3", "—");
+      var op = loadJournal().filter(function (e) { return e.inst === st.inst && e.status === "open"; }).pop();
+      if (op) {
+        txt("p-sl", fmt(op.sl)); txt("p-en", fmt(op.entry));
+        txt("p-t1", fmt(op.tp1)); txt("p-t2", op.tp2 != null ? fmt(op.tp2) : "—"); txt("p-t3", op.tp3 != null ? fmt(op.tp3) : "—");
+      } else {
+        txt("p-sl", "—"); txt("p-en", "—"); txt("p-t1", "—"); txt("p-t2", "—"); txt("p-t3", "—");
+      }
     }
     renderLevels(r);
   }
@@ -497,7 +503,7 @@
     var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d);
     if (j.some(function (e) { return e.id === id; })) return false;
     var against = (sg.dir === "LONG" && !(price > ema50)) || (sg.dir === "SHORT" && !(price < ema50));
-    var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open", against: against };
+    var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, tp2: sg.tp2, tp3: sg.tp3, t: t, status: "open", against: against };
     j.push(e);
     if (emit) events.push({ type: "open", e: e });
     return true;
@@ -585,6 +591,7 @@
     box.appendChild(el("p", "muted rep-note", L.note));
   }
   function renderJournal() {
+    renderBacktestBox();
     var box = $("journal-box"); if (!box) return;
     var s = journalStats(loadJournal()), L = learnFromJournal();
     box.textContent = "";
@@ -601,6 +608,33 @@
     renderReport();
   }
 
+  // ---------- backtest on the loaded candles of every instrument ----------
+  function renderBacktestBox() {
+    var box = $("backtest-box"); if (!box) return;
+    box.textContent = "";
+    box.appendChild(el("h2", "", st.lang === "ar" ? "الباك تيست" : "Backtest"));
+    box.appendChild(el("p", "muted", st.lang === "ar"
+      ? "يعيد تشغيل نفس نظام الإشارات على البيانات المحمّلة لكل أصل، ويحسب النتيجة بوحدة R (الوحدة = المخاطرة لكل صفقة). النتائج تاريخية وليست ضماناً للمستقبل."
+      : "Replays the same signal logic on the loaded candles of each instrument, in R units (1R = the risk of one trade). Past results do not guarantee future ones."));
+    var btn = el("button", "btn", st.lang === "ar" ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
+    var out = el("div", "");
+    btn.addEventListener("click", function () {
+      out.textContent = "";
+      INST.forEach(function (x) {
+        var c = candlesFor(x.id);
+        var card = el("div", "rep-m");
+        card.appendChild(el("b", "", x.name));
+        if (c.length < 120) { card.appendChild(el("p", "muted", st.lang === "ar" ? "بيانات غير كافية" : "Not enough data")); out.appendChild(card); return; }
+        var b = A.backtest(c, 60, st.profile);
+        var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
+        card.appendChild(el("p", "muted", (st.lang === "ar" ? "الصفقات: " : "Trades: ") + b.count + " · " + (st.lang === "ar" ? "رابحة: " : "Win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + " " + (st.lang === "ar" ? "محسومة" : "decided") + ")"));
+        card.appendChild(el("p", "muted", (st.lang === "ar" ? "صافي R: " : "Net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · " + (st.lang === "ar" ? "معامل الربح: " : "Profit factor: ") + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : (b.profitFactor === Infinity ? "∞" : "—"))));
+        out.appendChild(card);
+      });
+    });
+    box.appendChild(btn);
+    box.appendChild(out);
+  }
   // ---------- alerts: in-page message always, system notification when allowed ----------
   function toast(msg) {
     var t = el("div", "toast", msg);
