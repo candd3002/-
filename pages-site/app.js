@@ -801,14 +801,18 @@
     });
   }
   // Multi-timeframe scalp backtest on BTC: 15m and 1m candles for the last 30 days.
-  function runScalpMTF(btn, out, days) {
+  function runScalpMTF(btn, out, days, id) {
     var ar = st.lang === "ar", label = btn.textContent;
     btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
-    Promise.all([longBinance("15m", "BTCUSDT", days), longBinance("1m", "BTCUSDT", days)]).then(function (cs) {
+    var src = id && id !== "BTC"
+      ? [fetchTf(id, "15m", true), fetchTf(id, "1m", true)]           // gold / FX: up to 5000 candles each
+      : [longBinance("15m", "BTCUSDT", days), longBinance("1m", "BTCUSDT", days)];
+    Promise.all(src).then(function (cs) {
       var b = A.backtestMTF(cs[0], cs[1], "scalp", 240, 0.001);
       out.textContent = "";
       var card = el("div", "rep-m");
-      card.appendChild(el("b", "", (ar ? "المضاربة السريعة متعددة الأطر (BTC، " : "Scalp multi-timeframe (BTC, ") + days + (ar ? " يوماً)" : " days)")));
+      var nm = id && id !== "BTC" ? (BY[id] ? BY[id].name : id) : "BTC";
+      card.appendChild(el("b", "", (ar ? "المضاربة السريعة متعددة الأطر (" + nm + "، " : "Scalp multi-timeframe (" + nm + ", ") + (id && id !== "BTC" ? (ar ? "آخر ~3.5 يوم" : "last ~3.5 days") : days + (ar ? " يوماً" : " days")) + ")"));
       card.appendChild(el("p", "muted", (ar ? "قبل التكلفة: R " : "Gross R: ") + (b.grossR >= 0 ? "+" : "") + b.grossR.toFixed(2) + (ar ? " · بعد تكلفة 0.1%: R " : " · after 0.1% cost: R ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2)));
       card.appendChild(el("p", "muted", (ar ? "متوسط حجم الوقف: $" : "Avg stop: $") + b.avgRiskUSD.toFixed(1) + (ar ? " · متوسط التكلفة لكل صفقة: " : " · avg cost per trade: ") + b.avgCostR.toFixed(2) + "R"));
       var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
@@ -839,10 +843,16 @@
     btnMtf.addEventListener("click", function () { runScalpMTF(btnMtf, out, 30); });
     var btnMtf90 = el("button", "btn", ar ? "مضاربة سريعة متعددة الأطر (BTC، 90 يوماً)" : "Scalp multi-timeframe (BTC, 90 days)"); btnMtf90.type = "button";
     btnMtf90.addEventListener("click", function () { runScalpMTF(btnMtf90, out, 90); });
+    var btnXau = el("button", "btn", ar ? "مضاربة متعددة الأطر: الذهب XAU/USD" : "Scalp multi-timeframe: XAU/USD"); btnXau.type = "button";
+    btnXau.addEventListener("click", function () { runScalpMTF(btnXau, out, 0, "XAU"); });
+    var btnEur = el("button", "btn", ar ? "مضاربة متعددة الأطر: اليورو EUR/USD" : "Scalp multi-timeframe: EUR/USD"); btnEur.type = "button";
+    btnEur.addEventListener("click", function () { runScalpMTF(btnEur, out, 0, "EURUSD"); });
     box.appendChild(btn);
     box.appendChild(btnLong);
     box.appendChild(btnMtf);
     box.appendChild(btnMtf90);
+    box.appendChild(btnXau);
+    box.appendChild(btnEur);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------
