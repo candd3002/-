@@ -1003,23 +1003,41 @@
     setTimeout(function () { t.classList.add("out"); }, 4800);
     setTimeout(function () { t.remove(); }, 5400);
   }
+  // Full alert text: instrument, direction, timeframe, entry, stop and the three targets.
+  function alertDetails(e, ar) {
+    var x = BY[e.inst], d = x.digits, f = function (v) { return v == null || isNaN(v) ? "—" : v.toFixed(d); };
+    var side = e.dir === "LONG" ? (ar ? "شراء" : "BUY") : (ar ? "بيع" : "SELL");
+    var tf = e.tf || st.tf, tfName = { "15m": "15m", "1h": "1H", "4h": "4H", "1m": "1m" }[tf] || tf;
+    return [
+      x.name + " · " + side + " · " + tfName,
+      (ar ? "دخول: " : "Entry: ") + f(e.entry) + "   " + (ar ? "وقف: " : "Stop: ") + f(e.sl),
+      "TP1 " + f(e.tp1) + "   TP2 " + f(e.tp2) + "   TP3 " + f(e.tp3)
+    ].join("\n");
+  }
   function announce(ev) {
-    var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg;
+    var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg, title;
     if (ev.type === "close" && ev.e.exitReason === "reversal") {
-      var pts2 = Math.abs(ev.e.exit - ev.e.entry).toFixed(d), side = ev.e.dir === "LONG" ? (ar ? "شراء" : "buy") : (ar ? "بيع" : "sell");
+      var pts2 = Math.abs(ev.e.exit - ev.e.entry).toFixed(d), side2 = ev.e.dir === "LONG" ? (ar ? "شراء" : "buy") : (ar ? "بيع" : "sell");
       var res = ev.e.status === "win" ? (ar ? "ربح " : "win ") : (ar ? "خسارة " : "loss ");
-      msg = ar ? "انعكس الاتجاه: أُغلقت صفقة " + side + " بـ " + res + pts2 + " · " + x.name : "Trend reversed: " + side + " closed, " + res + pts2 + " · " + x.name;
+      title = ar ? "انعكس الاتجاه، أُغلقت الصفقة" : "Trend reversed, trade closed";
+      msg = (ar ? "أُغلقت صفقة " + side2 + " بـ " + res + pts2 : "Closed " + side2 + ": " + res + pts2) + "\n" + alertDetails(ev.e, ar);
     } else if (ev.type === "open") {
       if (!st.prefs.signal) return;
-      msg = (ar ? (ev.e.dir === "LONG" ? "إشارة شراء" : "إشارة بيع") : (ev.e.dir === "LONG" ? "Buy signal" : "Sell signal")) + " · " + x.name + " · " + ev.e.entry.toFixed(d);
+      title = ar ? "إشارة جديدة" : "New signal";
+      msg = alertDetails(ev.e, ar);
     } else {
       if (!st.prefs.tp) return;
       var won = ev.e.status === "win", pts = ev.e.exit != null ? Math.abs(ev.e.exit - ev.e.entry) : (won ? Math.abs(ev.e.tp1 - ev.e.entry) : Math.abs(ev.e.entry - ev.e.sl));
-      msg = (ar ? (won ? "ربح" : "خسارة") : (won ? "Win" : "Loss")) + " · " + x.name + " · " + (won ? "+" : "−") + pts.toFixed(d) + (ar ? " نقطة" : " pts");
+      title = won ? (ar ? "صفقة رابحة" : "Winning trade") : (ar ? "صفقة خاسرة" : "Losing trade");
+      msg = (won ? "+" : "−") + pts.toFixed(d) + (ar ? " نقطة" : " pts") + "\n" + alertDetails(ev.e, ar);
     }
-    toast(msg);
-    if ("Notification" in window && Notification.permission === "granted") { try { new Notification("Baqer Sniper", { body: msg }); } catch (e) {} }
-    // Telegram is disabled: alerts go only to the app notification above.
+    toast(title + " · " + x.name);
+    if ("Notification" in window && Notification.permission === "granted") {
+      try {
+        var n = new Notification(title, { body: msg, tag: ev.e.id, renotify: false });
+        n.onclick = function () { window.focus(); setView("analysis"); var b = $("styles"); if (b) b.scrollIntoView({ behavior: "smooth", block: "start" }); n.close(); };
+      } catch (err) {}
+    }
   }
 
   // ---------- alerts ----------
