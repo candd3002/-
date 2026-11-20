@@ -11,22 +11,56 @@ h1{font-size:16px;color:#e8c35a;margin:0 0 8px}
 <h1>biquote live test</h1>
 <div id="status">starting...</div>
 <div id="log"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 <script>
 var statusEl = document.getElementById("status"), logEl = document.getElementById("log");
 function line(t, cls){ var d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t; logEl.insertBefore(d, logEl.firstChild); }
 function status(t, cls){ statusEl.textContent = t; statusEl.className = cls || ""; }
-if (typeof signalR === "undefined") { status("SignalR library did not load (check network)", "bad"); }
-else {
-  var conn = new signalR.HubConnectionBuilder().withUrl("https://biquote.io/hubs/tick").withAutomaticReconnect().build();
-  conn.on("ReceiveTick", function (msg) { line(new Date().toLocaleTimeString() + "  " + JSON.stringify(msg)); });
-  conn.onreconnecting(function () { status("reconnecting...", "bad"); });
-  conn.onreconnected(function () { status("reconnected", "ok"); });
-  conn.onclose(function () { status("closed", "bad"); });
-  conn.start().then(function () {
-    status("connected", "ok");
-    return conn.invoke("Subscribe", ["XAUUSD", "EURUSD", "GBPUSD"]).catch(function (e) { line("Subscribe with array failed, trying one by one: " + e); return Promise.all(["XAUUSD","EURUSD","GBPUSD"].map(function (s) { return conn.invoke("Subscribe", s).catch(function (e2) { line("Subscribe " + s + " failed: " + e2); }); })); });
-  }).then(function () { line("subscription sent"); })
-    .catch(function (e) { status("failed: " + e, "bad"); });
+var SYMS = ["XAUUSD", "EURUSD", "GBPUSD"];
+
+// Plan A: plain WebSocket to the hub (no SignalR negotiation).
+// SignalR JSON protocol: messages are separated by the 0x1e character.
+function tryWebSocket() {
+  var ws;
+  try { ws = new WebSocket("wss://biquote.io/hubs/tick"); } catch (e) { line("WebSocket constructor failed: " + e, "bad"); return fallback(); }
+  var opened = false;
+  ws.onopen = function () {
+    opened = true;
+    ws.send(JSON.stringify({ protocol: "json", version: 1 }) + "\u001e");
+    ws.send(JSON.stringify({ type: 1, target: "Subscribe", arguments: [SYMS] }) + "\u001e");
+    status("WebSocket connected (plan A)", "ok");
+  };
+  ws.onmessage = function (ev) {
+    String(ev.data).split("\u001e").forEach(function (part) {
+      if (!part) return;
+      try {
+        var m = JSON.parse(part);
+        if (m.type === 1 && m.target === "ReceiveTick") line(new Date().toLocaleTimeString() + "  " + JSON.stringify(m.arguments[0]));
+        else if (m.type === 6) { /* ping */ }
+        else line("other: " + part.slice(0, 200));
+      } catch (e) { line("raw: " + part.slice(0, 200)); }
+    });
+  };
+  ws.onerror = function () { line("WebSocket error", "bad"); };
+  ws.onclose = function () { if (!opened) fallback(); else status("WebSocket closed", "bad"); };
 }
+
+// Plan B: plain HTTP polling of /api/latest (batch, all symbols in one request).
+var pollTimer = null;
+function fallback() {
+  status("Plan B: polling /api/latest every 15 seconds", "");
+  function poll() {
+    var q = SYMS.map(function (s) { return "symbols=" + s; }).join("&");
+    fetch("https://biquote.io/api/latest?" + q, { cache: "no-store" })
+      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, code: r.status, t: t }; }); })
+      .then(function (x) {
+        if (!x.ok) { line("HTTP " + x.code + ": " + x.t.slice(0, 200), "bad"); return; }
+        line(new Date().toLocaleTimeString() + "  " + x.t.slice(0, 400));
+      })
+      .catch(function (e) { line("fetch failed: " + e, "bad"); });
+  }
+  poll();
+  pollTimer = setInterval(poll, 15000);
+}
+
+tryWebSocket();
 </script></body></html>
