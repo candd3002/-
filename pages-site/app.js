@@ -395,10 +395,17 @@
       txt("p-sl", fmt(s.sl)); txt("p-en", fmt(s.entry));
       txt("p-t1", fmt(s.tp1)); txt("p-t2", fmt(s.tp2)); txt("p-t3", fmt(s.tp3));
     } else {
-      var op = loadJournal().filter(function (e) { return e.inst === st.inst && e.status === "open"; }).pop();
-      if (op) {
-        txt("p-sl", fmt(op.sl)); txt("p-en", fmt(op.entry));
-        txt("p-t1", fmt(op.tp1)); txt("p-t2", op.tp2 != null ? fmt(op.tp2) : "—"); txt("p-t3", op.tp3 != null ? fmt(op.tp3) : "—");
+      var mine = function (e) { return e.inst === st.inst && (!e.tf || e.tf === st.tf); };
+      var all = loadJournal().filter(mine);
+      var op = all.filter(function (e) { return e.status === "open"; }).pop();
+      var recent = all.filter(function (e) { return e.status !== "open" && e.closeT && Date.now() - e.closeT < 48 * 3600e3; }).pop();
+      var show = op || recent, note = "";
+      if (op) note = (st.lang === "ar" ? "صفقة مفتوحة" : "Open trade");
+      else if (recent) note = (st.lang === "ar" ? "أُغلقت: " : "Closed: ") + (recent.status === "win" ? (st.lang === "ar" ? "ربح" : "win") : (st.lang === "ar" ? "خسارة" : "loss"));
+      txt("plan-note", note);
+      if (show) {
+        txt("p-sl", fmt(show.sl)); txt("p-en", fmt(show.entry));
+        txt("p-t1", fmt(show.tp1)); txt("p-t2", show.tp2 != null ? fmt(show.tp2) : "—"); txt("p-t3", show.tp3 != null ? fmt(show.tp3) : "—");
       } else {
         txt("p-sl", "—"); txt("p-en", "—"); txt("p-t1", "—"); txt("p-t2", "—"); txt("p-t3", "—");
       }
@@ -463,9 +470,12 @@
   //  against_ema   : entered against the EMA50 trend
   //  tight_stop    : stopped out, then price reached TP1 within 20 candles
   //  quick_reversal: stopped out within 3 candles of entry
+  function srcFor(e) {
+    return e.tf && e.tf !== st.tf ? ((STY_CACHE[e.inst + "|" + e.tf] || {}).c || []) : candlesFor(e.inst);
+  }
   function tagLoss(e) {
     var tags = [];
-    var c = candlesFor(e.inst), long = e.dir === "LONG";
+    var c = srcFor(e), long = e.dir === "LONG";
     if (e.against) tags.push("against_ema");
     var idx = -1;
     for (var i = 0; i < c.length; i++) if (c[i].t === e.closeT) { idx = i; break; }
@@ -557,7 +567,8 @@
     });
     j.forEach(function (e) {
       if (e.status !== "open") return;
-      var c = e.tf && e.tf !== st.tf ? ((STY_CACHE[e.inst + "|" + e.tf] || {}).c || []) : candlesFor(e.inst), long = e.dir === "LONG";
+      var c = srcFor(e), long = e.dir === "LONG";
+      if (!feedFresh(c, e.tf || st.tf)) return;
       for (var i = 0; i < c.length; i++) {
         if (!(c[i].t > e.t)) continue;
         var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
