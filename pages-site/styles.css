@@ -479,3 +479,6 @@ body{background:#070d17}
 /* Markets tab shows the owner's photo */
 .nav-me{width:26px; height:26px; border-radius:50%; object-fit:cover; border:1.5px solid var(--muted); display:block; margin:0 auto}
 .nav button.on .nav-me{border-color:var(--gold); box-shadow:0 0 0 2px rgba(232,195,90,.25)}
+
+.adv{margin:10px 0; border:1px solid var(--line); border-radius:14px; padding:10px 12px}
+.adv summary{cursor:pointer; color:var(--gold); font-weight:700; font-size:14px; padding:4px 0}

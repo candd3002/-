@@ -118,10 +118,12 @@
     </label>
     <p class="muted" data-i18n="riskNote">Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.</p>
     <label class="field"><span data-i18n="instrument">Instrument</span><select id="inst-select"></select></label>
+    <details class="adv"><summary data-i18n="advTitle">Advanced options</summary>
     <label class="field"><span data-i18n="importCsv">Import candles (CSV from MT5)</span><input type="file" id="csv" accept=".csv,text/csv"></label>
     <label class="field"><span data-i18n="dataUrl">Live data link (CSV or JSON)</span><input type="url" id="data-url" placeholder="https://" inputmode="url"></label>
     <div class="row-btns"><button type="button" class="btn" id="data-save" data-i18n="dataSave">Connect data</button><button type="button" class="ghost" id="data-clear" data-i18n="dataClear">Disconnect</button></div>
     <p class="muted" data-i18n="dataNote">The app reads this link every minute. The file needs columns open, high, low, close (and time if available). Each instrument can have its own link.</p>
+    </details>
     <p class="muted" id="data-note"></p>
     <p class="muted" id="csv-note"></p>
   </section>

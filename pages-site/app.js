@@ -134,6 +134,7 @@
   };
   Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
   I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.en.advTitle = "Advanced options"; I18N.ar.advTitle = "خيارات متقدمة";
   I18N.en.eduTitle = "Key concepts (ICT + SMC)"; I18N.ar.eduTitle = "المفاهيم الأساسية (ICT + SMC)";
   I18N.en.sourcePaxg = "Binance live (PAXG). May differ from XAU/USD on MT5 by a few dollars"; I18N.ar.sourcePaxg = "Binance مباشر (PAXG). قد يختلف عن XAU/USD في MT5 بعدة دولارات";
   I18N.en.sessOpen = "Open now"; I18N.en.sessClosed = "Closed"; I18N.en.sessTz = "Your time zone: ";
