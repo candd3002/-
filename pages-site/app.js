@@ -557,6 +557,27 @@
     box.textContent = "";
     var sty = A.story(r, st.lang);
     if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
+    // Pending orders from the order-block zone of the current timeframe (our rule, not copied from anywhere).
+    // Buy Limit below price for longs, Sell Limit above price for shorts; stop beyond the block, targets from the same risk.
+    if (r.ob && (r.ob.dir === "bull" || r.ob.dir === "bear")) {
+      var obLong = r.ob.dir === "bull";
+      var zLo = r.ob.lo, zHi = r.ob.hi;
+      var entryP = obLong ? zHi : zLo;
+      var stopP = obLong ? zLo - 0.1 * r.atr : zHi + 0.1 * r.atr;
+      var riskP = Math.abs(entryP - stopP);
+      if (riskP > 0) {
+        var mult = [1.5, 2.5, 4];
+        var tgts = mult.map(function (m) { return obLong ? entryP + m * riskP : entryP - m * riskP; });
+        var pend = el("div", "lvl trade-entry");
+        pend.appendChild(el("b", "", (ar(st.lang) ? "أوامر معلقة من منطقة الأوردر بلوك" : "Pending orders from the order block")));
+        pend.appendChild(el("div", obLong ? "up" : "", (obLong ? "Buy Limit " : "Sell Limit ") + (ar(st.lang) ? "عند " : "at ") + zLo.toFixed(5) + " - " + zHi.toFixed(5)));
+        pend.appendChild(el("div", "", (ar(st.lang) ? "الدخول " : "Entry ") + entryP.toFixed(5)));
+        pend.appendChild(el("div", "down", (ar(st.lang) ? "الوقف " : "Stop ") + stopP.toFixed(5)));
+        tgts.forEach(function (t, i) { pend.appendChild(el("div", "up", "TP" + (i + 1) + " " + t.toFixed(5))); });
+        pend.appendChild(el("div", "muted", ar(st.lang) ? "أوامر معلقة بانتظار وصول السعر للمنطقة. ليست توصية، اختبرها أولاً." : "Pending orders wait for price to reach the zone. Not advice; test first."));
+        box.appendChild(pend);
+      }
+    }
     // "Why this trade": every check for the side the app is leaning to, ticked or not, with the score.
     var side = r.longScore >= r.shortScore ? "long" : "short";
     var checks = side === "long" ? r.longChecks : r.shortChecks;
