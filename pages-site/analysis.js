@@ -204,7 +204,8 @@
     if (!k) return { ready: false, reason: "1m order block candle missing" };
     var entry = k.o;
     var atr1 = r1.atr;
-    var stop = up ? k.l - P.slBufferATR * atr1 : k.h + P.slBufferATR * atr1;
+    // Stop: exactly at the end of the 1m order block candle (its low for longs, its high for shorts).
+    var stop = up ? k.l : k.h;
     var valid = up ? stop < entry : stop > entry;
     var risk = Math.abs(entry - stop);
     if (!valid || !risk || risk > P.slMaxATR * atr1) return { ready: false, reason: "stop outside the allowed range" };
