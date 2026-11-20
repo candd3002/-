@@ -714,7 +714,6 @@
     box.appendChild(el("p", "muted rep-note", L.note));
   }
   function renderJournal() {
-    renderBacktestBox();
     var box = $("journal-box"); if (!box) return;
     var s = journalStats(loadJournal()), L = learnFromJournal();
     box.textContent = "";
@@ -909,6 +908,8 @@
     box.appendChild(card);
   }
 
+  // Backtest panel is built once, so live refreshes never wipe its results.
+  renderBacktestBox();
   // ---------- alerts: in-page message always, system notification when allowed ----------
   function toast(msg) {
     var t = el("div", "toast", msg);
@@ -958,6 +959,7 @@
     applyLang();
     renderSessions();
     renderEdu();
+    renderBacktestBox();
     if (NEWS.ok !== null) renderNews();
   }
 
@@ -1520,6 +1522,7 @@
   applyLang();
   renderSessions();
   renderEdu();
+  renderBacktestBox();
   setInterval(renderSessions, 60000);
   loadAllForMarkets();
   setInterval(loadAllForMarkets, 900000);
