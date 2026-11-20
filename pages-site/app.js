@@ -1540,6 +1540,17 @@
     renderAccount();
   });
   $("signout").addEventListener("click", function () { store("baqerUser", null); renderAccount(); });
+  // Connection test only: sends a fixed text with no prices and no trade data.
+  $("tg-test").addEventListener("click", function () {
+    var note = $("tg-note"); note.textContent = "...";
+    fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "اختبار اتصال من Baqer Sniper. هذه ليست إشارة تداول." }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        note.textContent = x.ok ? "تم الإرسال إلى Telegram." : "لم يُرسل: " + (x.j && x.j.error ? x.j.error : "خطأ");
+      })
+      .catch(function () { note.textContent = "تعذّر الاتصال بالخادم."; });
+  });
   $("notify-btn").addEventListener("click", function () {
     if (!("Notification" in window)) { txt("alerts-note", T("notifOff")); return; }
     Notification.requestPermission().then(function (p) { txt("alerts-note", p === "granted" ? T("notifOn") : T("notifNo")); });
