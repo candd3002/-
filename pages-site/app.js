@@ -154,7 +154,7 @@
     { key: "sma20", type: "sma", len: 20, color: "#8ecae6" },
     { key: "sma100", type: "sma", len: 100, color: "#fb8500" }
   ];
-  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, ema9: false, ema21: false, ema200: false, sma20: false, sma50: false, sma100: false, sma200: false, wma20: false, vwap: false, vol: false, macd: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, ema9: false, ema21: false, sma20: false, sma100: false, sma200: false, macd: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -657,24 +657,7 @@
   var OWN = null, owcFailed = false, owcLoading = false;
   var DRAW = {};   // drawings per instrument: { type: "trend" | "hline", ... }
   var drawMode = null, pending = null;
-  var MA_OWN = { ema9: ["ema", 9, "#f0cc6e"], ema21: ["ema", 21, "#a78bfa"], ema: ["ema", 50, "#5aa8ff"], ema200: ["ema", 200, "#f472b6"], sma20: ["sma", 20, "#e2e8f0"], sma50: ["sma", 50, "#67e8f9"], sma100: ["sma", 100, "#fb923c"], sma200: ["sma", 200, "#fb7185"], wma20: ["wma", 20, "#a3e635"] };
-  function wmaOf(vals, len) {
-    var out = new Array(vals.length).fill(null), den = len * (len + 1) / 2;
-    for (var i = len - 1; i < vals.length; i++) {
-      var num = 0;
-      for (var j = 0; j < len; j++) num += vals[i - len + 1 + j] * (j + 1);
-      out[i] = num / den;
-    }
-    return out;
-  }
-  function vwapOf(data) {
-    var out = [], pv = 0, v = 0;
-    data.forEach(function (d) {
-      var tp = (d.high + d.low + d.close) / 3, vol = d.volume || 1;
-      pv += tp * vol; v += vol; out.push(pv / v);
-    });
-    return out;
-  }
+  var MA_OWN = { ema9: ["ema", 9, "#f0cc6e"], ema21: ["ema", 21, "#a78bfa"], ema: ["ema", 50, "#5aa8ff"], sma20: ["sma", 20, "#e2e8f0"], sma100: ["sma", 100, "#fb923c"], sma200: ["sma", 200, "#fb7185"] };
   function loadOwnLib(cb) {
     if (window.LightweightCharts) return cb();
     if (owcLoading) return;
@@ -724,12 +707,6 @@
     var cs = chart.addCandlestickSeries({ upColor: "rgba(34,211,238,0.10)", downColor: "#f43f5e", borderVisible: true, borderUpColor: "#22d3ee", borderDownColor: "#f43f5e", wickUpColor: "#22d3ee", wickDownColor: "#f43f5e", priceLineColor: "#e8c35a", priceLineStyle: 2 });
     var series = {};
     Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
-    series.vwap = chart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-    series.bbU = chart.addLineSeries({ color: "rgba(90,168,255,.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-    series.bbL = chart.addLineSeries({ color: "rgba(90,168,255,.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-    series.bbM = chart.addLineSeries({ color: "rgba(90,168,255,.3)", lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-    series.vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol", priceLineVisible: false, lastValueVisible: false });
-    chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     OWN = { chart: chart, cs: cs, series: series, ov: ov, host: host, lines: [] };
     chart.timeScale().subscribeVisibleTimeRangeChange(paintOverlays);
     chart.subscribeClick(onOwnClick);
@@ -759,18 +736,10 @@
     OWN.cs.setData(data);
     var closes = data.map(function (d) { return d.close; });
     Object.keys(MA_OWN).forEach(function (k) {
-      var spec = MA_OWN[k], vals = spec[0] === "ema" ? A.ema(closes, spec[1]) : spec[0] === "sma" ? A.sma(closes, spec[1]) : wmaOf(closes, spec[1]);
+      var spec = MA_OWN[k], vals = spec[0] === "ema" ? A.ema(closes, spec[1]) : A.sma(closes, spec[1]);
       var rows = st.show[k] ? data.map(function (d, i) { return vals[i] != null ? { time: d.time, value: vals[i] } : null; }).filter(Boolean) : [];
       OWN.series[k].setData(rows);
     });
-    var bb = A.bollinger(closes, 20, 2), bbOn = st.show.bb;
-    var pick = function (src) { return bbOn ? data.map(function (d, i) { return src[i] != null ? { time: d.time, value: src[i] } : null; }).filter(Boolean) : []; };
-    var vw = st.show.vwap ? vwapOf(data) : [];
-    OWN.series.vwap.setData(st.show.vwap ? data.map(function (d, i) { return { time: d.time, value: vw[i] }; }) : []);
-    OWN.series.bbU.setData(pick(bb.up));
-    OWN.series.bbL.setData(pick(bb.lo));
-    OWN.series.bbM.setData(pick(bb.mid || A.sma(closes, 20)));
-    OWN.series.vol.setData(st.show.vol ? data.map(function (d) { return { time: d.time, value: d.volume || 0, color: d.close >= d.open ? "rgba(47,208,139,.28)" : "rgba(255,100,100,.28)" }; }) : []);
     OWN.data = data;
     OWN.lines.forEach(function (l) { try { OWN.cs.removePriceLine(l); } catch (x) {} });
     OWN.lines = [];
