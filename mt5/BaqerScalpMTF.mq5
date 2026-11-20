@@ -45,6 +45,18 @@ double g1o[], g1h[], g1l[], g1c[]; datetime g1t[]; int n1 = 0;
 // 15m candles built from closed 1m bars (the forming 15m bar is excluded)
 double g15o[], g15h[], g15l[], g15c[]; datetime g15t[]; int n15 = 0;
 
+
+string gReasons[16];
+int    gReasonCnt[16];
+int    gReasonN = 0;
+int    gBarsSeen = 0;
+void Why(string r)
+{
+   gWhy = r;
+   for(int i = 0; i < gReasonN; i++) if(gReasons[i] == r) { gReasonCnt[i]++; return; }
+   if(gReasonN < 16) { gReasons[gReasonN] = r; gReasonCnt[gReasonN] = 1; gReasonN++; }
+}
+
 bool IsNul(double x) { return x < -1.0e299; }
 
 //+------------------------------------------------------------------+
@@ -175,27 +187,27 @@ void BuildM15()
 // Same rules as scalpSetup() in analysis.js. Returns true with the levels when a trade is set up now.
 bool ScalpCheck(bool &isLong, double &entry, double &sl)
 {
-   if(n15 < 60 || n1 < 120) { gWhy = "not enough bars"; return false; }
+   if(n15 < 60 || n1 < 120) { Why("not enough bars"); return false; }
    Res z, m;
    Core(g15o, g15h, g15l, g15c, n15, z);
-   if(!z.ready || !z.hasOb || !z.obStrong) { gWhy = "no strong 15m order block"; return false; }
+   if(!z.ready || !z.hasOb || !z.obStrong) { Why("no strong 15m order block"); return false; }
    int dir = (z.ob.dir == 1) ? 1 : -1;
    double tol = 0.3 * z.atr;
    double p1 = g1c[n1 - 1];
-   if(p1 < z.ob.lo - tol || p1 > z.ob.hi + tol) { gWhy = "price not at 15m order block"; return false; }
+   if(p1 < z.ob.lo - tol || p1 > z.ob.hi + tol) { Why("price not at 15m order block"); return false; }
 
    Core(g1o, g1h, g1l, g1c, n1, m);
-   if(!m.ready) { gWhy = "1m not ready"; return false; }
+   if(!m.ready) { Why("1m not ready"); return false; }
    if(InpMode == "bos")
    {
-      if(m.evDir != dir) { gWhy = "no 1m break of structure"; return false; }
+      if(m.evDir != dir) { Why("no 1m break of structure"); return false; }
    }
    else
    {
       bool fvgOk = m.hasFvg && m.fvg.dir == dir && p1 >= m.fvg.lo - tol && p1 <= m.fvg.hi + tol;
-      if(!fvgOk) { gWhy = "no 1m fair value gap at price"; return false; }
+      if(!fvgOk) { Why("no 1m fair value gap at price"); return false; }
    }
-   if(!m.hasOb || m.ob.dir != dir) { gWhy = "no 1m order block in direction"; return false; }
+   if(!m.hasOb || m.ob.dir != dir) { Why("no 1m order block in direction"); return false; }
 
    int k = m.ob.i;
    bool up = (dir == 1);
@@ -203,12 +215,12 @@ bool ScalpCheck(bool &isLong, double &entry, double &sl)
    sl = up ? g1l[k] : g1h[k];
    bool valid = up ? (sl < entry) : (sl > entry);
    double risk = MathAbs(entry - sl);
-   if(!valid || risk <= 0 || risk > P_slMaxATR * m.atr) { gWhy = "stop outside allowed range"; return false; }
+   if(!valid || risk <= 0 || risk > P_slMaxATR * m.atr) { Why("stop outside allowed range"); return false; }
    // one trade per 1m order block candle: the same block stays a candidate on every new bar
-   if(g1t[k] == lastSigBar) { gWhy = "same order block already traded"; return false; }
+   if(g1t[k] == lastSigBar) { Why("same order block already traded"); return false; }
    lastSigBar = g1t[k];
    isLong = up;
-   gWhy = up ? "LONG setup" : "SHORT setup";
+   Why(up ? "LONG setup" : "SHORT setup");
    return true;
 }
 
@@ -302,6 +314,8 @@ void OnDeinit(const int reason)
        " wins=" + IntegerToString(statWins) + " losses=" + IntegerToString(statLoss) +
        " winRate=" + (closed > 0 ? DoubleToString(100.0 * statWins / closed, 1) : "0") + "%" +
        " net=" + DoubleToString(statPts, 5) + " price units");
+   Log("BARS evaluated " + IntegerToString(gBarsSeen) + " setups opened " + IntegerToString(gSignals));
+   for(int i = 0; i < gReasonN; i++) Log("REASON " + gReasons[i] + " : " + IntegerToString(gReasonCnt[i]));
    if(fh != INVALID_HANDLE) FileClose(fh);
 }
 
@@ -326,6 +340,7 @@ void OnTick()
    }
    BuildM15();
 
+   gBarsSeen++;
    ProcessBar(g1h[n1 - 1], g1l[n1 - 1], g1t[n1 - 1]);
    bool isLong = false; double entry = 0, sl = 0;
    if(ScalpCheck(isLong, entry, sl)) OpenVirtual(isLong, entry, sl, g1t[n1 - 1]);
