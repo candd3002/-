@@ -992,7 +992,7 @@
       $("wel-title").style.textAlign = sl.rtl ? "right" : "left";
       box.classList.remove("wel-swap");
     }, 600);
-  }, 30000);
+  }, 15000);
   // Entry gate: the visitor must open the Instagram follow link first. This is a request, not a check.
   var FOLLOW_KEY = "baqerFollowClicked";
   function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }
