@@ -1,0 +1,88 @@
+//@version=5
+indicator("Baqer Scalp Zone (15m)", overlay=true, max_boxes_count=200, max_lines_count=200)
+
+// Inputs (match the app's scalp profile)
+atrLen   = input.int(14, "ATR length")
+impMult  = input.float(1.0, "Impulse size (ATR)")
+impBars  = input.int(3, "Impulse bars after candle")
+tp1R     = input.float(1.2, "TP1 (R)")
+tol      = input.float(0.3, "Zone tolerance (ATR)")
+pivotN   = input.int(3, "Pivot bars")
+
+atr = ta.atr(atrLen)
+
+// Strong-move candle: a later move of at least impMult*ATR within impBars candles.
+// Bullish zone: a down candle followed by an up impulse. Bearish zone: an up candle followed by a down impulse.
+bullZone = close[1] < open[1] and (high[1] + 0) > 0 and (ta.highest(high, impBars) - high[1]) >= impMult * atr[1] and barstate.isconfirmed
+bearZone = close[1] > open[1] and (low[1] - ta.lowest(low, impBars)) >= impMult * atr[1] and barstate.isconfirmed
+
+// Zones are stored as boxes from the candle that produced the move
+var box bzBox = na
+var box szBox = na
+var float bzLo = na
+var float bzHi = na
+var float szLo = na
+var float szHi = na
+var int bzDir = 0
+
+if bullZone
+    bzLo := low[1]
+    bzHi := high[1]
+    bzDir := 1
+    if not na(bzBox)
+        box.delete(bzBox)
+    bzBox := box.new(bar_index[1], bzHi, bar_index + 200, bzLo, border_color=color.new(color.green, 0), bgcolor=color.new(color.green, 80))
+
+if bearZone
+    szLo := low[1]
+    szHi := high[1]
+    if not na(szBox)
+        box.delete(szBox)
+    szBox := box.new(bar_index[1], szHi, bar_index + 200, szLo, border_color=color.new(color.red, 0), bgcolor=color.new(color.red, 80))
+
+// Entry when price touches the zone (before any break)
+tolP = tol * atr
+longSig  = not na(bzLo) and low <= bzHi + tolP and high >= bzLo - tolP and close >= bzLo
+shortSig = not na(szHi) and high >= szLo - tolP and low <= szHi + tolP and close <= szHi
+
+// Stops at the far edge of the zone candle; targets by R
+var float entryL = na
+var float stopL = na
+var float tpL = na
+var float entryS = na
+var float stopS = na
+var float tpS = na
+
+if longSig and barstate.isconfirmed
+    entryL := close
+    stopL := bzLo
+    tpL := entryL + tp1R * (entryL - stopL)
+    label.new(bar_index, low, "BUY zone", color=color.green, textcolor=color.white, style=label.style_label_up)
+    line.new(bar_index, entryL, bar_index + 10, entryL, color=color.green, width=2)
+    line.new(bar_index, stopL, bar_index + 10, stopL, color=color.red, width=2)
+    line.new(bar_index, tpL, bar_index + 10, tpL, color=color.teal, width=2)
+
+if shortSig and barstate.isconfirmed
+    entryS := close
+    stopS := szHi
+    tpS := entryS - tp1R * (stopS - entryS)
+    label.new(bar_index, high, "SELL zone", color=color.red, textcolor=color.white, style=label.style_label_down)
+    line.new(bar_index, entryS, bar_index + 10, entryS, color=color.red, width=2)
+    line.new(bar_index, stopS, bar_index + 10, stopS, color=color.orange, width=2)
+    line.new(bar_index, tpS, bar_index + 10, tpS, color=color.teal, width=2)
+
+// Break of structure / CHoCH: shown as confirmation only (not an entry condition)
+ph = ta.pivothigh(high, pivotN, pivotN)
+pl = ta.pivotlow(low, pivotN, pivotN)
+var float lastPH = na
+var float lastPL = na
+if not na(ph)
+    lastPH := ph
+if not na(pl)
+    lastPL := pl
+if not na(lastPH) and close > lastPH and barstate.isconfirmed
+    label.new(bar_index, low, "BOS/CHoCH up (confirm)", color=color.new(color.green, 30), textcolor=color.white, size=size.tiny)
+    lastPH := na
+if not na(lastPL) and close < lastPL and barstate.isconfirmed
+    label.new(bar_index, high, "BOS/CHoCH down (confirm)", color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+    lastPL := na
