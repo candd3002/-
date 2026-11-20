@@ -312,6 +312,7 @@
     if (!candlesFor(id).length) return T("noSource");
     if (LIVE_SYM[id] && id !== "BTC") return T("sourcePaxg");
     if (id === "BTC") return st.btc && st.btcFetchedTf ? T("sourceLive") : T("sourceSample");
+    if (BQ_SYM[id] && LV[id] && LV[id].live) return st.lang === "ar" ? "biquote · مباشر" : "biquote · live";
     if (connectedNow(id)) return T("sourceLinked");
     if (autoOk[id]) return T("sourceAuto");
     return st.csv[id] ? T("sourceCsv") : T("sourceSample");
