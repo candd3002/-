@@ -697,3 +697,10 @@ header.top .live,#reload-btn,#menu-btn{height:28px !important; margin-top:8px !i
 .tk .sym{font-size:9px !important}
 .tk .px{font-size:12px !important}
 .tk .pct{font-size:10px !important}
+
+/* price strip marquee: moves on every device, pauses while touched */
+.tickers{overflow:hidden !important; padding:10px 0 4px !important; display:block !important}
+.tk-track{display:flex; gap:8px; width:max-content; animation:tkmove 26s linear infinite; will-change:transform}
+.tickers.paused .tk-track{animation-play-state:paused}
+@keyframes tkmove{from{transform:translate3d(0,0,0)} to{transform:translate3d(-50%,0,0)}}
+.tk-track > .tk{flex:0 0 auto !important; width:auto !important; min-width:138px}
