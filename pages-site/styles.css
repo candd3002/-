@@ -740,3 +740,10 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 .lvl > div{font-size:13px; line-height:1.6; padding:2px 0; word-break:break-word}
 .lvl > div.up{color:#6fd08c; font-weight:700}
 .lvl > div.muted{color:var(--muted); font-size:12px; font-weight:400}
+
+/* Trade card: uses the site palette (gold, card, up/down/blue) for the entry, stop and targets */
+.lvl{box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+.lvl.trade-entry{border-color:rgba(217,177,90,.45)}
+.lvl.trade-stop{border-color:rgba(255,100,100,.35)}
+.lvl.trade-target{border-color:rgba(47,208,139,.35)}
+.lvl > div.muted{padding-top:6px}
