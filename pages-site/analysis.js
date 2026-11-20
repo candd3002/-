@@ -187,8 +187,11 @@
     var P = PROFILES[profileName] || PROFILES.scalp;
     var r15 = r15pre || analyze(c15, profileName), r1 = analyze(c1, profileName);
     if (!r15.ready || !r1.ready) return { ready: false, reason: "not enough data" };
+    // 15m zone = the single candle that produced the strong move (impulse of at least 1 ATR within 3 bars).
+    // Weak or unconfirmed candles do not define a zone.
     var ob15 = r15.ob;
     if (!ob15) return { ready: false, reason: "no 15m order block" };
+    if (!r15.oq || !r15.oq.strong) return { ready: false, reason: "15m candle did not produce a strong move" };
     var dir = ob15.dir === "bear" ? "SHORT" : "LONG";
     var up = dir === "LONG";
     var tol = 0.3 * r15.atr, p1 = r1.price;
