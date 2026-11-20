@@ -722,3 +722,6 @@ header.top .live #clock, header.top .live .rf{display:none !important}
 header.top .live,#reload-btn,#menu-btn{height:30px !important}
 #menu-btn,#reload-btn{width:30px !important; padding:0 !important}
 .tickers{margin-top:8px !important}
+
+.wel-notify{width:100%; margin-top:6px}
+.wel-notify-note{font-size:12px; text-align:center; margin:4px 0 0; min-height:16px}

@@ -1140,6 +1140,21 @@
   function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }
   $("wel-follow").addEventListener("click", function () { store(FOLLOW_KEY, true); });
   $("wel-guest").addEventListener("click", hideWelcome);
+  // Notification opt-in from the first page. iPhone only allows web notifications after the site is
+  // added to the Home Screen, so the button checks that first and explains the step if needed.
+  $("wel-notify").addEventListener("click", function () {
+    var note = $("wel-notify-note");
+    var standalone = (window.navigator.standalone === true) || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    var isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (isIos && !standalone) {
+      note.textContent = "أولاً: زر المشاركة ← إضافة إلى الشاشة الرئيسية، ثم افتح الأيقونة واضغط هذا الزر مرة أخرى.";
+      return;
+    }
+    if (!("Notification" in window)) { note.textContent = "هذا المتصفح لا يدعم الإشعارات."; return; }
+    Notification.requestPermission().then(function (p) {
+      note.textContent = p === "granted" ? "تم تفعيل الإشعارات." : "لم تُفعّل الإشعارات.";
+    });
+  });
 
   $("wel-continue").addEventListener("click", hideWelcome);
 
