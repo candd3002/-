@@ -97,7 +97,7 @@
           modeSwing: "Swing", modeScalp: "Scalp", modeDay: "Day ICT", marketTrend: "Market trend",
           stopLoss: "Stop loss", entryZone: "Entry zone", tp1: "TP1", tp2: "TP2", tp3: "TP3",
           detailTitle: "Detailed analysis (ICT + SMC)", signalBuy: "Buy signal", signalSell: "Sell signal", signalWait: "Wait" },
-    ar: { appName: "باقر سنايبر", appSub: "تحليل الذهب والعملات الرقمية", live: "مباشر", structTitle: "هيكل ICT + SMC الفوري",
+    ar: { appName: "BAQER SNIPER", appSub: "تحليل الذهب والعملات الرقمية", live: "مباشر", structTitle: "هيكل ICT + SMC الفوري",
           modeSwing: "تداول متدرج", modeScalp: "مضاربة سريعة", modeDay: "تداول يومي ICT", marketTrend: "اتجاه السوق",
           stopLoss: "وقف الخسارة", entryZone: "منطقة الدخول", tp1: "الهدف 1", tp2: "الهدف 2", tp3: "الهدف 3",
           detailTitle: "التحليل التفصيلي بنظام ICT + SMC", signalBuy: "إشارة شراء", signalSell: "إشارة بيع", signalWait: "انتظار" }
@@ -910,7 +910,7 @@
     document.documentElement.lang = st.lang;
     document.documentElement.dir = st.lang === "ar" ? "rtl" : "ltr";
     var bn = $("brand-name");
-    if (bn) bn.textContent = st.lang === "ar" ? "باقر سنايبر" : "BAQER SNIPER";
+    if (bn) bn.textContent = "BAQER SNIPER";
     document.querySelectorAll("[data-i18n]").forEach(function (e) { e.textContent = T(e.getAttribute("data-i18n")); });
     document.querySelectorAll("[data-i18nph]").forEach(function (e) { e.setAttribute("placeholder", T(e.getAttribute("data-i18nph"))); });
     document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === st.lang)); });
