@@ -558,3 +558,22 @@ body{background:#070d17}
 .wel-sub{color:#9aa8c0; letter-spacing:.02em}
 .wel-more{background:rgba(255,255,255,.04); border:1px solid rgba(232,195,90,.35); color:#e8c35a; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px)}
 .wel-langs{background:rgba(11,20,36,.92); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px)}
+
+/* first page, design A: full-bleed portrait with dark gradient */
+.welcome{background:#000 !important; align-items:end; place-items:end center !important; padding:0 !important}
+.welcome::before{content:""; position:absolute; inset:0; background:url(assets/me-full.jpg) center 12%/cover no-repeat; filter:grayscale(1) contrast(1.08); z-index:0}
+.welcome::after{content:""; position:absolute; inset:0; z-index:0; background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,.78) 72%,#000 100%); pointer-events:none}
+.wel-bg{z-index:1}
+.wel-card{position:relative; z-index:2; width:100%; padding:0 24px 56px; box-sizing:border-box; justify-items:start; text-align:start; gap:12px}
+.wel-photo{display:none}
+.wel-logo{position:absolute; top:58px; left:24px; width:44px !important; height:44px !important; margin:0; filter:drop-shadow(0 0 12px rgba(232,195,90,.45))}
+.wel-title{font-size:44px !important; line-height:.98 !important; margin:0; text-align:start; letter-spacing:.02em !important}
+.wel-title .wordmark{display:block}
+.wel-title .grad{color:#e8c35a !important}
+.wel-sub{font-size:14px; color:#b7c0d1; margin:0 0 14px; text-align:start}
+.wel-top{top:58px !important; right:24px !important}
+#wel-new{width:100%}
+.welcome .wel-follow{padding:16px}
+.welcome .wel-enter{padding:16px}
+
+.welcome .wel-logo{position:fixed !important; top:58px; left:24px; z-index:3}
