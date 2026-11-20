@@ -219,6 +219,46 @@
         tp1: entry + s * P.tp[0] * risk, tp2: entry + s * P.tp[1] * risk, tp3: entry + s * P.tp[2] * risk }
     };
   }
+  // 15m-only rule: the zone is a strong-move candle; price returns into it, a break in the trade
+  // direction confirms; entry at the close of the confirming bar; stop at the zone's far edge.
+  function backtest15(c, maxBars, costPct) {
+    maxBars = maxBars || 96; costPct = costPct || 0;
+    var trades = [], busy = -1;
+    for (var i = 120; i < c.length - 1; i++) {
+      if (i <= busy) continue;
+      var r = analyze(c.slice(0, i + 1), "scalp");
+      if (!r.ready || !r.ob || !r.oq || !r.oq.strong || !r.ev) continue;
+      var up = r.ob.dir === "bull";
+      if (r.ev.dir !== (up ? "bull" : "bear")) continue;
+      var tol = 0.3 * r.atr, p = c[i].c;
+      if (p < r.ob.lo - tol || p > r.ob.hi + tol) continue;
+      var entry = p, stop = up ? r.ob.lo : r.ob.hi, risk = Math.abs(entry - stop);
+      if (!risk || (up ? stop >= entry : stop <= entry)) continue;
+      var s1 = up ? 1 : -1, tp1 = entry + s1 * PROFILES.scalp.tp[0] * risk;
+      var R = 0, exit = null, outcome = "open";
+      for (var q = i + 1; q < Math.min(c.length, i + 1 + maxBars); q++) {
+        var b = c[q];
+        if (up ? b.l <= stop : b.h >= stop) { outcome = "stop"; R = -1; exit = q; break; }
+        if (up ? b.h >= tp1 : b.l <= tp1) { outcome = "tp1"; R = Math.abs(tp1 - entry) / risk; exit = q; break; }
+      }
+      if (exit == null) { exit = Math.min(c.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
+      var cost = outcome !== "timeout" ? costPct * entry / risk : 0;
+      trades.push({ outcome: outcome, R: R - cost, grossR: R, cost: cost, risk: risk });
+      busy = exit;
+    }
+    var wins = trades.filter(function (x) { return x.R > 0; }).length;
+    var gw = trades.filter(function (x) { return x.R > 0; }).reduce(function (a, x) { return a + x.R; }, 0);
+    var gl = Math.abs(trades.filter(function (x) { return x.R < 0; }).reduce(function (a, x) { return a + x.R; }, 0));
+    var decided = trades.filter(function (x) { return x.outcome !== "timeout"; }).length;
+    return {
+      trades: trades, count: trades.length, wins: wins, winRate: decided ? wins / decided : 0,
+      netR: trades.reduce(function (a, x) { return a + x.R; }, 0),
+      grossR: trades.reduce(function (a, x) { return a + x.grossR; }, 0),
+      avgCostR: trades.length ? trades.reduce(function (a, x) { return a + x.cost; }, 0) / trades.length : 0,
+      avgRiskUSD: trades.length ? trades.reduce(function (a, x) { return a + x.risk; }, 0) / trades.length : 0,
+      profitFactor: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0)
+    };
+  }
   // Multi-timeframe scalp backtest: for each 1m bar, the 15m order block zone and the 1m rules
   // decide the entry; the trade is then followed on 1m bars (stop first, then TP1, as in backtest).
   function backtestMTF(c15, c1, profileName, maxBars, costPct) {
@@ -595,7 +635,7 @@
   }
 
   return {
-    CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, backtestMTF: backtestMTF, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, backtestMTF: backtestMTF, backtest15: backtest15, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };

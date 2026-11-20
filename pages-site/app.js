@@ -800,6 +800,26 @@
       btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
     });
   }
+  // 15-minute-only rule on BTC, last 30 days, with 0.1% commission per trade.
+  function runBtc15(btn, out) {
+    var ar = st.lang === "ar", label = btn.textContent;
+    btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
+    longBinance("15m", "BTCUSDT", 30).then(function (c) {
+      var b = A.backtest15(c, 96, 0.001);
+      out.textContent = "";
+      var card = el("div", "rep-m");
+      card.appendChild(el("b", "", ar ? "شمعة 15 دقيقة فقط (BTC، 30 يوماً)" : "15-minute only (BTC, 30 days)"));
+      var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
+      card.appendChild(el("p", "muted", (ar ? "الصفقات: " : "Trades: ") + b.count + " · " + (ar ? "رابحة: " : "win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + ")"));
+      card.appendChild(el("p", "muted", (ar ? "قبل التكلفة: R " : "Gross R: ") + (b.grossR >= 0 ? "+" : "") + b.grossR.toFixed(2) + (ar ? " · بعد التكلفة: R " : " · net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · PF " + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : "—")));
+      card.appendChild(el("p", "muted", (ar ? "متوسط حجم الوقف: $" : "Avg stop: $") + b.avgRiskUSD.toFixed(2) + (ar ? " · متوسط التكلفة: " : " · avg cost: ") + b.avgCostR.toFixed(2) + "R"));
+      out.appendChild(card);
+      btn.disabled = false; btn.textContent = label;
+    }).catch(function () {
+      out.textContent = ar ? "تعذّر تحميل بيانات 15 دقيقة من Binance." : "Could not load 15m data from Binance.";
+      btn.disabled = false; btn.textContent = label;
+    });
+  }
   // Multi-timeframe scalp backtest on BTC: 15m and 1m candles for the last 30 days.
   function runScalpMTF(btn, out, days, id) {
     var ar = st.lang === "ar", label = btn.textContent;
@@ -862,6 +882,9 @@
     box.appendChild(btnXau);
     box.appendChild(btnEur);
     box.appendChild(btnGbp);
+    var btn15 = el("button", "btn", ar ? "شمعة 15 دقيقة فقط: البيتكوين (30 يوماً)" : "15-minute only: BTC (30 days)"); btn15.type = "button";
+    btn15.addEventListener("click", function () { runBtc15(btn15, out); });
+    box.appendChild(btn15);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------
