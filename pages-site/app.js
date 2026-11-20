@@ -341,6 +341,24 @@
   // Small coin badges shown beside each price in the strip.
   var COIN_ICON = { BTC: "₿", XAU: "Au", XAG: "Ag", EURUSD: "€", GBPUSD: "£", NAS100: "N" };
   var COIN_COLOR = { BTC: "#f7931a", XAU: "#e8c35a", XAG: "#9aa6b8", EURUSD: "#3b82f6", GBPUSD: "#8b5cf6", NAS100: "#10b981" };
+  // Slow automatic scroll of the price strip. Pauses while the finger or mouse is on it.
+  var tkPause = 0;
+  (function autoScrollTickers() {
+    var row = $("tickers");
+    function step() {
+      if (row && Date.now() > tkPause && row.scrollWidth > row.clientWidth) {
+        row.scrollLeft += 0.4;
+        if (row.scrollLeft >= row.scrollWidth - row.clientWidth - 1) row.scrollLeft = 0;
+      }
+      requestAnimationFrame(step);
+    }
+    if (row) {
+      ["touchstart", "pointerdown", "wheel", "mousedown"].forEach(function (ev) {
+        row.addEventListener(ev, function () { tkPause = Date.now() + 4000; }, { passive: true });
+      });
+      requestAnimationFrame(step);
+    }
+  })();
   function renderTickers() {
     var row = $("tickers"); if (!row) return;
     row.textContent = "";
