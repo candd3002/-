@@ -256,6 +256,20 @@
   var autoKey = {}, autoAt = {};
   // Gold history from biquote OHLC (mid-price bars). Used for XAU instead of Twelve Data.
   var BQ_INTERVAL = { "1m": "1m", "15m": "15m", "1h": "1h", "4h": "4h" };
+  // biquote OHLC for an explicit biquote symbol (rolling window: newest bars only).
+  function bqFetchSym(sym, tf) {
+    if (!BQ_INTERVAL[tf]) return Promise.reject(new Error("no interval"));
+    return fetch("https://biquote.io/api/" + sym + "/ohlc?interval=" + BQ_INTERVAL[tf], { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var out = ((j && j.bars) || []).map(function (b) {
+          return { t: Date.parse(b.openTime), o: +b.open, h: +b.high, l: +b.low, c: +b.close, v: +(b.tickVolume || 1) };
+        }).filter(function (b) { return isFinite(b.t) && isFinite(b.c); });
+        out.sort(function (a, b) { return a.t - b.t; });
+        if (out.length < 60) throw new Error("not enough bars");
+        return out;
+      });
+  }
   function bqHistory(id, tf) {
     var sym = BQ_SYM[id];
     if (!sym || !BQ_INTERVAL[tf]) return Promise.reject(new Error("no biquote history"));
@@ -834,7 +848,7 @@
   function fetchTf(id, tf, long) {
     var key = id + "|" + tf + (long ? "|long" : "");
     if (BT_CACHE[key]) return Promise.resolve(BT_CACHE[key]);
-    var p = id === "BTC" ? (long ? longBinance(tf, "BTCUSDT") : klines(tf, "BTCUSDT"))
+    var p = id === "BTC" ? (long ? longBinance(tf, "BTCUSDT") : bqFetchSym("BTCUSD", tf))
       : (BQ_SYM[id] && BQ_INTERVAL[tf]) ? bqHistory(id, tf)
       : fetch("/api/candles?symbol=" + AUTO[id] + "&interval=" + tf + (long ? "&size=5000" : ""), { cache: "no-store" })
           .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
@@ -940,8 +954,8 @@
     box.textContent = "";
     box.appendChild(el("h2", "", ar ? "الباك تيست حسب الأسلوب" : "Backtest by style"));
     box.appendChild(el("p", "muted", ar
-      ? "يعيد تشغيل الإشارات على بيانات كل أسلوب وإطاره الزمني. R = وحدة المخاطرة لكل صفقة. يستهلك التشغيل نحو 9 طلبات من حصة الذهب والعملات المجانية، فشغّله بقدر الحاجة."
-      : "Replays signals on each style's timeframe. R = risk unit per trade. A run uses about 9 requests of the free gold/FX quota, so run it sparingly."));
+      ? "يعيد تشغيل الإشارات على بيانات كل أسلوب وإطاره الزمني. R = وحدة المخاطرة لكل صفقة. البيانات من biquote، وهي نافذة متحركة (آخر 168 شمعة ساعة، و180 شمعة 4 ساعات)، وليست أرشيفاً."
+      : "Replays signals on each style's timeframe. R = risk unit per trade. Data from biquote: a rolling window (newest 168 hourly and 180 four-hour bars), not an archive."));
     var out = el("div", "");
     var btn = el("button", "btn", ar ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
     var btnLong = el("button", "btn", ar ? "تشغيل على 3 سنوات" : "Run on 3 years"); btnLong.type = "button";
