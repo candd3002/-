@@ -590,3 +590,9 @@ body{background:#070d17}
 .welcome .wel-enter{font-size:15px !important; border-color:#f6cf6b !important; color:#f6cf6b !important}
 .welcome .wel-card::before{content:""; position:absolute; left:0; right:0; top:-280px; height:2px; background:linear-gradient(90deg,transparent,#f6cf6b,transparent); box-shadow:0 0 18px #f6cf6b; animation:scan 5s ease-in-out infinite; pointer-events:none}
 @keyframes scan{0%{transform:translateY(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(560px);opacity:0}}
+
+/* follow is a quiet link above the main Enter button */
+.welcome .wel-follow{background:transparent !important; border:0 !important; box-shadow:none !important; color:#e8c35a !important; font-size:14px !important; font-weight:700 !important; padding:6px 0 !important; text-align:start !important; letter-spacing:.02em}
+.welcome .wel-follow::before{content:"\\2022  "; color:#e8c35a}
+.welcome .wel-enter{background:linear-gradient(180deg,#f3d27a,#c99a33) !important; color:#15110a !important; border:0 !important; font-weight:900 !important; box-shadow:0 14px 34px -14px rgba(232,195,90,.7) !important}
+.welcome .wel-enter:disabled{background:linear-gradient(180deg,#f3d27a,#c99a33) !important; opacity:.35 !important; color:#15110a !important}
