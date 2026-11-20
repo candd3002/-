@@ -179,8 +179,9 @@
   function bqApply(id, mid, ts) {
     if (!BQ_SYM[id] || !isFinite(mid)) return;
     var ms = BQ_TF_MS[st.tf] || 60 * 60e3, t0 = Math.floor(ts / ms) * ms;
-    var c = LV[id] && LV[id].c;
-    if (!c || !c.length) return;
+    if (!LV[id] || !LV[id].c) LV[id] = { c: [], tf: st.tf, live: null };
+    var c = LV[id].c;
+    if (!c.length) { c.push({ t: t0, o: mid, h: mid, l: mid, c: mid, v: 0 }); LV[id].live = Date.now(); return; }
     var last = c[c.length - 1];
     if (last.t === t0) { last.c = mid; last.h = Math.max(last.h, mid); last.l = Math.min(last.l, mid); }
     else if (t0 > last.t) { c.push({ t: t0, o: mid, h: mid, l: mid, c: mid, v: 0 }); if (c.length > 500) c.shift(); }
