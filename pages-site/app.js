@@ -714,14 +714,14 @@
     wrap.appendChild(bar); wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
     var chart = LightweightCharts.createChart(host, {
       width: host.clientWidth || 340, height: 496,
-      layout: { background: { type: "solid", color: "#0b1424" }, textColor: "#8c99ad", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
+      layout: { background: { type: "solid", color: "#05080f" }, textColor: "#7d8aa3", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
       grid: { vertLines: { color: "rgba(70,120,200,.07)" }, horzLines: { color: "rgba(70,120,200,.07)" } },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.14, bottom: 0.12 } },
       timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4, barSpacing: 7 },
       crosshair: { mode: 0, vertLine: { color: "rgba(232,195,90,.55)", width: 1, style: 2, labelBackgroundColor: "#e8c35a" }, horzLine: { color: "rgba(232,195,90,.55)", width: 1, style: 2, labelBackgroundColor: "#e8c35a" } },
       handleScroll: true, handleScale: true
     });
-    var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6464", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6464", priceLineColor: "#e8c35a", priceLineStyle: 2 });
+    var cs = chart.addCandlestickSeries({ upColor: "rgba(34,211,238,0.10)", downColor: "#f43f5e", borderVisible: true, borderUpColor: "#22d3ee", borderDownColor: "#f43f5e", wickUpColor: "#22d3ee", wickDownColor: "#f43f5e", priceLineColor: "#e8c35a", priceLineStyle: 2 });
     var series = {};
     Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
     series.vwap = chart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
