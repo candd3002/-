@@ -1252,6 +1252,28 @@
       box.classList.remove("wel-swap");
     }, 600);
   }, 3000);
+  // ---------- Web Push: notifications from the app, also when the page is closed ----------
+  function b64uToU8(s) {
+    var pad = "=".repeat((4 - s.length % 4) % 4);
+    var bin = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    var u = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u;
+  }
+  // Registers the service worker, subscribes this device and sends the subscription to the Worker.
+  function enablePush() {
+    if (!window.PUSH_WORKER || !("serviceWorker" in navigator) || !("PushManager" in window)) return Promise.resolve(false);
+    return navigator.serviceWorker.register("sw.js").then(function (reg) {
+      return fetch(PUSH_WORKER + "/vapid-public").then(function (r) { return r.json(); }).then(function (j) {
+        return reg.pushManager.getSubscription().then(function (sub) {
+          return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(j.key) });
+        });
+      }).then(function (sub) {
+        return fetch(PUSH_WORKER + "/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub) });
+      }).then(function (r) { return r.ok; });
+    }).catch(function () { return false; });
+  }
+
   // Entry gate: notifications must be allowed before the Enter button unlocks.
   // On iPhone web notifications only work after the site is added to the Home Screen; the gate explains that.
   var NOTIF_OK = "baqerNotifOk";
@@ -1283,7 +1305,7 @@
     }
     if (!("Notification" in window)) { setStep("bad", "هذا المتصفح لا يدعم الإشعارات"); return; }
     Notification.requestPermission().then(function (p) {
-      if (p === "granted") { store(NOTIF_OK, true); unlockEnterBtn(); setStep("ok", "تم التفعيل، يمكنك الدخول"); }
+      if (p === "granted") { store(NOTIF_OK, true); unlockEnterBtn(); setStep("ok", "تم التفعيل، يمكنك الدخول"); enablePush(); }
       else { setStep("bad", "فعّل الإشعارات من إعدادات الهاتف ثم أعد المحاولة"); }
     });
   });
@@ -1702,20 +1724,23 @@
     renderJournal();
   }
   $("tg-practice") && $("tg-practice").addEventListener("click", addPracticeTrade);
+  // Test button: asks the server to push a test notification to this device.
   $("tg-test").addEventListener("click", function () {
     var note = $("tg-note"); note.textContent = "...";
-    fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: "اختبار اتصال من Baqer Sniper. هذه ليست إشارة تداول." }) })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (x) {
-        note.textContent = x.ok ? "تم الإرسال إلى Telegram." : "لم يُرسل: " + (x.j && x.j.error ? x.j.error : "خطأ");
-      })
-      .catch(function () { note.textContent = "تعذّر الاتصال بالخادم."; });
+    if (!window.PUSH_WORKER) { note.textContent = "خادم الإشعارات غير مضبوط بعد."; return; }
+    enablePush().then(function (ok) {
+      if (!ok) { note.textContent = "فعّل الإشعارات أولاً من الزر أعلاه."; return; }
+      return fetch(PUSH_WORKER + "/test").then(function () { note.textContent = "أُرسل إشعار تجريبي، يجب أن يظهر خلال ثوانٍ."; });
+    }).catch(function () { note.textContent = "تعذّر الاتصال بالخادم."; });
   });
   $("notify-btn").addEventListener("click", function () {
     if (!("Notification" in window)) { txt("alerts-note", T("notifOff")); return; }
-    Notification.requestPermission().then(function (p) { txt("alerts-note", p === "granted" ? T("notifOn") : T("notifNo")); });
+    Notification.requestPermission().then(function (p) {
+      txt("alerts-note", p === "granted" ? T("notifOn") : T("notifNo"));
+      if (p === "granted") enablePush();
+    });
   });
+  if ("Notification" in window && Notification.permission === "granted") enablePush();
   var pSig = $("pref-signal"), pTp = $("pref-tp");
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   pSig.addEventListener("change", function () { st.prefs.signal = pSig.checked; store("baqerPrefs", st.prefs); });
