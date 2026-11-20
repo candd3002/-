@@ -800,15 +800,18 @@
       btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
     });
   }
-  // 15-minute-only rule on BTC, last 30 days, with 0.1% commission per trade.
-  function runBtc15(btn, out) {
-    var ar = st.lang === "ar", label = btn.textContent;
+  // 15-minute-only rule. BTC: 30 days from Binance, 0.1% commission. Gold/FX: up to 5000 candles from Twelve Data
+  // (about 52 days), no commission here (spread is excluded by request).
+  function runBtc15(btn, out, id) {
+    var ar = st.lang === "ar", label = btn.textContent, isBtc = !id || id === "BTC";
     btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
-    longBinance("15m", "BTCUSDT", 30).then(function (c) {
-      var b = A.backtest15(c, 96, 0.001);
+    var src = isBtc ? longBinance("15m", "BTCUSDT", 30) : fetchTf(id, "15m", true);
+    src.then(function (c) {
+      var b = A.backtest15(c, 96, isBtc ? 0.001 : 0);
       out.textContent = "";
       var card = el("div", "rep-m");
-      card.appendChild(el("b", "", ar ? "شمعة 15 دقيقة فقط (BTC، 30 يوماً)" : "15-minute only (BTC, 30 days)"));
+      var nm = isBtc ? "BTC, 30 days" : (BY[id] ? BY[id].name : id) + ", ~52 days";
+      card.appendChild(el("b", "", (ar ? "شمعة 15 دقيقة فقط (" : "15-minute only (") + nm + (ar ? ")" : ")")));
       var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
       card.appendChild(el("p", "muted", (ar ? "الصفقات: " : "Trades: ") + b.count + " · " + (ar ? "رابحة: " : "win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + ")"));
       card.appendChild(el("p", "muted", (ar ? "قبل التكلفة: R " : "Gross R: ") + (b.grossR >= 0 ? "+" : "") + b.grossR.toFixed(2) + (ar ? " · بعد التكلفة: R " : " · net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · PF " + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : "—")));
@@ -816,7 +819,7 @@
       out.appendChild(card);
       btn.disabled = false; btn.textContent = label;
     }).catch(function () {
-      out.textContent = ar ? "تعذّر تحميل بيانات 15 دقيقة من Binance." : "Could not load 15m data from Binance.";
+      out.textContent = ar ? "تعذّر تحميل بيانات 15 دقيقة (" + (isBtc ? "Binance" : "Twelve Data") + ")." : "Could not load 15m data (" + (isBtc ? "Binance" : "Twelve Data") + ").";
       btn.disabled = false; btn.textContent = label;
     });
   }
@@ -885,6 +888,11 @@
     var btn15 = el("button", "btn", ar ? "شمعة 15 دقيقة فقط: البيتكوين (30 يوماً)" : "15-minute only: BTC (30 days)"); btn15.type = "button";
     btn15.addEventListener("click", function () { runBtc15(btn15, out); });
     box.appendChild(btn15);
+    [["XAUUSD", "XAU", ar ? "شمعة 15 دقيقة فقط: الذهب" : "15-minute only: Gold"], ["EURUSD", "EURUSD", ar ? "شمعة 15 دقيقة فقط: اليورو" : "15-minute only: EUR/USD"], ["GBPUSD", "GBPUSD", ar ? "شمعة 15 دقيقة فقط: الجنيه" : "15-minute only: GBP/USD"]].forEach(function (x) {
+      var bf = el("button", "btn", x[2]); bf.type = "button";
+      bf.addEventListener("click", function () { runBtc15(bf, out, x[1]); });
+      box.appendChild(bf);
+    });
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------
