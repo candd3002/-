@@ -672,7 +672,7 @@
     if (store(flag)) return false;
     for (var i = 60; i < c.length; i++) {
       var r = A.analyze(c.slice(0, i + 1), profile, null);
-      if (r.ready && r.signal) addSignal(j, x, r.signal, c[i].t, r.price, r.ema50, events, false);
+      if (r.ready && r.signal) addSignal(j, x, r.signal, c[i].t, r.price, r.ema50, events, false, st.tf, st.tf === "4h" ? "swing" : (st.tf === "15m" ? "scalp" : "day"));
     }
     store(flag, true);
     return true;
@@ -695,7 +695,9 @@
       if (backfill(x, c, st.profile, j, events)) changed = true;
       var r = A.analyze(c, st.profile, learn);
       trendOf[x.id] = r.ready ? r.trend : null; lastOf[x.id] = c[c.length - 1];
-      if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true)) changed = true;
+      // Tag with the timeframe the signal came from, so the same signal is never recorded twice
+      // (the style cards record the same setup with the same timeframe tag).
+      if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true, st.tf, st.tf === "4h" ? "swing" : (st.tf === "15m" ? "scalp" : "day"))) changed = true;
     });
     j.forEach(function (e) {
       if (e.status !== "open") return;
