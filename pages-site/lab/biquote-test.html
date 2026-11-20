@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>biquote live test</title>
+<style>
+body{margin:0;background:#0b1424;color:#e6eaf2;font:14px/1.5 ui-monospace,Menlo,monospace;padding:14px}
+h1{font-size:16px;color:#e8c35a;margin:0 0 8px}
+#status{margin:6px 0 12px;color:#8c99ad}
+#log{white-space:pre-wrap;word-break:break-all;background:#070d17;border:1px solid #1f2d46;border-radius:10px;padding:10px;max-height:70vh;overflow:auto}
+.ok{color:#2fd08b}.bad{color:#ff6464}
+</style></head><body>
+<h1>biquote live test</h1>
+<div id="status">starting...</div>
+<div id="log"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<script>
+var statusEl = document.getElementById("status"), logEl = document.getElementById("log");
+function line(t, cls){ var d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t; logEl.insertBefore(d, logEl.firstChild); }
+function status(t, cls){ statusEl.textContent = t; statusEl.className = cls || ""; }
+if (typeof signalR === "undefined") { status("SignalR library did not load (check network)", "bad"); }
+else {
+  var conn = new signalR.HubConnectionBuilder().withUrl("https://biquote.io/hubs/tick").withAutomaticReconnect().build();
+  conn.on("ReceiveTick", function (msg) { line(new Date().toLocaleTimeString() + "  " + JSON.stringify(msg)); });
+  conn.onreconnecting(function () { status("reconnecting...", "bad"); });
+  conn.onreconnected(function () { status("reconnected", "ok"); });
+  conn.onclose(function () { status("closed", "bad"); });
+  conn.start().then(function () {
+    status("connected", "ok");
+    return conn.invoke("Subscribe", ["XAUUSD", "EURUSD", "GBPUSD"]).catch(function (e) { line("Subscribe with array failed, trying one by one: " + e); return Promise.all(["XAUUSD","EURUSD","GBPUSD"].map(function (s) { return conn.invoke("Subscribe", s).catch(function (e2) { line("Subscribe " + s + " failed: " + e2); }); })); });
+  }).then(function () { line("subscription sent"); })
+    .catch(function (e) { status("failed: " + e, "bad"); });
+}
+</script></body></html>
