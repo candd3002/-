@@ -537,3 +537,13 @@ body{background:#070d17}
 .welcome .btn{box-shadow:0 10px 30px -10px rgba(232,195,90,.6); transition:transform .15s ease}
 .welcome .btn:active{transform:scale(.97)}
 @media (prefers-reduced-motion: reduce){.wel-bg i,.wel-photo,.wel-photo img,.wel-logo,.wel-title .grad{animation:none}}
+
+/* first page: language menu at the top, follow gate */
+.wel-top{position:absolute; top:16px; inset-inline-end:16px; z-index:2; display:grid; justify-items:end; gap:8px}
+.wel-more{font-size:22px; line-height:1; width:40px; height:40px; border-radius:50%}
+.wel-langs{display:grid; gap:6px; background:#0b1424; border:1px solid rgba(232,195,90,.35); border-radius:12px; padding:6px; min-width:140px; box-shadow:0 12px 30px -12px rgba(0,0,0,.7)}
+.wel-langs button{background:transparent; color:#e6eaf2; border:0; padding:8px 10px; border-radius:8px; text-align:start; font-weight:700; cursor:pointer}
+.wel-langs button[aria-pressed="true"]{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a}
+.wel-gate{display:grid; gap:10px; width:100%}
+.wel-follow{text-decoration:none; text-align:center}
+.wel-enter:disabled{opacity:.45; cursor:not-allowed; box-shadow:none}

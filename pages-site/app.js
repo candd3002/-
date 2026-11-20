@@ -83,12 +83,12 @@
   I18N.ar.orderBlock = "كتلة الأوامر"; I18N.ar.sniperEntry = "منطقة الدخول";
   I18N.ar.tag = "تحليل الذهب والعملات الرقمية";
   I18N.ar.riskScalp = "Scalp (وقف ضيق جداً وأهداف سريعة)";
-  I18N.en.welGuest = "Enter";
+  I18N.en.welGuest = "Enter"; I18N.en.welFollow = "Follow on Instagram first";
   I18N.en.welContinue = "Continue";
   I18N.en.welHint = "Your sign-in is saved on this device only.";
   I18N.en.welBack = "Welcome back, ";
   I18N.ar.welSub = "هيكل السوق، مشروحاً ببساطة.";
-  I18N.ar.welGuest = "ادخل";
+  I18N.ar.welGuest = "ادخل"; I18N.ar.welFollow = "تابعني على إنستغرام أولاً";
   I18N.ar.welContinue = "متابعة";
   I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
   I18N.ar.welBack = "أهلاً بعودتك، ";
@@ -974,7 +974,16 @@
     renderAccount();
     hideWelcome();
   });
+  // Entry gate: the visitor must open the Instagram follow link first. This is a request, not a check.
+  var FOLLOW_KEY = "baqerFollowClicked";
+  function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }
+  if (store(FOLLOW_KEY)) unlockEnter();
+  $("wel-follow").addEventListener("click", function () { store(FOLLOW_KEY, true); unlockEnter(); });
   $("wel-guest").addEventListener("click", hideWelcome);
+  $("wel-more").addEventListener("click", function () {
+    var m = $("wel-langs"), open = m.hidden;
+    m.hidden = !open; this.setAttribute("aria-expanded", String(open));
+  });
   $("wel-continue").addEventListener("click", hideWelcome);
 
   // ---------- TradingView: the only chart ----------
