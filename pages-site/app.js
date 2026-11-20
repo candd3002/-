@@ -959,19 +959,23 @@
     btnGbp.addEventListener("click", function () { runScalpMTF(btnGbp, out, 0, "GBPUSD"); });
     box.appendChild(btn);
     box.appendChild(btnLong);
-    box.appendChild(btnMtf);
-    box.appendChild(btnMtf90);
-    box.appendChild(btnXau);
-    box.appendChild(btnEur);
-    box.appendChild(btnGbp);
+    // Experimental tests are grouped under one collapsed section, so the main panel stays simple.
+    var adv = el("details", "adv");
+    adv.appendChild(el("summary", "", ar ? "اختبارات متقدمة (تجريبية)" : "Advanced tests (experimental)"));
+    adv.appendChild(btnMtf);
+    adv.appendChild(btnMtf90);
+    adv.appendChild(btnXau);
+    adv.appendChild(btnEur);
+    adv.appendChild(btnGbp);
     var btn15 = el("button", "btn", ar ? "شمعة 15 دقيقة فقط: البيتكوين (30 يوماً)" : "15-minute only: BTC (30 days)"); btn15.type = "button";
     btn15.addEventListener("click", function () { runBtc15(btn15, out); });
-    box.appendChild(btn15);
+    adv.appendChild(btn15);
     [["XAUUSD", "XAU", ar ? "شمعة 15 دقيقة فقط: الذهب" : "15-minute only: Gold"], ["EURUSD", "EURUSD", ar ? "شمعة 15 دقيقة فقط: اليورو" : "15-minute only: EUR/USD"], ["GBPUSD", "GBPUSD", ar ? "شمعة 15 دقيقة فقط: الجنيه" : "15-minute only: GBP/USD"]].forEach(function (x) {
       var bf = el("button", "btn", x[2]); bf.type = "button";
       bf.addEventListener("click", function () { runBtc15(bf, out, x[1]); });
-      box.appendChild(bf);
+      adv.appendChild(bf);
     });
+    box.appendChild(adv);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------
