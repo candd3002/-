@@ -316,6 +316,9 @@
 
     function build(dir, t) {
       var up = dir === "LONG", entry = price;
+      // Entry rule: when the trigger candle runs in the trade direction, enter at its open.
+      var lastC = c[n - 1];
+      if (lastC && ((up && lastC.c > lastC.o) || (!up && lastC.c < lastC.o))) entry = lastC.o;
       var key = dir + "|" + (sweep && sweep.dir === (up ? "bull" : "bear") ? "sweep" : "nosweep") + "|" +
         (ob && ob.dir === (up ? "bull" : "bear") ? "ob" : "noob") + "|" + (bq || "none");
       if (learn && learn.block && learn.block.indexOf(key) >= 0) {
