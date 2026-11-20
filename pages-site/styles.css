@@ -704,3 +704,7 @@ header.top .live,#reload-btn,#menu-btn{height:28px !important; margin-top:8px !i
 .tickers.paused .tk-track{animation-play-state:paused}
 @keyframes tkmove{from{transform:translate3d(0,0,0)} to{transform:translate3d(-50%,0,0)}}
 .tk-track > .tk{flex:0 0 auto !important; width:auto !important; min-width:138px}
+
+/* no empty space above the title */
+header.top{padding-top:10px !important; margin-top:0 !important}
+.phone{padding-top:0 !important}
