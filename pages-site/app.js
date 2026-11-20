@@ -550,12 +550,25 @@
     Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); });
     return e;
   }
+  function ar(lang) { return lang === "ar"; }
   // ---------- three-level understanding ----------
   function renderLevels(r) {
     var box = $("analysis"); if (!box) return;
     box.textContent = "";
     var sty = A.story(r, st.lang);
     if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
+    // "Why this trade": every check for the side the app is leaning to, ticked or not, with the score.
+    var side = r.longScore >= r.shortScore ? "long" : "short";
+    var checks = side === "long" ? r.longChecks : r.shortChecks;
+    var score = side === "long" ? r.longScore : r.shortScore;
+    var met = checks.filter(function (c) { return c.ok; }).length;
+    var why = el("div", "lvl");
+    why.appendChild(el("b", "", (ar(st.lang) ? "لماذا هذه الصفقة؟ " : "Why this trade? ") + met + "/" + checks.length + " · " + score));
+    checks.forEach(function (c) {
+      why.appendChild(el("div", c.ok ? "up" : "muted", (c.ok ? "✓ " : "✗ ") + c.label + " (+" + c.w + ")"));
+    });
+    why.appendChild(el("div", "muted", ar(st.lang) ? "هذه قراءة للشروط المتحققة، وليست احتمال ربح. اختبر قبل أي استخدام." : "These are the checks met, not a probability of profit. Test before any use."));
+    box.appendChild(why);
     [sty.l1, sty.l2, sty.l3].forEach(function (lv, idx) {
       var card = el("div", "lvl");
       var head = el("div", "lvl-h");
