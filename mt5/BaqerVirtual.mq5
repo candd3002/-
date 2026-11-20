@@ -326,6 +326,10 @@ void OnClosed(const VTrade &tr, bool won, double pts, datetime when)
 {
    if(won) statWins++; else statLoss++;
    statPts += pts;
+   if(fh != INVALID_HANDLE) FileWriteString(fh, TimeToString(tr.t, TIME_DATE|TIME_MINUTES) + ";" + TimeToString(when, TIME_DATE|TIME_MINUTES) + ";" +
+      (tr.isLong ? "BUY" : "SELL") + ";" + DoubleToString(tr.entry, _Digits) + ";" + DoubleToString(tr.sl, _Digits) + ";" +
+      DoubleToString(tr.tp1, _Digits) + ";" + DoubleToString(tr.tp2, _Digits) + ";" + DoubleToString(tr.tp3, _Digits) + ";" +
+      (won ? "WIN" : "LOSS") + ";" + IntegerToString(tr.tpHits) + ";" + DoubleToString(pts, _Digits) + "\r\n");
    Log(TimeToString(when, TIME_DATE | TIME_MINUTES) + "," + (won ? "WIN" : "LOSS") + "," +
        (tr.isLong ? "BUY" : "SELL") + "," + DoubleToString(tr.entry, _Digits) + "," +
        DoubleToString(pts, _Digits) + " pts,tpHits=" + IntegerToString(tr.tpHits));
@@ -384,7 +388,7 @@ int OnInit()
    if(InpWriteCsv)
    {
       fh = FileOpen(InpCsvName, FILE_WRITE | FILE_TXT | FILE_ANSI);
-      if(fh != INVALID_HANDLE) FileWriteString(fh, "time,event,side,price,detail\r\n");
+      if(fh != INVALID_HANDLE) FileWriteString(fh, "open;close;side;entry;stop;tp1;tp2;tp3;result;tpHits;points\r\n");
    }
    Log("BaqerVirtual started, profile=" + InpProfile);
    return INIT_SUCCEEDED;
