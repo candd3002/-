@@ -422,10 +422,8 @@
       var mine = function (e) { return e.inst === st.inst && (!e.tf || e.tf === st.tf); };
       var all = loadJournal().filter(mine);
       var op = all.filter(function (e) { return e.status === "open"; }).pop();
-      var recent = all.filter(function (e) { return e.status !== "open" && e.closeT && Date.now() - e.closeT < 48 * 3600e3; }).pop();
-      var show = op || recent, note = "";
-      if (op) note = (st.lang === "ar" ? "صفقة مفتوحة" : "Open trade");
-      else if (recent) note = (st.lang === "ar" ? "أُغلقت: " : "Closed: ") + (recent.status === "win" ? (st.lang === "ar" ? "ربح" : "win") : (st.lang === "ar" ? "خسارة" : "loss"));
+      // Live trades only: closed trades are not shown in the plan.
+      var show = op, note = op ? (st.lang === "ar" ? "صفقة مفتوحة" : "Open trade") : "";
       txt("plan-note", note);
       if (show) {
         txt("p-sl", fmt(show.sl)); txt("p-en", fmt(show.entry));
