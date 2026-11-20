@@ -734,3 +734,9 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 .welcome .wel-notify.shake{animation:wel-shake .4s ease; box-shadow:0 0 0 2px #ff3b3b}
 @keyframes wel-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 .welcome .wel-enter[aria-disabled="true"]{opacity:.4 !important; filter:grayscale(.6); cursor:pointer; box-shadow:none !important}
+
+/* "Why this trade" checks: clear ticks and crosses, readable at phone width */
+.lvl > b{display:block; font-size:14px; color:var(--gold); margin-bottom:8px}
+.lvl > div{font-size:13px; line-height:1.6; padding:2px 0; word-break:break-word}
+.lvl > div.up{color:#6fd08c; font-weight:700}
+.lvl > div.muted{color:var(--muted); font-size:12px; font-weight:400}
