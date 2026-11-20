@@ -608,28 +608,68 @@
     renderReport();
   }
 
-  // ---------- backtest on the loaded candles of every instrument ----------
+  // ---------- backtest: each trading style on its own timeframe and risk profile ----------
+  var STYLES = [
+    { id: "scalp", ar: "سكالب سريع (15 دقيقة، وقف ضيق)", en: "Scalp (15m, tight stop)", tf: "15m", profile: "scalp" },
+    { id: "sniper", ar: "قناص (ساعة، وقف ضيق وهدف بعيد)", en: "Sniper (1h, tight stop, far target)", tf: "1h", profile: "sniper" },
+    { id: "day", ar: "يومي ICT (ساعة)", en: "Day ICT (1h)", tf: "1h", profile: "balanced" },
+    { id: "swing", ar: "سوينج (4 ساعات)", en: "Swing (4h)", tf: "4h", profile: "balanced" }
+  ];
+  var BT_CACHE = {};
+  function fetchTf(id, tf) {
+    var key = id + "|" + tf;
+    if (BT_CACHE[key]) return Promise.resolve(BT_CACHE[key]);
+    var p = id === "BTC" ? klines(tf, "BTCUSDT")
+      : fetch("/api/candles?symbol=" + AUTO[id] + "&interval=" + tf, { cache: "no-store" })
+          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+          .then(parseJSONCandles);
+    return p.then(function (c) { BT_CACHE[key] = c; return c; });
+  }
+  function renderBtRows(out, rows) {
+    var ar = st.lang === "ar";
+    out.textContent = "";
+    STYLES.forEach(function (sty) {
+      var card = el("div", "rep-m");
+      card.appendChild(el("b", "", ar ? sty.ar : sty.en));
+      rows.filter(function (r) { return r.sty.id === sty.id; }).forEach(function (r) {
+        var row = el("div", "rep-i");
+        row.appendChild(el("span", "", r.x.name));
+        if (!r.b) {
+          row.appendChild(el("span", "muted", r.err ? (ar ? "لا بيانات" : "no data") : (ar ? "بيانات غير كافية" : "not enough data")));
+          card.appendChild(row); return;
+        }
+        var decided = r.b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
+        row.appendChild(el("span", "", (ar ? "صفقات " : "trades ") + r.b.count + " · " + Math.round(r.b.winRate * 100) + "% (" + decided + ")"));
+        row.appendChild(el("span", r.b.netR >= 0 ? "up" : "down", "R " + (r.b.netR >= 0 ? "+" : "") + r.b.netR.toFixed(2)));
+        row.appendChild(el("span", "", isFinite(r.b.profitFactor) && r.b.profitFactor > 0 ? "PF " + r.b.profitFactor.toFixed(2) : "PF —"));
+        card.appendChild(row);
+      });
+      out.appendChild(card);
+    });
+  }
   function renderBacktestBox() {
     var box = $("backtest-box"); if (!box) return;
+    var ar = st.lang === "ar";
     box.textContent = "";
-    box.appendChild(el("h2", "", st.lang === "ar" ? "الباك تيست" : "Backtest"));
-    box.appendChild(el("p", "muted", st.lang === "ar"
-      ? "يعيد تشغيل نفس نظام الإشارات على البيانات المحمّلة لكل أصل، ويحسب النتيجة بوحدة R (الوحدة = المخاطرة لكل صفقة). النتائج تاريخية وليست ضماناً للمستقبل."
-      : "Replays the same signal logic on the loaded candles of each instrument, in R units (1R = the risk of one trade). Past results do not guarantee future ones."));
-    var btn = el("button", "btn", st.lang === "ar" ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
+    box.appendChild(el("h2", "", ar ? "الباك تيست حسب الأسلوب" : "Backtest by style"));
+    box.appendChild(el("p", "muted", ar
+      ? "يعيد تشغيل الإشارات على بيانات كل أسلوب وإطاره الزمني. R = وحدة المخاطرة لكل صفقة. يستهلك التشغيل نحو 9 طلبات من حصة الذهب والعملات المجانية، فشغّله بقدر الحاجة."
+      : "Replays signals on each style's timeframe. R = risk unit per trade. A run uses about 9 requests of the free gold/FX quota, so run it sparingly."));
+    var btn = el("button", "btn", ar ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
     var out = el("div", "");
     btn.addEventListener("click", function () {
-      out.textContent = "";
-      INST.forEach(function (x) {
-        var c = candlesFor(x.id);
-        var card = el("div", "rep-m");
-        card.appendChild(el("b", "", x.name));
-        if (c.length < 120) { card.appendChild(el("p", "muted", st.lang === "ar" ? "بيانات غير كافية" : "Not enough data")); out.appendChild(card); return; }
-        var b = A.backtest(c, 60, st.profile);
-        var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
-        card.appendChild(el("p", "muted", (st.lang === "ar" ? "الصفقات: " : "Trades: ") + b.count + " · " + (st.lang === "ar" ? "رابحة: " : "Win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + " " + (st.lang === "ar" ? "محسومة" : "decided") + ")"));
-        card.appendChild(el("p", "muted", (st.lang === "ar" ? "صافي R: " : "Net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · " + (st.lang === "ar" ? "معامل الربح: " : "Profit factor: ") + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : (b.profitFactor === Infinity ? "∞" : "—"))));
-        out.appendChild(card);
+      btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
+      var rows = [], jobs = [];
+      STYLES.forEach(function (sty) { INST.forEach(function (x) { jobs.push({ sty: sty, x: x }); }); });
+      jobs.reduce(function (chain, job) {
+        return chain.then(function () {
+          return fetchTf(job.x.id, job.sty.tf).then(function (c) {
+            rows.push({ sty: job.sty, x: job.x, b: c.length >= 120 ? A.backtest(c, 60, job.sty.profile) : null });
+          }).catch(function () { rows.push({ sty: job.sty, x: job.x, b: null, err: true }); });
+        });
+      }, Promise.resolve()).then(function () {
+        renderBtRows(out, rows);
+        btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
       });
     });
     box.appendChild(btn);
