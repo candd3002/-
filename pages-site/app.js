@@ -974,6 +974,25 @@
     renderAccount();
     hideWelcome();
   });
+  // First page headline: English and Arabic take turns every 30 seconds.
+  var WEL_SLIDES = [
+    { hl: "Market<br>is a map.", sub: "Educational analysis of gold, FX and crypto.<br>No guaranteed profit.", rtl: false },
+    { hl: "السوق<br>خريطة.", sub: "تحليل تعليمي للذهب والعملات والكريبتو.<br>بدون ضمان للربح.", rtl: true }
+  ];
+  var welIdx = 0;
+  setInterval(function () {
+    var box = $("welcome"); if (!box || box.hidden) return;
+    welIdx = (welIdx + 1) % WEL_SLIDES.length;
+    var sl = WEL_SLIDES[welIdx];
+    box.classList.add("wel-swap");
+    setTimeout(function () {
+      txt("wel-hl", ""); $("wel-hl").innerHTML = sl.hl;
+      $("wel-sub").innerHTML = sl.sub;
+      $("wel-title").style.direction = sl.rtl ? "rtl" : "ltr";
+      $("wel-title").style.textAlign = sl.rtl ? "right" : "left";
+      box.classList.remove("wel-swap");
+    }, 600);
+  }, 30000);
   // Entry gate: the visitor must open the Instagram follow link first. This is a request, not a check.
   var FOLLOW_KEY = "baqerFollowClicked";
   function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }

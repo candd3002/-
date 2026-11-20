@@ -601,3 +601,18 @@ body{background:#070d17}
 .welcome .wel-follow{display:flex !important; align-items:center; justify-content:center; gap:10px; background:rgba(255,255,255,.04) !important; color:#f6cf6b !important; border:1px solid rgba(232,195,90,.5) !important; box-shadow:none !important; padding:14px !important; font-size:15px !important; font-weight:800 !important; text-decoration:none}
 .welcome .wel-follow::before{content:none !important}
 .welcome .wel-enter:disabled{opacity:1 !important}
+
+/* first page: poster design (approved sample) */
+.welcome::before{filter:grayscale(1) contrast(1.12) brightness(1.04) !important}
+.welcome::after{background:radial-gradient(ellipse 42% 36% at 50% 30%,rgba(0,0,0,0) 0%,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%),linear-gradient(180deg,rgba(10,16,32,0) 45%,rgba(10,16,32,.6) 80%,#0a1020 100%) !important}
+.welcome{background:#0a1020 !important}
+.wel-vert{position:absolute; left:22px; top:300px; transform:rotate(-90deg); transform-origin:left top; font-size:12px; letter-spacing:.5em; color:#f0c35a; z-index:2; pointer-events:none}
+.welcome .wel-title{font-size:60px !important; font-weight:900 !important; line-height:.9 !important; text-transform:uppercase; color:#f0c35a !important; letter-spacing:-.02em !important; transition:opacity .6s ease}
+.welcome .wel-title span{color:#f0c35a !important; background:none !important; -webkit-text-fill-color:#f0c35a}
+.welcome .wel-sub{color:#c9b77e !important; font-size:13px !important; letter-spacing:0 !important; text-transform:none !important; transition:opacity .6s ease}
+.welcome.wel-swap .wel-title,.welcome.wel-swap .wel-sub{opacity:0}
+.welcome .wel-logo{display:none !important}
+.welcome .wel-photo{display:none !important}
+
+.welcome .wel-title,.welcome .wel-sub{direction:ltr; text-align:left}
+.welcome .wel-vert{top:360px !important}
