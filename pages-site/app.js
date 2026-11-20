@@ -830,6 +830,8 @@
     }
     toast(msg);
     if ("Notification" in window && Notification.permission === "granted") { try { new Notification("Baqer Sniper", { body: msg }); } catch (e) {} }
+    // Telegram copy (only when the server has the bot configured; silently skipped otherwise).
+    try { fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Baqer Sniper\n" + msg }) }).catch(function () {}); } catch (e) {}
   }
 
   // ---------- alerts ----------
