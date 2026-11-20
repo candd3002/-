@@ -435,6 +435,12 @@
       var op = all.filter(function (e) { return e.status === "open"; }).pop();
       // Live trades only: closed trades are not shown in the plan.
       var show = op, note = op ? (st.lang === "ar" ? "صفقة مفتوحة" : "Open trade") : "";
+      if (op) {
+        var cs = candlesFor(st.inst), lastP = cs.length ? cs[cs.length - 1].c : null, half = (op.entry + op.tp1) / 2;
+        if (lastP != null && (op.dir === "LONG" ? lastP >= half : lastP <= half)) {
+          note += " · " + (st.lang === "ar" ? "وصلت نصف الهدف الأول" : "reached half of TP1");
+        }
+      }
       txt("plan-note", note);
       if (show) {
         txt("p-sl", fmt(show.sl)); txt("p-en", fmt(show.entry));
@@ -912,7 +918,11 @@
   }
   function announce(ev) {
     var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg;
-    if (ev.type === "open") {
+    if (ev.type === "close" && ev.e.exitReason === "reversal") {
+      var pts2 = Math.abs(ev.e.exit - ev.e.entry).toFixed(d), side = ev.e.dir === "LONG" ? (ar ? "شراء" : "buy") : (ar ? "بيع" : "sell");
+      var res = ev.e.status === "win" ? (ar ? "ربح " : "win ") : (ar ? "خسارة " : "loss ");
+      msg = ar ? "انعكس الاتجاه: أُغلقت صفقة " + side + " بـ " + res + pts2 + " · " + x.name : "Trend reversed: " + side + " closed, " + res + pts2 + " · " + x.name;
+    } else if (ev.type === "open") {
       if (!st.prefs.signal) return;
       msg = (ar ? (ev.e.dir === "LONG" ? "إشارة شراء" : "إشارة بيع") : (ev.e.dir === "LONG" ? "Buy signal" : "Sell signal")) + " · " + x.name + " · " + ev.e.entry.toFixed(d);
     } else {
