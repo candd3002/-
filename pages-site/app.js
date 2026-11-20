@@ -801,23 +801,24 @@
     });
   }
   // Multi-timeframe scalp backtest on BTC: 15m and 1m candles for the last 30 days.
-  function runScalpMTF(btn, out) {
-    var ar = st.lang === "ar";
+  function runScalpMTF(btn, out, days) {
+    var ar = st.lang === "ar", label = btn.textContent;
     btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
-    Promise.all([longBinance("15m", "BTCUSDT", 30), longBinance("1m", "BTCUSDT", 30)]).then(function (cs) {
-      var b = A.backtestMTF(cs[0], cs[1], "scalp", 240);
+    Promise.all([longBinance("15m", "BTCUSDT", days), longBinance("1m", "BTCUSDT", days)]).then(function (cs) {
+      var b = A.backtestMTF(cs[0], cs[1], "scalp", 240, 0.001);
       out.textContent = "";
       var card = el("div", "rep-m");
-      card.appendChild(el("b", "", ar ? "المضاربة السريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)"));
+      card.appendChild(el("b", "", (ar ? "المضاربة السريعة متعددة الأطر (BTC، " : "Scalp multi-timeframe (BTC, ") + days + (ar ? " يوماً)" : " days)")));
+      card.appendChild(el("p", "muted", ar ? "بعد خصم تكلفة 0.1% لكل صفقة" : "After 0.1% cost per trade"));
       var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
       card.appendChild(el("p", "muted", (ar ? "الصفقات: " : "Trades: ") + b.count + " · " + (ar ? "رابحة: " : "win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + ")"));
       card.appendChild(el("p", "muted", (ar ? "صافي R: " : "Net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · PF " + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : "—")));
       card.appendChild(el("p", "muted", ar ? "القاعدة: Order Block على 15 دقيقة، ثم الدقيقة، الدخول من شمعة الـOrder Block على الدقيقة، والوقف فوقها." : "Rule: 15m order block zone, 1m block entry, stop beyond the 1m block."));
       out.appendChild(card);
-      btn.disabled = false; btn.textContent = ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)";
+      btn.disabled = false; btn.textContent = label;
     }).catch(function () {
       out.textContent = ar ? "تعذّر تحميل بيانات الدقيقة من Binance." : "Could not load 1m data from Binance.";
-      btn.disabled = false; btn.textContent = ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)";
+      btn.disabled = false; btn.textContent = label;
     });
   }
   function renderBacktestBox() {
@@ -834,10 +835,13 @@
     btn.addEventListener("click", function () { runBacktest(false, btn, out); });
     btnLong.addEventListener("click", function () { runBacktest(true, btnLong, out); });
     var btnMtf = el("button", "btn", ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)"); btnMtf.type = "button";
-    btnMtf.addEventListener("click", function () { runScalpMTF(btnMtf, out); });
+    btnMtf.addEventListener("click", function () { runScalpMTF(btnMtf, out, 30); });
+    var btnMtf90 = el("button", "btn", ar ? "مضاربة سريعة متعددة الأطر (BTC، 90 يوماً)" : "Scalp multi-timeframe (BTC, 90 days)"); btnMtf90.type = "button";
+    btnMtf90.addEventListener("click", function () { runScalpMTF(btnMtf90, out, 90); });
     box.appendChild(btn);
     box.appendChild(btnLong);
     box.appendChild(btnMtf);
+    box.appendChild(btnMtf90);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------

@@ -183,9 +183,9 @@
   // reaches the 15m zone a 1m order block in the same direction gives the entry and the stop.
   // Entry: open of the 1m order block candle. Stop: beyond its far edge (above its high for shorts,
   // below its low for longs), plus the profile buffer.
-  function scalpSetup(c15, c1, profileName) {
+  function scalpSetup(c15, c1, profileName, r15pre) {
     var P = PROFILES[profileName] || PROFILES.scalp;
-    var r15 = analyze(c15, profileName), r1 = analyze(c1, profileName);
+    var r15 = r15pre || analyze(c15, profileName), r1 = analyze(c1, profileName);
     if (!r15.ready || !r1.ready) return { ready: false, reason: "not enough data" };
     var ob15 = r15.ob;
     if (!ob15) return { ready: false, reason: "no 15m order block" };
@@ -214,15 +214,20 @@
   }
   // Multi-timeframe scalp backtest: for each 1m bar, the 15m order block zone and the 1m rules
   // decide the entry; the trade is then followed on 1m bars (stop first, then TP1, as in backtest).
-  function backtestMTF(c15, c1, profileName, maxBars) {
+  function backtestMTF(c15, c1, profileName, maxBars, costPct) {
     maxBars = maxBars || 240;
-    var trades = [], busy = -1, j = -1;
+    costPct = costPct || 0;
+    var trades = [], busy = -1, j = -1, r15 = null, rj = -1;
     for (var i = 300; i < c1.length - 1; i++) {
       if (i <= busy) continue;
       var t = c1[i].t;
       while (j + 1 < c15.length && c15[j + 1].t <= t) j++;
       if (j < 60) continue;
-      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName);
+      if (j !== rj) { r15 = analyze(c15.slice(0, j + 1), profileName); rj = j; }
+      if (!r15.ob) continue;
+      var zt = 0.3 * r15.atr, pc = c1[i].c;
+      if (pc < r15.ob.lo - zt || pc > r15.ob.hi + zt) continue;
+      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName, r15);
       if (!sc.ready) continue;
       var s = sc.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
       for (var q = i + 1; q < Math.min(c1.length, i + 1 + maxBars); q++) {
@@ -233,6 +238,8 @@
         if (hitTP1) { outcome = "tp1"; R = Math.abs(s.tp1 - s.entry) / s.risk; exit = q; break; }
       }
       if (exit == null) { exit = Math.min(c1.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
+      // trading cost: a fixed share of the entry price, expressed in R
+      if (outcome !== "timeout") R -= costPct * s.entry / s.risk;
       trades.push({ i: i, dir: s.dir, outcome: outcome, R: R });
       busy = exit;
     }
