@@ -424,6 +424,15 @@
     var c = candlesFor(st.inst);
     st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
     st.res.inst = st.inst; // tag: a result belongs to the instrument it was computed for
+    // Per-timeframe snapshot for the agreement block: only from bars we actually have for this instrument.
+    st.tfCache = {};
+    ["15m", "1h", "4h"].forEach(function (tf) {
+      var bars = (typeof LV !== "undefined" && LV[st.inst] && LV[st.inst].tf === tf) ? LV[st.inst].c : null;
+      if (!bars || bars.length < 60) return;
+      var rr = A.analyze(bars, st.profile, null);
+      if (rr && rr.ready) st.tfCache[tf] = { price: rr.price, ema50: rr.ema50, emaRising: rr.emaRising };
+    });
+    if (st.tf && st.res && st.res.ready && !st.tfCache[st.tf]) st.tfCache[st.tf] = { price: st.res.price, ema50: st.res.ema50, emaRising: st.res.emaRising };
     var evs = journalUpdate();
     renderTickers();
     render();
@@ -557,6 +566,30 @@
     box.textContent = "";
     var sty = A.story(r, st.lang);
     if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
+    // Timeframe agreement: for each available timeframe, the trend from our own rules (EMA50 side, last BOS side, RSI zone).
+    // Agreement = share of available timeframes that agree with the side the app is leaning to. Only real bars are used.
+    var tfRows = [];
+    var lean = r.longScore >= r.shortScore ? "bull" : "bear";
+    var tfs = [["1m", "1M"], ["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
+    tfs.forEach(function (p) {
+      var key = p[0], label = p[1];
+      var rr = st.tfCache && st.tfCache[key];
+      if (!rr) { tfRows.push({ label: label, dir: null }); return; }
+      var up = rr.price > rr.ema50 && rr.emaRising;
+      var dn = rr.price < rr.ema50 && !rr.emaRising;
+      var dir = up ? "bull" : dn ? "bear" : null;
+      tfRows.push({ label: label, dir: dir });
+    });
+    var known = tfRows.filter(function (x) { return x.dir; });
+    var agree = known.filter(function (x) { return x.dir === lean; }).length;
+    var tfBox = el("div", "lvl");
+    tfBox.appendChild(el("b", "", (ar(st.lang) ? "توافق الفريمات " : "Timeframe agreement ") + (known.length ? Math.round(100 * agree / known.length) + "%" : "—")));
+    tfRows.forEach(function (x) {
+      var arrow = x.dir === "bull" ? "↑" : x.dir === "bear" ? "↓" : "—";
+      tfBox.appendChild(el("div", x.dir === lean ? "up" : (x.dir ? "down" : "muted"), x.label + " " + arrow));
+    });
+    tfBox.appendChild(el("div", "muted", ar(st.lang) ? "الفريمات 5 و30 دقيقة تحتاج بيانات غير متوفرة حالياً، فلم تُحسب." : "5m and 30m need data that is not available yet, so they are not counted."));
+    box.appendChild(tfBox);
     // Pending orders from the order-block zone of the current timeframe (our rule, not copied from anywhere).
     // Buy Limit below price for longs, Sell Limit above price for shorts; stop beyond the block, targets from the same risk.
     if (r.ob && (r.ob.dir === "bull" || r.ob.dir === "bear")) {
