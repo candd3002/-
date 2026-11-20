@@ -350,23 +350,36 @@
     items.forEach(function (n) { track.appendChild(n.cloneNode(true)); });
     row.appendChild(track);
   }
+  // Builds the strip once. Later updates only change the numbers, so the moving track never restarts.
   function renderTickers() {
     var row = $("tickers"); if (!row) return;
-    row.textContent = "";
+    if (!row.querySelector(".tk-track")) {
+      row.textContent = "";
+      INST.forEach(function (x) {
+        var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
+        b.type = "button"; b.setAttribute("data-id", x.id);
+        var ic = el("span", "tk-ic", COIN_ICON[x.id] || "•");
+        ic.style.background = COIN_COLOR[x.id] || "#2a3850";
+        b.appendChild(ic);
+        b.appendChild(el("span", "sym", x.name));
+        b.appendChild(el("span", "px", ""));
+        b.appendChild(el("span", "pct", ""));
+        b.addEventListener("click", function () { setInst(x.id); });
+        row.appendChild(b);
+      });
+      marqueeTickers(row);
+    }
     INST.forEach(function (x) {
       var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
-      var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
-      b.type = "button"; b.setAttribute("aria-pressed", String(x.id === st.inst));
-      var ic = el("span", "tk-ic", COIN_ICON[x.id] || "•");
-      ic.style.background = COIN_COLOR[x.id] || "#2a3850";
-      b.appendChild(ic);
-      b.appendChild(el("span", "sym", x.name));
-      b.appendChild(el("span", "px", fmtD(last, x.digits)));
-      b.appendChild(el("span", "pct" + (ch != null && ch < 0 ? " neg" : ""), ch == null ? "—" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
-      b.addEventListener("click", function () { setInst(x.id); });
-      row.appendChild(b);
+      var nodes = row.querySelectorAll('[data-id="' + x.id + '"]');
+      Array.prototype.forEach.call(nodes, function (b) {
+        b.setAttribute("aria-pressed", String(x.id === st.inst));
+        b.querySelector(".px").textContent = fmtD(last, x.digits);
+        var p = b.querySelector(".pct");
+        p.textContent = ch == null ? "—" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%";
+        p.className = "pct" + (ch != null && ch < 0 ? " neg" : "");
+      });
     });
-    marqueeTickers(row);
     txt("asset-name", BY[st.inst].name);
     txt("src", sourceFor(st.inst));
   }
