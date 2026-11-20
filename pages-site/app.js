@@ -134,6 +134,7 @@
   };
   Object.keys(NEWS_TXT).forEach(function (l) { Object.keys(NEWS_TXT[l]).forEach(function (k) { I18N[l][k] = NEWS_TXT[l][k]; }); });
   I18N.ar.noSource = "لا يوجد مصدر بيانات";
+  I18N.en.eduTitle = "Key concepts (ICT + SMC)"; I18N.ar.eduTitle = "المفاهيم الأساسية (ICT + SMC)";
   I18N.en.sourcePaxg = "Binance live (PAXG). May differ from XAU/USD on MT5 by a few dollars"; I18N.ar.sourcePaxg = "Binance مباشر (PAXG). قد يختلف عن XAU/USD في MT5 بعدة دولارات";
   I18N.en.sessOpen = "Open now"; I18N.en.sessClosed = "Closed"; I18N.en.sessTz = "Your time zone: ";
   I18N.ar.sessOpen = "مفتوحة الآن"; I18N.ar.sessClosed = "مغلقة"; I18N.ar.sessTz = "توقيتك: ";
@@ -561,6 +562,7 @@
     store("baqerLang", st.lang);
     applyLang();
     renderSessions();
+    renderEdu();
     if (NEWS.ok !== null) renderNews();
   }
 
@@ -916,6 +918,37 @@
     wrap.appendChild(sc);
     box.appendChild(wrap);
   }
+  // ---------- concept guide shown under the analysis ----------
+  var EDU = {
+    en: [
+      ["Market structure (BOS / CHoCH)", "A break of structure (BOS) continues the trend. A change of character (CHoCH) is the first sign the trend may be reversing. Trade only after the break is confirmed."],
+      ["Liquidity and sweeps", "Price often runs above highs (buy-side liquidity, BSL) or below lows (sell-side liquidity, SSL) to trigger stops, then reverses. A sweep that closes back inside the range is a stronger signal."],
+      ["Order block", "The last opposite candle before a strong impulse. Price often returns to it before continuing. The stronger the impulse, the more reliable the zone."],
+      ["Fair value gap (FVG)", "A three-candle imbalance where price moved too fast and left a gap. Price often returns to fill part of it."],
+      ["Premium and discount", "Above the midpoint of the recent range is premium (look for sells). Below it is discount (look for buys). The best entries are in the zone that matches the trend."],
+      ["EMA 50 and trend", "Price above the EMA favours buys, below favours sells. The EMA is a filter, not a trigger."],
+      ["Risk first", "Define the stop before the entry. Risk a fixed small percentage per trade. The analysis is educational and not financial advice."]
+    ],
+    ar: [
+      ["هيكل السوق (BOS / CHoCH)", "كسر الهيكل (BOS) يؤكد استمرار الاتجاه. تغيّر الطابع (CHoCH) هو أول إشارة على احتمال انعكاس الاتجاه. لا تدخل إلا بعد تأكيد الكسر."],
+      ["السيولة والاصطياد (Sweep)", "يتحرك السعر غالباً فوق القمم (سيولة شراء BSL) أو تحت القيعان (سيولة بيع SSL) ليضرب أوامر الإيقاف، ثم ينعكس. الاصطياد الذي يغلق داخل النطاق إشارة أقوى."],
+      ["كتلة الأوامر (Order Block)", "آخر شمعة معاكسة قبل اندفاع قوي. يعود السعر إليها غالباً قبل أن يكمل. كلما كان الاندفاع أقوى كانت المنطقة أكثر موثوقية."],
+      ["فجوة القيمة العادلة (FVG)", "فجوة من ثلاث شموع يتحرك فيها السعر بسرعة فيترك فراغاً. يعود السعر غالباً ليملأ جزءاً منها."],
+      ["Premium و Discount", "فوق منتصف النطاق الأخير هو Premium (ابحث عن البيع). تحته هو Discount (ابحث عن الشراء). أفضل الدخول يكون في المنطقة التي تتوافق مع الاتجاه."],
+      ["المتوسط EMA 50", "السعر فوق المتوسط يفضّل الشراء، وتحته يفضّل البيع. المتوسط فلتر وليس زناد دخول."],
+      ["المخاطرة أولاً", "حدّد وقف الخسارة قبل الدخول، وخاطر بنسبة ثابتة وصغيرة في كل صفقة. التحليل تعليمي وليس نصيحة مالية."]
+    ]
+  };
+  function renderEdu() {
+    var box = $("edu-list"); if (!box) return;
+    box.textContent = "";
+    (EDU[st.lang === "ar" ? "ar" : "en"]).forEach(function (x) {
+      var c = el("div", "edu-item");
+      c.appendChild(el("b", "", x[0]));
+      c.appendChild(el("p", "muted", x[1]));
+      box.appendChild(c);
+    });
+  }
   function impactOf(e) { return e.impact === "high" ? "high" : e.impact === "medium" ? "medium" : "low"; }
   function renderNews() {
     var econ = $("econ"), list = $("newslist");
@@ -1058,6 +1091,7 @@
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   applyLang();
   renderSessions();
+  renderEdu();
   setInterval(renderSessions, 60000);
   loadAllForMarkets();
   setInterval(loadAllForMarkets, 60000);
