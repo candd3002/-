@@ -1724,6 +1724,14 @@
     renderJournal();
   }
   $("tg-practice") && $("tg-practice").addEventListener("click", addPracticeTrade);
+  // Trade log from the monitor, shown inside the app (refreshed every 2 minutes).
+  function refreshTradeLog() {
+    var f = $("trade-log"); if (!f || !window.PUSH_WORKER) return;
+    f.src = PUSH_WORKER + "/history?t=" + Date.now();
+  }
+  refreshTradeLog();
+  setInterval(refreshTradeLog, 120000);
+
   // Test button: asks the server to push a test notification to this device.
   $("tg-test").addEventListener("click", function () {
     var note = $("tg-note"); note.textContent = "...";
