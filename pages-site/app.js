@@ -314,12 +314,18 @@
         analyzeAndRender();
       };
       ws.onerror = function () { if (id === "BTC") live(false); };
-      ws.onclose = function () { if (st.ws === ws && st.inst === id) st.poll = st.poll || setInterval(refresh, 30000); };
+      // When the live connection drops (common on iPhone), reconnect after 3 seconds and keep polling meanwhile.
+      ws.onclose = function () {
+        if (st.ws !== ws || st.inst !== id) return;
+        st.poll = st.poll || setInterval(refresh, 30000);
+        setTimeout(function () { if (st.inst === id) connect(); }, 3000);
+      };
     } catch (e) { st.poll = setInterval(refresh, 30000); }
   }
   function refresh() {
     var id = st.inst, p = Promise.resolve();
-    if (id === "BTC" && st.btcFetchedTf !== st.tf) p = loadBtc();
+    // Bitcoin is always refreshed here, so its price keeps moving even when the live socket is down.
+    if (id === "BTC") p = loadBtc();
     else if (LIVE_SYM[id] && id !== "BTC" && (!LV[id] || LV[id].tf !== st.tf)) p = loadLive(id);
     p.then(analyzeAndRender);
   }
