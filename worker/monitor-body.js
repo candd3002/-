@@ -66,12 +66,45 @@ async function pushAll(env) {
 }
 
 // ---- Monitor ----
-function setupMsg(inst, style, sig) {
-  const d = inst.digits, f = v => (v == null || isNaN(v) ? "—" : v.toFixed(d));
+const PROFILES = ["balanced", "sniper"];
+const TFS = ["15m", "1h", "4h"];
+const PNAME = { balanced: "متوازن / balanced", sniper: "قناص / sniper", scalp: "مضاربة / scalp" };
+function fmt(inst, v) { return v == null || isNaN(v) ? "—" : v.toFixed(inst.digits); }
+function setupMsg(inst, tf, profile, sig) {
   const side = sig.dir === "LONG" ? "شراء / BUY" : "بيع / SELL";
-  return { title: "إشارة جديدة / New setup",
-    body: inst.name + " · " + side + " · " + style.tf.toUpperCase() + " · " + style.ar + "\n" +
-      "دخول " + f(sig.entry) + " · وقف " + f(sig.sl) + "\nTP1 " + f(sig.tp1) + " · TP2 " + f(sig.tp2) + " · TP3 " + f(sig.tp3) };
+  return { title: "دخول / Entry: " + side,
+    body: inst.name + " · " + tf.toUpperCase() + " · " + (PNAME[profile] || profile) + "\n" +
+      "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) };
+}
+// Walks the bars after the entry: reports each target hit once, then the close (stop or TP3).
+function manage(tr, id, bars, inst, now, out, hist, state) {
+  tr.tpHits = tr.tpHits || 0;
+  const long = tr.dir === "LONG", dg = inst.digits;
+  const label = inst.name + " · " + tr.tf.toUpperCase() + " · " + (PNAME[tr.profile] || tr.profile || "");
+  for (const b of bars) {
+    if (b.t <= tr.t) continue;
+    const stopHit = long ? b.l <= tr.sl : b.h >= tr.sl;
+    if (stopHit) {
+      const won = tr.tpHits > 0;
+      const lvl = won ? tr["tp" + tr.tpHits] : tr.sl;
+      const pts = won ? Math.abs(lvl - tr.entry) : -Math.abs(tr.entry - tr.sl);
+      out.push({ id: "exit|" + id + "|" + b.t, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
+        body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "") + pts.toFixed(dg) + " pts" });
+      hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
+      delete state.open[id]; return;
+    }
+    for (let k = tr.tpHits + 1; k <= 3; k++) {
+      const level = tr["tp" + k];
+      const hit = long ? b.h >= level : b.l <= level;
+      if (!hit) break;
+      tr.tpHits = k;
+      const pts = Math.abs(level - tr.entry);
+      out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " / TP" + k + " hit",
+        body: label + "\nالسعر " + fmt(inst, level) + " · +" + pts.toFixed(dg) + " pts" });
+      hist.push({ t: now, kind: "tp" + k, inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
+      if (k === 3) { delete state.open[id]; return; }
+    }
+  }
 }
 async function run(env) {
   const skipped = [];
@@ -81,44 +114,31 @@ async function run(env) {
   const now = Date.now(), firstRun = !state.init, out = [];
 
   for (const inst of INSTR) {
-    for (const style of STYLES) {
+    for (const tf of TFS) {
       let bars;
-      try { bars = await fetchBars(inst.sym, style.tf); } catch (e) { skipped.push(inst.id + " " + style.tf + ": " + e.message); continue; }
+      try { bars = await fetchBars(inst.sym, tf); } catch (e) { skipped.push(inst.id + " " + tf + ": " + e.message); continue; }
       if (bars.length < 60) continue;
       const last = bars[bars.length - 1];
-      const fresh = now - last.t <= 2 * TF_MS[style.tf];
-      const r = A.analyze(bars, style.profile, null);
-      if (r.ready && r.signal) {
-        const id = inst.id + "|" + style.id + "|" + r.signal.key + "|" + r.signal.entry.toFixed(inst.digits);
-        if (!state.seen[id]) {
-          state.seen[id] = now;
-          if (!firstRun && fresh) {
-            const m = setupMsg(inst, style, r.signal);
-            state.open[id] = { inst: inst.id, style: style.id, tf: style.tf, dir: r.signal.dir, entry: r.signal.entry,
-              sl: r.signal.sl, tp1: r.signal.tp1, tp2: r.signal.tp2, tp3: r.signal.tp3, t: last.t };
-            out.push({ id: "new|" + id, title: m.title, body: m.body });
-            hist.push({ t: now, kind: "open", inst: inst.name, tf: style.tf, dir: r.signal.dir, entry: r.signal.entry, sl: r.signal.sl, tp1: r.signal.tp1, digits: inst.digits });
-          }
+      const fresh = now - last.t <= 2 * TF_MS[tf];
+      for (const profile of PROFILES) {
+        const r = A.analyze(bars, profile, null);
+        if (!(r.ready && r.signal)) continue;
+        const sig = r.signal;
+        const id = inst.id + "|" + tf + "|" + profile + "|" + sig.key + "|" + sig.entry.toFixed(inst.digits);
+        if (state.seen[id]) continue;
+        state.seen[id] = now;
+        if (!firstRun && fresh) {
+          const m = setupMsg(inst, tf, profile, sig);
+          state.open[id] = { inst: inst.id, tf: tf, profile: profile, dir: sig.dir, entry: sig.entry, sl: sig.sl,
+            tp1: sig.tp1, tp2: sig.tp2, tp3: sig.tp3, tpHits: 0, t: last.t };
+          out.push({ id: "new|" + id, title: m.title, body: m.body });
+          hist.push({ t: now, kind: "open", inst: inst.name, tf: tf, profile: profile, dir: sig.dir, entry: sig.entry, digits: inst.digits });
         }
       }
       for (const id of Object.keys(state.open)) {
         const tr = state.open[id];
-        if (tr.inst !== inst.id || tr.tf !== style.tf) continue;
-        const long = tr.dir === "LONG";
-        for (const b of bars) {
-          if (b.t <= tr.t) continue;
-          const hitStop = long ? b.l <= tr.sl : b.h >= tr.sl;
-          const hitTp = long ? b.h >= tr.tp1 : b.l <= tr.tp1;
-          if (!hitStop && !hitTp) continue;
-          const won = hitTp && !hitStop;
-          const pts = won ? Math.abs(tr.tp1 - tr.entry) : Math.abs(tr.entry - tr.sl);
-          out.push({ id: "exit|" + id, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
-            body: inst.name + " · " + (won ? "+" : "−") + pts.toFixed(inst.digits) + " نقطة / pts · " + style.tf.toUpperCase() + "\n" +
-              "دخول " + tr.entry.toFixed(inst.digits) + " · وقف " + tr.sl.toFixed(inst.digits) + " · TP1 " + tr.tp1.toFixed(inst.digits) });
-          hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: style.tf, dir: tr.dir, entry: tr.entry, sl: tr.sl, tp1: tr.tp1, pts: won ? Math.abs(tr.tp1 - tr.entry) : -Math.abs(tr.entry - tr.sl), digits: inst.digits });
-          delete state.open[id];
-          break;
-        }
+        if (tr.inst !== inst.id || tr.tf !== tf) continue;
+        manage(tr, id, bars, inst, now, out, hist, state);
       }
     }
   }
@@ -151,13 +171,13 @@ function historyHtml(h) {
   const d = (n, x) => (x == null || isNaN(x) ? "—" : Number(x).toFixed(n));
   const rows = h.slice().reverse().map(e => {
     const dt = new Date(e.t).toISOString().replace("T", " ").slice(0, 16);
-    const res = e.kind === "open" ? "مفتوحة / open" : e.kind === "win" ? "ربح / win" : "خسارة / loss";
+    const res = e.kind === "open" ? "دخول / entry" : e.kind === "win" ? "ربح / win" : e.kind === "loss" ? "خسارة / loss" : "وصل الهدف " + e.kind.slice(2);
     const cls = e.kind === "win" ? "w" : e.kind === "loss" ? "l" : "o";
     const pts = e.kind === "open" ? "" : (e.pts >= 0 ? "+" : "") + d(e.digits, e.pts) + " pts";
     return '<tr class="' + cls + '"><td>' + dt + "</td><td>" + e.inst + " · " + e.tf + "</td><td>" +
       (e.dir === "LONG" ? "شراء" : "بيع") + "</td><td>" + d(e.digits, e.entry) + "</td><td>" + res + "</td><td>" + pts + "</td></tr>";
   }).join("");
-  const closed = h.filter(e => e.kind !== "open");
+  const closed = h.filter(e => e.kind === "win" || e.kind === "loss");
   const wins = closed.filter(e => e.kind === "win").length;
   const net = closed.reduce((s, e) => s + (e.pts || 0), 0);
   const summary = "ربح " + wins + " · خسارة " + (closed.length - wins) + " · صافي " + net.toFixed(2) + " نقطة";

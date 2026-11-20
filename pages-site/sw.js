@@ -15,7 +15,7 @@ self.addEventListener("push", function (e) {
       items = (await r.json()).items || [];
     } catch (err) {}
     if (!items.length) items = [{ id: "generic-" + Date.now(), title: "Baqer Sniper", body: "\u062a\u062d\u062f\u064a\u062b \u062c\u062f\u064a\u062f \u0641\u064a \u0627\u0644\u062a\u0637\u0628\u064a\u0642" }];
-    for (const it of items.slice(-3)) {
+    for (const it of items.slice(-10)) {
       await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: "icon.svg", badge: "icon.svg" });
     }
   })());
