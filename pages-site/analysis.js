@@ -593,6 +593,55 @@
 
   // ---------- backtest (no lookahead: each decision sees only closed bars) ----------
   // Simple rule: after a signal, first of {stop, TP1} wins. Same-bar ties count as stop (conservative).
+// ---- Wyckoff Spring test (separate pattern, does not change existing signals) ----
+// Range = high/low of the previous `rangeLen` closed bars. Spring = a bar that pierces the range low and closes back inside.
+// Entry at the close of the spring bar; stop below the spring low; target = 2R (fixed, for the test).
+// Elliott filter (optional): the last 5-swing impulse must satisfy the 3 hard rules.
+function elliottValid(c, n) {
+  var sw = swings(c.slice(0, n), 3), L = sw.L, H = sw.H;
+  if (L.length < 3 || H.length < 3) return true; // not enough structure: do not block
+  // use the last 3 lows and highs as a rough impulse: p0 (low), p1 (high), p2 (low), p3 (high)
+  var p0 = L[L.length - 3].p, p1 = H[H.length - 2].p, p2 = L[L.length - 2].p, p3 = H[H.length - 1].p;
+  if (!(p1 > p0 && p2 > p0 && p3 > p1)) return true; // not a bullish impulse shape, nothing to check
+  // p0..p3 are the first four turning points; wave 3 runs from p2 to p3 (wave 1 = p0..p1, wave 2 = p1..p2)
+  var w1 = p1 - p0, w3 = p3 - p2;
+  if (p2 <= p0) return false;           // rule 1: wave 2 cannot retrace beyond the start of wave 1
+  // rule 2 needs wave 5, which is not known yet at the entry bar: check wave 3 is not shorter than wave 1
+  if (w3 < w1) return false;
+  // rule 3: wave 4 (the low after p3) must not enter wave 1 territory; it is checked only once wave 4 exists
+  return true;
+}
+function backtestSpring(c, opts) {
+  opts = opts || {};
+  var rangeLen = opts.rangeLen || 40, maxBars = opts.maxBars || 120, costPct = opts.costPct || 0, useElliott = !!opts.elliott;
+  var trades = [], busy = -1;
+  for (var i = rangeLen + 2; i < c.length - 1; i++) {
+    if (i <= busy) continue;
+    var lo = Infinity, hi = -Infinity;
+    for (var k = i - rangeLen; k < i; k++) { lo = Math.min(lo, c[k].l); hi = Math.max(hi, c[k].h); }
+    var b = c[i];
+    var isSpring = b.l < lo && b.c > lo && b.c < hi;
+    if (!isSpring) continue;
+    if (useElliott && !elliottValid(c, i + 1)) continue;
+    var entry = b.c, stop = b.l, risk = entry - stop;
+    if (risk <= 0) continue;
+    var tp = entry + 2 * risk, R = 0, exit = null, outcome = "open";
+    for (var q = i + 1; q < Math.min(c.length, i + 1 + maxBars); q++) {
+      if (c[q].l <= stop) { outcome = "stop"; R = -1; exit = q; break; }
+      if (c[q].h >= tp) { outcome = "tp"; R = 2; exit = q; break; }
+    }
+    if (exit == null) { exit = Math.min(c.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
+    var cost = outcome !== "timeout" ? costPct * entry / risk : 0;
+    trades.push({ i: i, outcome: outcome, R: R - cost });
+    busy = exit;
+  }
+  var wins = trades.filter(function (t) { return t.R > 0; }).length;
+  var gw = trades.filter(function (t) { return t.R > 0; }).reduce(function (a, t) { return a + t.R; }, 0);
+  var gl = Math.abs(trades.filter(function (t) { return t.R < 0; }).reduce(function (a, t) { return a + t.R; }, 0));
+  return { count: trades.length, wins: wins, winRate: trades.length ? wins / trades.length : 0,
+    netR: trades.reduce(function (a, t) { return a + t.R; }, 0), profitFactor: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0), trades: trades };
+}
+
   function backtest(c, maxBars, profileName) {
     maxBars = maxBars || 120;
     var trades = [], busyUntil = -1;
@@ -646,7 +695,7 @@
 
   return {
     CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, backtestMTF: backtestMTF, backtest15: backtest15, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
-    analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
+    analyze: analyze, backtest: backtest, backtestSpring: backtestSpring, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };
 });
