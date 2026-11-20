@@ -506,3 +506,7 @@ body{background:#070d17}
 .style-hint{font-size:12.5px; margin:6px 0 0}
 
 .style-learn{font-size:11px; margin:4px 0 0; opacity:.85}
+
+/* follow banner at the top */
+.follow{display:grid; gap:2px; text-align:center; text-decoration:none; color:#e8c35a; background:linear-gradient(180deg,#0f1d38,#0b1424); border:1px solid rgba(232,195,90,.35); border-radius:14px; padding:10px 12px; margin:8px 0 6px; font-weight:800; font-size:14px}
+.follow small{color:#8c99ad; font-weight:500; font-size:11px}
