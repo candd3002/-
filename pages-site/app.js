@@ -1732,6 +1732,14 @@
   refreshTradeLog();
   setInterval(refreshTradeLog, 120000);
 
+  // Backtest from the monitor, inside the app (runs when the selection changes).
+  function refreshBacktest() {
+    var f = $("backtest-live"); if (!f || !window.PUSH_WORKER) return;
+    f.src = PUSH_WORKER + "/backtest?symbol=" + $("bt-sym").value + "&tf=" + $("bt-tf").value + "&profile=" + $("bt-prof").value + "&t=" + Date.now();
+  }
+  ["bt-sym", "bt-tf", "bt-prof"].forEach(function (id) { var e = $(id); if (e) e.addEventListener("change", refreshBacktest); });
+  refreshBacktest();
+
   // Test button: asks the server to push a test notification to this device.
   $("tg-test").addEventListener("click", function () {
     var note = $("tg-note"); note.textContent = "...";
