@@ -257,7 +257,7 @@
   }
   function change24h() {
     return fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
-      .then(function (r) { return r.json(); }).then(function (j) { return +j.priceChangePercent; });
+      .then(function (r) { return r.json(); }).then(function (j) { var v = +j.priceChangePercent; return isFinite(v) ? v : null; });
   }
   function loadLive(id) {
     var tf = st.tf;

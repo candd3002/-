@@ -641,3 +641,18 @@ body{background:#070d17}
 .tk .sym{font-size:11px; color:#8c99ad; font-weight:700}
 .tk .px{font-size:15px; font-weight:800; font-variant-numeric:tabular-nums}
 .tk .pct{font-size:11px; font-weight:800}
+
+/* top area, approved layout: centred title, row of pills, round price chips */
+header.top{display:flex !important; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px; text-align:center}
+header.top .title{flex:0 0 100%; order:0}
+header.top .title h1{letter-spacing:.18em; font-size:24px !important; text-transform:uppercase}
+header.top .title p{margin-top:2px}
+header.top .live{order:1; height:36px; border-radius:999px; padding:0 12px}
+#reload-btn{order:2; width:auto !important; height:36px; border-radius:999px !important; padding:0 12px !important; font-size:13px; font-weight:700}
+#menu-btn{order:3; width:auto !important; height:36px; border-radius:999px !important; padding:0 12px !important}
+.tickers{justify-content:flex-start}
+.tk{border-radius:999px !important; padding:6px 14px 6px 6px !important; min-height:48px; gap:10px}
+.tk .tk-ic{width:30px !important; height:30px !important; flex-basis:30px !important; font-size:12px !important}
+
+.tk{direction:ltr}
+.tk .sym,.tk .px,.tk .pct{text-align:left}
