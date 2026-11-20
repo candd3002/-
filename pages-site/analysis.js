@@ -324,10 +324,14 @@
       }
       var stop;
       var anchor = up ? (sl ? sl.p : null) : (sh ? sh.p : null);
+      // Stop rule: the far edge of the order block candle (its low for longs, its high for shorts).
+      // Only when no order block is in the trade direction does the older anchor logic apply.
       var cands = [];
-      if (anchor != null) cands.push(anchor);
-      if (sweep && sweep.dir === (up ? "bull" : "bear")) cands.push(sweep.wick);
       if (ob && ob.dir === (up ? "bull" : "bear")) cands.push(up ? ob.lo : ob.hi);
+      else {
+        if (anchor != null) cands.push(anchor);
+        if (sweep && sweep.dir === (up ? "bull" : "bear")) cands.push(sweep.wick);
+      }
       if (!cands.length) return null;
       stop = up ? Math.min.apply(null, cands) - (P.slBufferATR + ((learn && learn.widen) || 0)) * atrV : Math.max.apply(null, cands) + (P.slBufferATR + ((learn && learn.widen) || 0)) * atrV;
       var risk = Math.abs(entry - stop);
