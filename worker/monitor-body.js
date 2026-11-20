@@ -208,6 +208,32 @@ async function exportCsv(url) {
   return new Response(lines.join("\n") + "\n", { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "inline; filename=" + inst.sym + "_" + tf + ".csv" } });
 }
 
+// Backtest with the same engine as the app: /backtest?symbol=XAU&tf=15m&profile=balanced
+async function backtestRoute(url) {
+  const id = url.searchParams.get("symbol") || "XAU";
+  const tf = url.searchParams.get("tf") || "15m";
+  const profile = url.searchParams.get("profile") || "balanced";
+  const inst = INSTR.find(x => x.id === id);
+  if (!inst || !TF_MS[tf]) return new Response("usage: /backtest?symbol=XAU|EURUSD|GBPUSD|BTC&tf=15m|1h|4h&profile=balanced|sniper", { status: 400 });
+  const bars = await fetchBars(inst.sym, tf);
+  if (bars.length < 80) return new Response("not enough bars: " + bars.length, { status: 500 });
+  const r = A.backtest(bars, 120, profile);
+  const f = (v, d) => (v == null || isNaN(v) ? "—" : Number(v).toFixed(d));
+  const rows = r.trades.slice().reverse().map(t => {
+    const dt = new Date(bars[t.i].t).toISOString().replace("T", " ").slice(0, 16);
+    const res = t.outcome === "tp1" ? "ربح / win" : t.outcome === "stop" ? "خسارة / loss" : "انتهى الوقت";
+    return "<tr class=\"" + (t.R > 0 ? "w" : t.R < 0 ? "l" : "o") + "\"><td>" + dt + "</td><td>" + (t.dir === "LONG" ? "شراء" : "بيع") +
+      "</td><td>" + t.grade + "</td><td>" + res + "</td><td>" + (t.R >= 0 ? "+" : "") + f(t.R, 2) + "R</td></tr>";
+  }).join("");
+  const html = '<!doctype html><html dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>باك تيست</title>' +
+    '<style>body{font-family:system-ui,sans-serif;background:#0b1424;color:#eee;margin:16px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #1e2c44;padding:6px;text-align:start}.w td:nth-child(5){color:#6fd08c}.l td:nth-child(5){color:#ff6b6b}h2{color:#e8c35a}</style></head>' +
+    "<body><h2>باك تيست: " + inst.name + " · " + tf + " · " + profile + "</h2>" +
+    "<p>الشموع: " + bars.length + " · الصفقات: " + r.count + " · الرابحة: " + r.wins + " · نسبة الربح: " + f(r.winRate * 100, 1) + "% · الصافي: " + f(r.netR, 2) + "R · عامل الربح: " + f(r.profitFactor, 2) + "</p>" +
+    '<table><tr><th>الوقت UTC</th><th>الاتجاه</th><th>الدرجة</th><th>النتيجة</th><th>R</th></tr>' +
+    (rows || '<tr><td colspan="5">لا توجد صفقات في هذه البيانات</td></tr>') + "</table></body></html>";
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runSafe(env)); },
   async fetch(req, env) {
@@ -215,6 +241,7 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
     if (url.pathname === "/history") { const h = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
+    if (url.pathname === "/backtest") return backtestRoute(url);
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
