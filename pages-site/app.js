@@ -566,6 +566,34 @@
     box.textContent = "";
     var sty = A.story(r, st.lang);
     if (!sty) { box.textContent = r && r.reason ? r.reason : T("loading"); return; }
+    // Sessions (UTC hours) and previous-day high/low, from the real bars for this instrument only.
+    var SESS = [["Sydney", "سيدني", 21, 6], ["Tokyo", "طوكيو", 0, 9], ["London", "لندن", 7, 16], ["New York", "نيويورك", 12, 21]];
+    var cs = candlesFor(st.inst);
+    if (cs && cs.length > 60) {
+      var nowMs = cs[cs.length - 1].t, nowH = new Date(nowMs).getUTCHours();
+      var dayStart = Date.UTC(new Date(nowMs).getUTCFullYear(), new Date(nowMs).getUTCMonth(), new Date(nowMs).getUTCDate());
+      var prevStart = dayStart - 864e5;
+      var sBox = el("div", "lvl");
+      sBox.appendChild(el("b", "", ar(st.lang) ? "الجلسات وPDH / PDL" : "Sessions and PDH / PDL"));
+      SESS.forEach(function (s) {
+        var inside = s[2] < s[3] ? (nowH >= s[2] && nowH < s[3]) : (nowH >= s[2] || nowH < s[3]);
+        var hi = -Infinity, lo = Infinity;
+        cs.forEach(function (b) {
+          var h = new Date(b.t).getUTCHours();
+          var inS = s[2] < s[3] ? (h >= s[2] && h < s[3]) : (h >= s[2] || h < s[3]);
+          if (inS && b.t >= dayStart - 864e5 && b.t < dayStart + 864e5) { hi = Math.max(hi, b.h); lo = Math.min(lo, b.l); }
+        });
+        var label = ar(st.lang) ? s[1] : s[0];
+        var state = inside ? (ar(st.lang) ? "مفتوحة" : "open") : (ar(st.lang) ? "مغلقة" : "closed");
+        var txtS = isFinite(hi) ? label + " · " + state + " · " + hi.toFixed(5) + " / " + lo.toFixed(5) : label + " · " + state + " · —";
+        sBox.appendChild(el("div", inside ? "up" : "muted", txtS));
+      });
+      var pdh = -Infinity, pdl = Infinity;
+      cs.forEach(function (b) { if (b.t >= prevStart && b.t < dayStart) { pdh = Math.max(pdh, b.h); pdl = Math.min(pdl, b.l); } });
+      sBox.appendChild(el("div", "", "PDH " + (isFinite(pdh) ? pdh.toFixed(5) : "—") + " · PDL " + (isFinite(pdl) ? pdl.toFixed(5) : "—")));
+      sBox.appendChild(el("div", "muted", ar(st.lang) ? "الأوقات بتوقيت UTC. الجلسات تقريبية حسب الساعة، وليست لحظة إغلاق البورصة." : "Times in UTC. Sessions are approximate by hour, not exchange closing times."));
+      box.appendChild(sBox);
+    }
     // Timeframe agreement: for each available timeframe, the trend from our own rules (EMA50 side, last BOS side, RSI zone).
     // Agreement = share of available timeframes that agree with the side the app is leaning to. Only real bars are used.
     var tfRows = [];
