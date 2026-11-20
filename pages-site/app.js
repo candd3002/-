@@ -1541,6 +1541,18 @@
   });
   $("signout").addEventListener("click", function () { store("baqerUser", null); renderAccount(); });
   // Connection test only: sends a fixed text with no prices and no trade data.
+  // Local practice trade: stored only on this device, marked as a test, never sent to Telegram or the report.
+  function addPracticeTrade() {
+    var j = loadJournal(), x = BY[st.inst] || BY.BTC;
+    var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null;
+    if (last == null) { txt("tg-note", "لا توجد أسعار لهذا الأصل الآن."); return; }
+    var d = 0.002 * last, e = { id: "practice|" + Date.now(), inst: x.id, key: "practice", dir: "LONG",
+      entry: last, sl: last - d, tp1: last + 1.5 * d, t: Date.now(), status: "open", practice: true, tf: st.tf };
+    j.push(e); saveJournal(j);
+    txt("tg-note", "صفقة تجريبية محلية (لا تُرسل إلى Telegram ولا تدخل التقرير).");
+    renderJournal();
+  }
+  $("tg-practice") && $("tg-practice").addEventListener("click", addPracticeTrade);
   $("tg-test").addEventListener("click", function () {
     var note = $("tg-note"); note.textContent = "...";
     fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" },
