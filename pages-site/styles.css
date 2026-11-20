@@ -577,3 +577,16 @@ body{background:#070d17}
 .welcome .wel-enter{padding:16px}
 
 .welcome .wel-logo{position:fixed !important; top:58px; left:24px; z-index:3}
+
+/* first page, bolder version */
+.welcome::after{background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 24%,rgba(0,0,0,.55) 55%,rgba(0,0,0,.92) 80%,#000 100%) !important}
+.welcome::before{filter:grayscale(1) contrast(1.22) brightness(1.04) !important}
+.wel-bg i{background:linear-gradient(180deg,transparent,#f6cf6b,transparent) !important; opacity:.35 !important; width:3px !important}
+.wel-title{font-size:58px !important; font-weight:900 !important; line-height:.9 !important; letter-spacing:-.01em !important; text-transform:uppercase; margin-top:6px !important}
+.wel-title .wordmark{color:#fff}
+.wel-title .grad{background:linear-gradient(90deg,#fff3c4,#f6cf6b 40%,#c99a33 70%,#fff3c4); background-size:200% auto; -webkit-background-clip:text; background-clip:text; color:transparent !important; animation:shine 3.5s linear infinite}
+.wel-sub{font-size:13px !important; letter-spacing:.22em; text-transform:uppercase; color:#e8c35a !important}
+.welcome .wel-follow{font-size:16px !important; letter-spacing:.02em}
+.welcome .wel-enter{font-size:15px !important; border-color:#f6cf6b !important; color:#f6cf6b !important}
+.welcome .wel-card::before{content:""; position:absolute; left:0; right:0; top:-280px; height:2px; background:linear-gradient(90deg,transparent,#f6cf6b,transparent); box-shadow:0 0 18px #f6cf6b; animation:scan 5s ease-in-out infinite; pointer-events:none}
+@keyframes scan{0%{transform:translateY(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(560px);opacity:0}}
