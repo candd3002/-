@@ -596,3 +596,8 @@ body{background:#070d17}
 .welcome .wel-follow::before{content:"\2022  "; color:#e8c35a}
 .welcome .wel-enter{background:linear-gradient(180deg,#f3d27a,#c99a33) !important; color:#15110a !important; border:0 !important; font-weight:900 !important; box-shadow:0 14px 34px -14px rgba(232,195,90,.7) !important}
 .welcome .wel-enter:disabled{background:linear-gradient(180deg,#f3d27a,#c99a33) !important; opacity:.35 !important; color:#15110a !important}
+
+/* Instagram button opens your profile; Enter below is always available */
+.welcome .wel-follow{display:flex !important; align-items:center; justify-content:center; gap:10px; background:rgba(255,255,255,.04) !important; color:#f6cf6b !important; border:1px solid rgba(232,195,90,.5) !important; box-shadow:none !important; padding:14px !important; font-size:15px !important; font-weight:800 !important; text-decoration:none}
+.welcome .wel-follow::before{content:none !important}
+.welcome .wel-enter:disabled{opacity:1 !important}
