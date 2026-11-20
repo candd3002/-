@@ -35,6 +35,7 @@ VT  vt[MAXT]; int nvt = 0;
 int statWins = 0, statLoss = 0; double statPts = 0;
 int fh = INVALID_HANDLE;
 datetime lastBar = 0;
+datetime lastSigBar = 0;
 long gTicks = 0;
 string gWhy = "init";
 int gSignals = 0;
@@ -203,6 +204,10 @@ bool ScalpCheck(bool &isLong, double &entry, double &sl)
    bool valid = up ? (sl < entry) : (sl > entry);
    double risk = MathAbs(entry - sl);
    if(!valid || risk <= 0 || risk > P_slMaxATR * m.atr) { gWhy = "stop outside allowed range"; return false; }
+   if(risk < 0.5 * m.atr) { gWhy = "stop too tight (below minimum ATR)"; return false; }
+   // one trade per 1m order block candle: the same block stays a candidate on every new bar
+   if(g1t[k] == lastSigBar) { gWhy = "same order block already traded"; return false; }
+   lastSigBar = g1t[k];
    isLong = up;
    gWhy = up ? "LONG setup" : "SHORT setup";
    return true;
