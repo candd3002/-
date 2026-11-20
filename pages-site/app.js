@@ -149,7 +149,7 @@
   // Only BTC streams live from Binance. Gold comes from Twelve Data (updates every minute).
   var LIVE_SYM = { BTC: "BTCUSDT" };
   // biquote live stream (SignalR hub, no key): tick "mid" is the price. Gold and FX come from here.
-  var BQ_SYM = { XAU: "XAUUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD" };
+  var BQ_SYM = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD" };
   var LV = {};
   var autoOk = {}; // id -> true when the built-in data function returned candles
   var MAS = [
@@ -277,8 +277,8 @@
     var key = x.id + "|" + st.tf;
     // Free data plan allows ~800 requests a day: refresh each instrument at most every 15 minutes.
     if (autoKey[key] && Date.now() - (autoAt[key] || 0) < 900000) return Promise.resolve();
-    if (x.id === "XAU") {
-      return bqHistory("XAU", st.tf).then(function (hist) {
+    if (BQ_SYM[x.id]) {
+      return bqHistory(x.id, st.tf).then(function (hist) {
         var prev = LV[x.id], keepLive = prev && prev.tf === st.tf && prev.live && prev.c && prev.c.length;
         LV[x.id] = { c: hist, tf: st.tf, live: keepLive ? prev.live : null };
         st.csv[x.id] = hist;
