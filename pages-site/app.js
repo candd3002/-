@@ -795,7 +795,7 @@
       if (label) b.appendChild(el("span", "own-zl", label));
       ov.appendChild(b);
     }
-    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.16)" : "rgba(255,100,100,.16)", "OB");
+    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.20)" : "rgba(139,92,246,.30)", r.ob.dir === "bull" ? "DEMAND" : "SUPPLY");
     if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(232,195,90,.14)", "FVG");
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
