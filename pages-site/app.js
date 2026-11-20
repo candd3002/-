@@ -1378,7 +1378,15 @@
   document.querySelectorAll("[data-lang]").forEach(function (b) { b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); }); });
   document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { openMenu(false); setView(b.getAttribute("data-go")); }); });
   $("menu-btn").addEventListener("click", function () { openMenu(true); });
-  $("reload-btn").addEventListener("click", function () { location.reload(); });
+  // Refresh in place: reload the data without leaving the app or showing the first page again.
+  $("reload-btn").addEventListener("click", function () {
+    var b = this; b.disabled = true;
+    Promise.all([
+      loadBtc(), loadAllForMarkets(), refreshStyles(), loadNews(true), autoLoad()
+    ]).then(function () { connect(); analyzeAndRender(); })
+      .catch(function () {})
+      .then(function () { b.disabled = false; });
+  });
   $("drawer-close").addEventListener("click", function () { openMenu(false); });
   $("scrim").addEventListener("click", function () { openMenu(false); });
   $("signin-form").addEventListener("submit", function (ev) {
