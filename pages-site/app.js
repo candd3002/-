@@ -143,9 +143,9 @@
   I18N.ar.signedInAs = "مسجّل الدخول باسم ";
 
   var feeds = {}; // id -> { url, updated, ok } (user-provided links)
-  var AUTO = { XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
-  // Gold is live from Binance via PAXG (gold-backed token, free public stream).
-  var LIVE_SYM = { BTC: "BTCUSDT", XAU: "PAXGUSDT" };
+  var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
+  // Only BTC streams live from Binance. Gold comes from Twelve Data (updates every minute).
+  var LIVE_SYM = { BTC: "BTCUSDT" };
   var LV = {};
   var autoOk = {}; // id -> true when the built-in data function returned candles
   var MAS = [
@@ -634,7 +634,7 @@
   $("wel-continue").addEventListener("click", hideWelcome);
 
   // ---------- TradingView: the only chart ----------
-  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "BINANCE:PAXGUSDT", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
+  var TV_SYM = { BTC: "BINANCE:BTCUSDT", XAU: "OANDA:XAUUSD", XAG: "OANDA:XAGUSD", EURUSD: "FX:EURUSD", GBPUSD: "FX:GBPUSD", NAS100: "NASDAQ:NDX" };
   var TV_INT = { "15m": "15", "1h": "60", "4h": "240" };
   var MA_STUDY = {
     ema9: { id: "MAExp@tv-basicstudies", length: 9 },
