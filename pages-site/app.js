@@ -24,7 +24,7 @@
       sniperEntry: "SNIPER ENTRY", stop: "Stop", entry: "Entry", finalTarget: "Final target", targets: "Targets", sweep: "Sweep",
       noSetup: "No active setup", marketsTitle: "Markets", alertsTitle: "Alerts", settingsTitle: "Settings", calendarTitle: "Calendar",
       alertSignal: "Notify me when a new signal appears", alertTp: "Notify me when a trade closes (win or loss)",
-      enableNotif: "Enable notifications", alertsNote: "Notifications appear only while the page is open in your browser.",
+      enableNotif: "Enable notifications", alertsNote: "Messages appear on screen while the site is open. On iPhone, system notifications need the site added to the Home Screen.",
       risk: "Risk profile", riskBalanced: "Balanced (targets 1.5R, 2.5R, 4R)", riskSniper: "Sniper (tight stop, far targets)",
       riskNote: "Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.",
       instrument: "Instrument", importCsv: "Import candles (CSV from MT5)",
@@ -326,13 +326,13 @@
   function analyzeAndRender() {
     var c = candlesFor(st.inst);
     st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
-    journalUpdate();
+    var evs = journalUpdate();
     renderTickers();
     render();
     renderJournal();
     renderMarkets();
     if (OWN) paintOwn();
-    notifyIfNew(st.res);
+    evs.forEach(announce);
   }
 
   function renderTickers() {
@@ -422,7 +422,7 @@
 
   // Loads every automatic instrument so the markets table shows live prices for all of them.
   function loadAllForMarkets() {
-    return Promise.all(INST.map(function (x) { return LIVE_SYM[x.id] && x.id !== "BTC" ? loadLive(x.id) : autoLoad(x.id); })).then(function () { renderMarkets(); });
+    return Promise.all(INST.map(function (x) { return LIVE_SYM[x.id] && x.id !== "BTC" ? loadLive(x.id) : autoLoad(x.id); })).then(function () { renderMarkets(); analyzeAndRender(); });
   }
   function renderMarkets() {
     var box = $("markets"); if (!box) return;
@@ -440,7 +440,7 @@
   // ---------- trade journal ----------
   var JKEY = "baqerJournal";
   function loadJournal() { return store(JKEY) || []; }
-  function saveJournal(j) { store(JKEY, j.slice(-300)); }
+  function saveJournal(j) { store(JKEY, j.slice(-1500)); }
   function journalStats(j) {
     var closed = j.filter(function (e) { return e.status !== "open"; });
     var wins = closed.filter(function (e) { return e.status === "win"; }).length;
@@ -489,17 +489,39 @@
       ].filter(Boolean)
     };
   }
-  function journalUpdate() {
-    var j = loadJournal(), changed = false, r = st.res;
-    if (r && r.ready && r.signal) {
-      var sg = r.signal, d = BY[st.inst].digits, c = candlesFor(st.inst), t = c[c.length - 1].t;
-      var id = st.inst + "|" + sg.key + "|" + sg.entry.toFixed(d);
-      if (!j.some(function (e) { return e.id === id; })) {
-        var against = (sg.dir === "LONG" && !(r.price > r.ema50)) || (sg.dir === "SHORT" && !(r.price < r.ema50));
-        j.push({ id: id, inst: st.inst, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open", against: against });
-        changed = true;
-      }
+  // Records a signal once per instrument, direction and entry price.
+  function addSignal(j, x, sg, t, price, ema50, events, emit) {
+    var d = x.digits;
+    var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d);
+    if (j.some(function (e) { return e.id === id; })) return false;
+    var against = (sg.dir === "LONG" && !(price > ema50)) || (sg.dir === "SHORT" && !(price < ema50));
+    var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, t: t, status: "open", against: against };
+    j.push(e);
+    if (emit) events.push({ type: "open", e: e });
+    return true;
+  }
+  // Replays the analysis over past candles once per instrument and timeframe, so the journal and
+  // the monthly report already contain the signals the app would have given before this visit.
+  function backfill(x, c, profile, j, events) {
+    var flag = "baqerBf|" + x.id + "|" + st.tf + "|" + profile;
+    if (store(flag)) return false;
+    for (var i = 60; i < c.length; i++) {
+      var r = A.analyze(c.slice(0, i + 1), profile, null);
+      if (r.ready && r.signal) addSignal(j, x, r.signal, c[i].t, r.price, r.ema50, events, false);
     }
+    store(flag, true);
+    return true;
+  }
+  // Called on every refresh. Returns events (new signal / closed trade) for the notifier.
+  function journalUpdate() {
+    var j = loadJournal(), changed = false, events = [], learn = learnFromJournal();
+    INST.forEach(function (x) {
+      var c = candlesFor(x.id);
+      if (c.length < 60) return;
+      if (backfill(x, c, st.profile, j, events)) changed = true;
+      var r = A.analyze(c, st.profile, learn);
+      if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true)) changed = true;
+    });
     j.forEach(function (e) {
       if (e.status !== "open") return;
       var c = candlesFor(e.inst), long = e.dir === "LONG";
@@ -507,12 +529,58 @@
         if (!(c[i].t > e.t)) continue;
         var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
         var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
-        if (hitStop) { e.status = "loss"; e.closed = true; e.closeT = c[i].t; e.closeIdx = i; e.entryIdx = null; changed = true; break; }
-        if (hitTP) { e.status = "win"; e.closed = true; e.closeT = c[i].t; changed = true; break; }
+        if (hitStop) { e.status = "loss"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
+        if (hitTP) { e.status = "win"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
       }
     });
     j.forEach(function (e) { if (e.status === "loss" && !e.tags) { e.tags = tagLoss(e); changed = true; } });
     if (changed) saveJournal(j);
+    return events;
+  }
+
+  // ---------- monthly report: points won and lost per instrument ----------
+  var REP = {
+    en: { title: "Monthly report", none: "No closed trades yet.", trades: "Trades", wins: "Wins", losses: "Losses", won: "Points won", lost: "Points lost", net: "Net", note: "Points are price units (dollars for gold and BTC). Each instrument is shown separately." },
+    ar: { title: "التقرير الشهري", none: "لا توجد صفقات مغلقة بعد.", trades: "الصفقات", wins: "رابحة", losses: "خاسرة", won: "نقاط ربح", lost: "نقاط خسارة", net: "الصافي", note: "النقاط وحدات السعر (دولار للذهب والبيتكوين). كل أصل يظهر منفصلاً." }
+  };
+  function monthKey(t) { var d = new Date(t); return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0"); }
+  function monthlyReport(j) {
+    var m = {};
+    j.forEach(function (e) {
+      if (e.status !== "win" && e.status !== "loss") return;
+      var k = monthKey(e.closeT || e.t);
+      var g = m[k] || (m[k] = { trades: 0, wins: 0, losses: 0, inst: {} });
+      var gi = g.inst[e.inst] || (g.inst[e.inst] = { wins: 0, losses: 0, won: 0, lost: 0 });
+      var win = Math.abs(e.tp1 - e.entry), loss = Math.abs(e.entry - e.sl);
+      g.trades++; gi.wins += e.status === "win" ? 1 : 0; gi.losses += e.status === "loss" ? 1 : 0;
+      if (e.status === "win") { g.wins++; gi.won += win; } else { g.losses++; gi.lost += loss; }
+    });
+    return m;
+  }
+  function renderReport() {
+    var box = $("report-box"); if (!box) return;
+    var L = st.lang === "ar" ? REP.ar : REP.en;
+    var m = monthlyReport(loadJournal()), keys = Object.keys(m).sort().reverse();
+    box.textContent = "";
+    box.appendChild(el("h2", "", L.title));
+    if (!keys.length) { box.appendChild(el("p", "muted", L.none)); return; }
+    keys.slice(0, 12).forEach(function (k) {
+      var g = m[k];
+      var card = el("div", "rep-m");
+      card.appendChild(el("b", "", k));
+      card.appendChild(el("p", "muted", L.trades + ": " + g.trades + " · " + L.wins + ": " + g.wins + " · " + L.losses + ": " + g.losses));
+      Object.keys(g.inst).forEach(function (id) {
+        var gi = g.inst[id], d = BY[id].digits;
+        var row = el("div", "rep-i");
+        row.appendChild(el("span", "", BY[id].name));
+        row.appendChild(el("span", "up", "+" + gi.won.toFixed(d)));
+        row.appendChild(el("span", "down", "−" + gi.lost.toFixed(d)));
+        row.appendChild(el("b", gi.won - gi.lost >= 0 ? "up" : "down", (gi.won - gi.lost >= 0 ? "+" : "−") + Math.abs(gi.won - gi.lost).toFixed(d)));
+        card.appendChild(row);
+      });
+      box.appendChild(card);
+    });
+    box.appendChild(el("p", "muted rep-note", L.note));
   }
   function renderJournal() {
     var box = $("journal-box"); if (!box) return;
@@ -528,20 +596,31 @@
     var btn = el("button", "btn", T("clearJournal")); btn.type = "button";
     btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
     box.appendChild(btn);
+    renderReport();
+  }
+
+  // ---------- alerts: in-page message always, system notification when allowed ----------
+  function toast(msg) {
+    var t = el("div", "toast", msg);
+    document.body.appendChild(t);
+    setTimeout(function () { t.classList.add("out"); }, 4800);
+    setTimeout(function () { t.remove(); }, 5400);
+  }
+  function announce(ev) {
+    var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg;
+    if (ev.type === "open") {
+      if (!st.prefs.signal) return;
+      msg = (ar ? (ev.e.dir === "LONG" ? "إشارة شراء" : "إشارة بيع") : (ev.e.dir === "LONG" ? "Buy signal" : "Sell signal")) + " · " + x.name + " · " + ev.e.entry.toFixed(d);
+    } else {
+      if (!st.prefs.tp) return;
+      var won = ev.e.status === "win", pts = won ? Math.abs(ev.e.tp1 - ev.e.entry) : Math.abs(ev.e.entry - ev.e.sl);
+      msg = (ar ? (won ? "ربح" : "خسارة") : (won ? "Win" : "Loss")) + " · " + x.name + " · " + (won ? "+" : "−") + pts.toFixed(d) + (ar ? " نقطة" : " pts");
+    }
+    toast(msg);
+    if ("Notification" in window && Notification.permission === "granted") { try { new Notification("Baqer Sniper", { body: msg }); } catch (e) {} }
   }
 
   // ---------- alerts ----------
-  function notifyIfNew(r) {
-    if (!r || !r.signal || !st.prefs.signal) return;
-    var key = st.inst + ":" + r.signal.dir + ":" + r.signal.entry.toFixed(BY[st.inst].digits);
-    if (key === st.lastSig) return;
-    st.lastSig = key;
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Baqer Sniper · " + BY[st.inst].name + ": " + (r.signal.dir === "LONG" ? "Buy" : "Sell"),
-        { body: "Entry " + fmt(r.signal.entry) + " · Stop " + fmt(r.signal.sl) });
-    }
-  }
-
   // ---------- language ----------
   function applyLang() {
     document.documentElement.lang = st.lang;
