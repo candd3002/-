@@ -83,12 +83,12 @@
   I18N.ar.orderBlock = "كتلة الأوامر"; I18N.ar.sniperEntry = "منطقة الدخول";
   I18N.ar.tag = "تحليل الذهب والعملات الرقمية";
   I18N.ar.riskScalp = "Scalp (وقف ضيق جداً وأهداف سريعة)";
-  I18N.en.welGuest = "Continue without signing in";
+  I18N.en.welGuest = "Enter";
   I18N.en.welContinue = "Continue";
   I18N.en.welHint = "Your sign-in is saved on this device only.";
   I18N.en.welBack = "Welcome back, ";
   I18N.ar.welSub = "هيكل السوق، مشروحاً ببساطة.";
-  I18N.ar.welGuest = "المتابعة دون تسجيل دخول";
+  I18N.ar.welGuest = "ادخل";
   I18N.ar.welContinue = "متابعة";
   I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
   I18N.ar.welBack = "أهلاً بعودتك، ";
@@ -966,7 +966,7 @@
     $("welcome").hidden = true;
     document.body.style.overflow = "";
   }
-  $("wel-form").addEventListener("submit", function (ev) {
+  if ($("wel-form")) $("wel-form").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var name = $("wel-name").value.trim(), email = $("wel-email").value.trim();
     if (!name || !email) return;
