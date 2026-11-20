@@ -88,6 +88,10 @@ function setupMsg(inst, tf, profile, sig) {
     body: inst.name + " · " + tf.toUpperCase() + " · " + (PNAME[profile] || profile) + "\n" +
       "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) };
 }
+function fmtMove(inst, pts) {
+  if (inst.digits === 5) return (pts * 10000).toFixed(1) + " pip";
+  return pts.toFixed(2) + " نقطة";
+}
 // Walks the bars after the entry: reports each target hit once, then the close (stop or TP3).
 function manage(tr, id, bars, inst, now, out, hist, state) {
   tr.tpHits = tr.tpHits || 0;
@@ -101,7 +105,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       const lvl = won ? tr["tp" + tr.tpHits] : tr.sl;
       const pts = won ? Math.abs(lvl - tr.entry) : -Math.abs(tr.entry - tr.sl);
       out.push({ id: "exit|" + id + "|" + b.t, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
-        body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "") + pts.toFixed(dg) + " pts" });
+        body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "−") + fmtMove(inst, Math.abs(pts)) });
       hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       delete state.open[id]; return;
     }
@@ -112,7 +116,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       tr.tpHits = k;
       const pts = Math.abs(level - tr.entry);
       out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " / TP" + k + " hit",
-        body: label + "\nالسعر " + fmt(inst, level) + " · +" + pts.toFixed(dg) + " pts" });
+        body: label + "\nالسعر " + fmt(inst, level) + " · +" + fmtMove(inst, pts) });
       hist.push({ t: now, kind: "tp" + k, inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       if (k === 3) {
         hist.push({ t: now, kind: "win", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: Math.abs(tr.tp3 - tr.entry), digits: dg });

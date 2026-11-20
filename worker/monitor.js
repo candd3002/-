@@ -185,7 +185,9 @@ const module = { exports: {} };
   // reaches the 15m zone a 1m order block in the same direction gives the entry and the stop.
   // Entry: open of the 1m order block candle. Stop: beyond its far edge (above its high for shorts,
   // below its low for longs), plus the profile buffer.
-  function scalpSetup(c15, c1, profileName, r15pre) {
+  // mode "bos" (default): 1m break of structure required. mode "ob": no 1m break; the 1m order block in the
+  // trade direction plus a 1m fair value gap in that direction (overlapping the price) is the confirmation.
+  function scalpSetup(c15, c1, profileName, r15pre, mode) {
     var P = PROFILES[profileName] || PROFILES.scalp;
     var r15 = r15pre || analyze(c15, profileName), r1 = analyze(c1, profileName);
     if (!r15.ready || !r1.ready) return { ready: false, reason: "not enough data" };
@@ -202,7 +204,13 @@ const module = { exports: {} };
     // 1m confirmation: a break of structure (BOS) or change of character (CHoCH) in the trade direction,
     // and the order block candle that produced it. A full HH/HL trend is not required.
     var want = up ? "bull" : "bear";
-    if (!r1.ev || r1.ev.dir !== want) return { ready: false, reason: "no 1m break of structure in direction" };
+    if (mode !== "ob") {
+      if (!r1.ev || r1.ev.dir !== want) return { ready: false, reason: "no 1m break of structure in direction" };
+    } else {
+      var f1 = r1.fvg;
+      var fvgOk = !!(f1 && f1.dir === want && p1 >= f1.lo - tol && p1 <= f1.hi + tol);
+      if (!fvgOk) return { ready: false, reason: "no 1m fair value gap in direction at price" };
+    }
     var ob1 = r1.ob;
     if (!ob1 || ob1.dir !== want) return { ready: false, reason: "no 1m order block in direction" };
     var k = c1[ob1.i];
@@ -265,7 +273,7 @@ const module = { exports: {} };
   }
   // Multi-timeframe scalp backtest: for each 1m bar, the 15m order block zone and the 1m rules
   // decide the entry; the trade is then followed on 1m bars (stop first, then TP1, as in backtest).
-  function backtestMTF(c15, c1, profileName, maxBars, costPct) {
+  function backtestMTF(c15, c1, profileName, maxBars, costPct, mode) {
     maxBars = maxBars || 240;
     costPct = costPct || 0;
     var trades = [], busy = -1, j = -1, r15 = null, rj = -1;
@@ -278,7 +286,7 @@ const module = { exports: {} };
       if (!r15.ob) continue;
       var zt = 0.3 * r15.atr, pc = c1[i].c;
       if (pc < r15.ob.lo - zt || pc > r15.ob.hi + zt) continue;
-      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName, r15);
+      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName, r15, mode);
       if (!sc.ready) continue;
       var s = sc.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
       for (var q = i + 1; q < Math.min(c1.length, i + 1 + maxBars); q++) {
@@ -736,6 +744,10 @@ function setupMsg(inst, tf, profile, sig) {
     body: inst.name + " · " + tf.toUpperCase() + " · " + (PNAME[profile] || profile) + "\n" +
       "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) };
 }
+function fmtMove(inst, pts) {
+  if (inst.digits === 5) return (pts * 10000).toFixed(1) + " pip";
+  return pts.toFixed(2) + " نقطة";
+}
 // Walks the bars after the entry: reports each target hit once, then the close (stop or TP3).
 function manage(tr, id, bars, inst, now, out, hist, state) {
   tr.tpHits = tr.tpHits || 0;
@@ -749,7 +761,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       const lvl = won ? tr["tp" + tr.tpHits] : tr.sl;
       const pts = won ? Math.abs(lvl - tr.entry) : -Math.abs(tr.entry - tr.sl);
       out.push({ id: "exit|" + id + "|" + b.t, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
-        body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "") + pts.toFixed(dg) + " pts" });
+        body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "−") + fmtMove(inst, Math.abs(pts)) });
       hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       delete state.open[id]; return;
     }
@@ -760,7 +772,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       tr.tpHits = k;
       const pts = Math.abs(level - tr.entry);
       out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " / TP" + k + " hit",
-        body: label + "\nالسعر " + fmt(inst, level) + " · +" + pts.toFixed(dg) + " pts" });
+        body: label + "\nالسعر " + fmt(inst, level) + " · +" + fmtMove(inst, pts) });
       hist.push({ t: now, kind: "tp" + k, inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       if (k === 3) {
         hist.push({ t: now, kind: "win", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: Math.abs(tr.tp3 - tr.entry), digits: dg });
