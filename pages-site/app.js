@@ -255,7 +255,7 @@
   // reuses it for 2 minutes per timeframe.
   var autoKey = {}, autoAt = {};
   // Gold history from biquote OHLC (mid-price bars). Used for XAU instead of Twelve Data.
-  var BQ_INTERVAL = { "15m": "15m", "1h": "1h", "4h": "4h" };
+  var BQ_INTERVAL = { "1m": "1m", "15m": "15m", "1h": "1h", "4h": "4h" };
   function bqHistory(id, tf) {
     var sym = BQ_SYM[id];
     if (!sym || !BQ_INTERVAL[tf]) return Promise.reject(new Error("no biquote history"));
@@ -408,6 +408,7 @@
   function analyzeAndRender() {
     var c = candlesFor(st.inst);
     st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
+    st.res.inst = st.inst; // tag: a result belongs to the instrument it was computed for
     var evs = journalUpdate();
     renderTickers();
     render();
@@ -466,6 +467,8 @@
 
   function render() {
     var r = st.res;
+    // Never show another instrument's levels (e.g. BTC zones while gold is selected).
+    if (r && r.inst !== st.inst) r = { ready: false, reason: T("loading") };
     if (!r || !r.ready) { var nt = $("trend-line"); nt.textContent = r ? r.reason : T("loading"); nt.className = "trend note"; return; }
     var s = r.signal, sell = s && s.dir === "SHORT", buy = s && s.dir === "LONG";
     var cls = buy ? "buy" : sell ? "sell" : "wait";
@@ -831,6 +834,7 @@
     var key = id + "|" + tf + (long ? "|long" : "");
     if (BT_CACHE[key]) return Promise.resolve(BT_CACHE[key]);
     var p = id === "BTC" ? (long ? longBinance(tf, "BTCUSDT") : klines(tf, "BTCUSDT"))
+      : (BQ_SYM[id] && BQ_INTERVAL[tf]) ? bqHistory(id, tf)
       : fetch("/api/candles?symbol=" + AUTO[id] + "&interval=" + tf + (long ? "&size=5000" : ""), { cache: "no-store" })
           .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
           .then(parseJSONCandles);
@@ -992,7 +996,8 @@
         return Promise.all([styleCandles(id, "15m"), styleCandles(id, "1m")]).then(function (cs) {
           var c15 = cs[0], c1 = cs[1];
           var r = c15 && c1 && c15.length >= 60 && c1.length >= 60 ? A.scalpSetup(c15, c1, sty.profile) : null;
-          return { s: sty, own: styleLearn(sty.id), r: r && r.ready ? r : null, mtf: true, reason: r && r.reason };
+          // r is null only when candles are missing; a not-ready result is kept so it shows "waiting", not "no data".
+          return { s: sty, own: styleLearn(sty.id), r: r || null, mtf: true, reason: r && r.reason };
         });
       }
       return styleCandles(id, sty.tf).then(function (c) {
