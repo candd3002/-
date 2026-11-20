@@ -998,10 +998,7 @@
   function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }
   $("wel-follow").addEventListener("click", function () { store(FOLLOW_KEY, true); });
   $("wel-guest").addEventListener("click", hideWelcome);
-  $("wel-more").addEventListener("click", function () {
-    var m = $("wel-langs"), open = m.hidden;
-    m.hidden = !open; this.setAttribute("aria-expanded", String(open));
-  });
+
   $("wel-continue").addEventListener("click", hideWelcome);
 
   // ---------- TradingView: the only chart ----------

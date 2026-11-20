@@ -621,3 +621,7 @@ body{background:#070d17}
 .welcome *, .welcome *::before, .welcome *::after{animation:none !important}
 .welcome .wel-title span, .welcome .wel-title .grad{background:none !important; -webkit-text-fill-color:#f0c35a !important; color:#f0c35a !important}
 .welcome::before{transform:none !important}
+
+/* no top menu on the first page; no moving line */
+.welcome .wel-card::before{display:none !important}
+.welcome .wel-top{display:none !important}
