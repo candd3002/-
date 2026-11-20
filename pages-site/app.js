@@ -739,8 +739,8 @@
   ];
   var BT_CACHE = {};
   // Long history: about 3 years. Binance pages 1000 candles per call; Twelve Data returns up to 5000.
-  function longBinance(tf, sym) {
-    var rows = [], start = Date.now() - 3 * 365 * 864e5;
+  function longBinance(tf, sym, days) {
+    var rows = [], start = Date.now() - (days || 3 * 365) * 864e5;
     function page() {
       return fetch("https://api.binance.com/api/v3/klines?symbol=" + sym + "&interval=" + tf + "&limit=1000&startTime=" + start)
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -800,6 +800,26 @@
       btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
     });
   }
+  // Multi-timeframe scalp backtest on BTC: 15m and 1m candles for the last 30 days.
+  function runScalpMTF(btn, out) {
+    var ar = st.lang === "ar";
+    btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
+    Promise.all([longBinance("15m", "BTCUSDT", 30), longBinance("1m", "BTCUSDT", 30)]).then(function (cs) {
+      var b = A.backtestMTF(cs[0], cs[1], "scalp", 240);
+      out.textContent = "";
+      var card = el("div", "rep-m");
+      card.appendChild(el("b", "", ar ? "المضاربة السريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)"));
+      var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
+      card.appendChild(el("p", "muted", (ar ? "الصفقات: " : "Trades: ") + b.count + " · " + (ar ? "رابحة: " : "win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + ")"));
+      card.appendChild(el("p", "muted", (ar ? "صافي R: " : "Net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · PF " + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : "—")));
+      card.appendChild(el("p", "muted", ar ? "القاعدة: Order Block على 15 دقيقة، ثم الدقيقة، الدخول من شمعة الـOrder Block على الدقيقة، والوقف فوقها." : "Rule: 15m order block zone, 1m block entry, stop beyond the 1m block."));
+      out.appendChild(card);
+      btn.disabled = false; btn.textContent = ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)";
+    }).catch(function () {
+      out.textContent = ar ? "تعذّر تحميل بيانات الدقيقة من Binance." : "Could not load 1m data from Binance.";
+      btn.disabled = false; btn.textContent = ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)";
+    });
+  }
   function renderBacktestBox() {
     var box = $("backtest-box"); if (!box) return;
     var ar = st.lang === "ar";
@@ -813,8 +833,11 @@
     var btnLong = el("button", "btn", ar ? "تشغيل على 3 سنوات" : "Run on 3 years"); btnLong.type = "button";
     btn.addEventListener("click", function () { runBacktest(false, btn, out); });
     btnLong.addEventListener("click", function () { runBacktest(true, btnLong, out); });
+    var btnMtf = el("button", "btn", ar ? "مضاربة سريعة متعددة الأطر (BTC، 30 يوماً)" : "Scalp multi-timeframe (BTC, 30 days)"); btnMtf.type = "button";
+    btnMtf.addEventListener("click", function () { runScalpMTF(btnMtf, out); });
     box.appendChild(btn);
     box.appendChild(btnLong);
+    box.appendChild(btnMtf);
     box.appendChild(out);
   }
   // ---------- always-on analysis per style: scalp, day ICT and swing ----------

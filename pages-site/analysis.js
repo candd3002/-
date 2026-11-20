@@ -212,6 +212,41 @@
         tp1: entry + s * P.tp[0] * risk, tp2: entry + s * P.tp[1] * risk, tp3: entry + s * P.tp[2] * risk }
     };
   }
+  // Multi-timeframe scalp backtest: for each 1m bar, the 15m order block zone and the 1m rules
+  // decide the entry; the trade is then followed on 1m bars (stop first, then TP1, as in backtest).
+  function backtestMTF(c15, c1, profileName, maxBars) {
+    maxBars = maxBars || 240;
+    var trades = [], busy = -1, j = -1;
+    for (var i = 300; i < c1.length - 1; i++) {
+      if (i <= busy) continue;
+      var t = c1[i].t;
+      while (j + 1 < c15.length && c15[j + 1].t <= t) j++;
+      if (j < 60) continue;
+      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName);
+      if (!sc.ready) continue;
+      var s = sc.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
+      for (var q = i + 1; q < Math.min(c1.length, i + 1 + maxBars); q++) {
+        var b = c1[q];
+        var hitStop = up ? b.l <= s.sl : b.h >= s.sl;
+        var hitTP1 = up ? b.h >= s.tp1 : b.l <= s.tp1;
+        if (hitStop) { outcome = "stop"; R = -1; exit = q; break; }
+        if (hitTP1) { outcome = "tp1"; R = Math.abs(s.tp1 - s.entry) / s.risk; exit = q; break; }
+      }
+      if (exit == null) { exit = Math.min(c1.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
+      trades.push({ i: i, dir: s.dir, outcome: outcome, R: R });
+      busy = exit;
+    }
+    var wins = trades.filter(function (x) { return x.R > 0; }).length;
+    var grossW = trades.filter(function (x) { return x.R > 0; }).reduce(function (a, x) { return a + x.R; }, 0);
+    var grossL = Math.abs(trades.filter(function (x) { return x.R < 0; }).reduce(function (a, x) { return a + x.R; }, 0));
+    var decided = trades.filter(function (x) { return x.outcome !== "timeout"; }).length;
+    return {
+      trades: trades, count: trades.length, wins: wins,
+      winRate: decided ? wins / decided : 0,
+      netR: trades.reduce(function (a, x) { return a + x.R; }, 0),
+      profitFactor: grossL > 0 ? grossW / grossL : (grossW > 0 ? Infinity : 0)
+    };
+  }
   function analyze(c, profileName, learn) {
     var P = PROFILES[profileName] || PROFILES.balanced;
     var n = c.length;
@@ -543,7 +578,7 @@
   }
 
   return {
-    CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, backtestMTF: backtestMTF, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };
