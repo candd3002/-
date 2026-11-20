@@ -616,11 +616,26 @@
     { id: "swing", ar: "سوينج (4 ساعات)", en: "Swing (4h)", tf: "4h", profile: "balanced" }
   ];
   var BT_CACHE = {};
-  function fetchTf(id, tf) {
-    var key = id + "|" + tf;
+  // Long history: about 3 years. Binance pages 1000 candles per call; Twelve Data returns up to 5000.
+  function longBinance(tf, sym) {
+    var rows = [], start = Date.now() - 3 * 365 * 864e5;
+    function page() {
+      return fetch("https://api.binance.com/api/v3/klines?symbol=" + sym + "&interval=" + tf + "&limit=1000&startTime=" + start)
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (arr) {
+          arr.forEach(function (k) { rows.push({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] }); });
+          if (arr.length < 1000) return rows;
+          start = arr[arr.length - 1][0] + 1;
+          return page();
+        });
+    }
+    return page();
+  }
+  function fetchTf(id, tf, long) {
+    var key = id + "|" + tf + (long ? "|long" : "");
     if (BT_CACHE[key]) return Promise.resolve(BT_CACHE[key]);
-    var p = id === "BTC" ? klines(tf, "BTCUSDT")
-      : fetch("/api/candles?symbol=" + AUTO[id] + "&interval=" + tf, { cache: "no-store" })
+    var p = id === "BTC" ? (long ? longBinance(tf, "BTCUSDT") : klines(tf, "BTCUSDT"))
+      : fetch("/api/candles?symbol=" + AUTO[id] + "&interval=" + tf + (long ? "&size=5000" : ""), { cache: "no-store" })
           .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
           .then(parseJSONCandles);
     return p.then(function (c) { BT_CACHE[key] = c; return c; });
@@ -647,6 +662,22 @@
       out.appendChild(card);
     });
   }
+  function runBacktest(long, btn, out) {
+    var ar = st.lang === "ar", rows = [], jobs = [];
+    btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
+    out.textContent = "";
+    STYLES.forEach(function (sty) { INST.forEach(function (x) { jobs.push({ sty: sty, x: x }); }); });
+    jobs.reduce(function (chain, job) {
+      return chain.then(function () {
+        return fetchTf(job.x.id, job.sty.tf, long).then(function (c) {
+          rows.push({ sty: job.sty, x: job.x, b: c.length >= 120 ? A.backtest(c, 60, job.sty.profile) : null, n: c.length });
+        }).catch(function () { rows.push({ sty: job.sty, x: job.x, b: null, err: true }); });
+      });
+    }, Promise.resolve()).then(function () {
+      renderBtRows(out, rows);
+      btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
+    });
+  }
   function renderBacktestBox() {
     var box = $("backtest-box"); if (!box) return;
     var ar = st.lang === "ar";
@@ -655,24 +686,13 @@
     box.appendChild(el("p", "muted", ar
       ? "يعيد تشغيل الإشارات على بيانات كل أسلوب وإطاره الزمني. R = وحدة المخاطرة لكل صفقة. يستهلك التشغيل نحو 9 طلبات من حصة الذهب والعملات المجانية، فشغّله بقدر الحاجة."
       : "Replays signals on each style's timeframe. R = risk unit per trade. A run uses about 9 requests of the free gold/FX quota, so run it sparingly."));
-    var btn = el("button", "btn", ar ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
     var out = el("div", "");
-    btn.addEventListener("click", function () {
-      btn.disabled = true; btn.textContent = ar ? "جاري التحميل..." : "Loading...";
-      var rows = [], jobs = [];
-      STYLES.forEach(function (sty) { INST.forEach(function (x) { jobs.push({ sty: sty, x: x }); }); });
-      jobs.reduce(function (chain, job) {
-        return chain.then(function () {
-          return fetchTf(job.x.id, job.sty.tf).then(function (c) {
-            rows.push({ sty: job.sty, x: job.x, b: c.length >= 120 ? A.backtest(c, 60, job.sty.profile) : null });
-          }).catch(function () { rows.push({ sty: job.sty, x: job.x, b: null, err: true }); });
-        });
-      }, Promise.resolve()).then(function () {
-        renderBtRows(out, rows);
-        btn.disabled = false; btn.textContent = ar ? "تشغيل الباك تيست" : "Run backtest";
-      });
-    });
+    var btn = el("button", "btn", ar ? "تشغيل الباك تيست" : "Run backtest"); btn.type = "button";
+    var btnLong = el("button", "btn", ar ? "تشغيل على 3 سنوات" : "Run on 3 years"); btnLong.type = "button";
+    btn.addEventListener("click", function () { runBacktest(false, btn, out); });
+    btnLong.addEventListener("click", function () { runBacktest(true, btnLong, out); });
     box.appendChild(btn);
+    box.appendChild(btnLong);
     box.appendChild(out);
   }
   // ---------- alerts: in-page message always, system notification when allowed ----------

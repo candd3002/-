@@ -13,7 +13,9 @@ export async function onRequest(context) {
   const key = context.env.TWELVE_DATA_KEY;
   if (!key) return new Response(JSON.stringify({ error: "TWELVE_DATA_KEY is not set" }), { status: 503, headers: HEADERS });
   try {
-    const r = await fetch("https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(apiSymbol) + "&interval=" + apiInterval + "&outputsize=500&apikey=" + encodeURIComponent(key));
+    const sizeQ = Math.min(5000, Math.max(500, parseInt(new URL(context.request.url).searchParams.get("size") || "500", 10) || 500));
+    const size = sizeQ;
+    const r = await fetch("https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(apiSymbol) + "&interval=" + apiInterval + "&outputsize=" + size + "&apikey=" + encodeURIComponent(key));
     const data = await r.json();
     if (!data || !Array.isArray(data.values)) return new Response(JSON.stringify({ error: data && data.message ? data.message : "no data" }), { status: 502, headers: HEADERS });
     const candles = data.values.slice().reverse().map(function (v, i) {
