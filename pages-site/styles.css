@@ -625,3 +625,8 @@ body{background:#070d17}
 /* no top menu on the first page; no moving line */
 .welcome .wel-card::before{display:none !important}
 .welcome .wel-top{display:none !important}
+
+/* tidy top area: price strip scrolls cleanly, cards keep their size */
+.tickers{display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; padding:4px 0 8px; margin:0 -2px; scroll-snap-type:x proximity}
+.tickers > *{flex:0 0 auto; min-width:150px; scroll-snap-align:start}
+.top{margin-bottom:6px}
