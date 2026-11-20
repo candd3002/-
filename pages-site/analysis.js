@@ -183,7 +183,9 @@
   // reaches the 15m zone a 1m order block in the same direction gives the entry and the stop.
   // Entry: open of the 1m order block candle. Stop: beyond its far edge (above its high for shorts,
   // below its low for longs), plus the profile buffer.
-  function scalpSetup(c15, c1, profileName, r15pre) {
+  // mode "bos" (default): 1m break of structure required. mode "ob": no 1m break; the 1m order block in the
+  // trade direction plus a 1m fair value gap in that direction (overlapping the price) is the confirmation.
+  function scalpSetup(c15, c1, profileName, r15pre, mode) {
     var P = PROFILES[profileName] || PROFILES.scalp;
     var r15 = r15pre || analyze(c15, profileName), r1 = analyze(c1, profileName);
     if (!r15.ready || !r1.ready) return { ready: false, reason: "not enough data" };
@@ -200,7 +202,13 @@
     // 1m confirmation: a break of structure (BOS) or change of character (CHoCH) in the trade direction,
     // and the order block candle that produced it. A full HH/HL trend is not required.
     var want = up ? "bull" : "bear";
-    if (!r1.ev || r1.ev.dir !== want) return { ready: false, reason: "no 1m break of structure in direction" };
+    if (mode !== "ob") {
+      if (!r1.ev || r1.ev.dir !== want) return { ready: false, reason: "no 1m break of structure in direction" };
+    } else {
+      var f1 = r1.fvg;
+      var fvgOk = !!(f1 && f1.dir === want && p1 >= f1.lo - tol && p1 <= f1.hi + tol);
+      if (!fvgOk) return { ready: false, reason: "no 1m fair value gap in direction at price" };
+    }
     var ob1 = r1.ob;
     if (!ob1 || ob1.dir !== want) return { ready: false, reason: "no 1m order block in direction" };
     var k = c1[ob1.i];
@@ -263,7 +271,7 @@
   }
   // Multi-timeframe scalp backtest: for each 1m bar, the 15m order block zone and the 1m rules
   // decide the entry; the trade is then followed on 1m bars (stop first, then TP1, as in backtest).
-  function backtestMTF(c15, c1, profileName, maxBars, costPct) {
+  function backtestMTF(c15, c1, profileName, maxBars, costPct, mode) {
     maxBars = maxBars || 240;
     costPct = costPct || 0;
     var trades = [], busy = -1, j = -1, r15 = null, rj = -1;
@@ -276,7 +284,7 @@
       if (!r15.ob) continue;
       var zt = 0.3 * r15.atr, pc = c1[i].c;
       if (pc < r15.ob.lo - zt || pc > r15.ob.hi + zt) continue;
-      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName, r15);
+      var sc = scalpSetup(c15.slice(0, j + 1), c1.slice(Math.max(0, i - 499), i + 1), profileName, r15, mode);
       if (!sc.ready) continue;
       var s = sc.signal, up = s.dir === "LONG", R = 0, exit = null, outcome = "open";
       for (var q = i + 1; q < Math.min(c1.length, i + 1 + maxBars); q++) {
