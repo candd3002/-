@@ -727,23 +727,40 @@
     var ar = st.lang === "ar", d = BY[st.inst].digits;
     box.textContent = "";
     var card = el("div", "style-card");
-    card.appendChild(el("div", "style-title", ar ? "الفرص حسب الأسلوب" : "Setups by style"));
+    var head = el("div", "style-title");
+    head.appendChild(el("span", "", ar ? "الفرص حسب الأسلوب" : "Setups by style"));
+    head.appendChild(el("span", "style-live", ar ? "مباشر" : "live"));
+    card.appendChild(head);
     rows.forEach(function (row) {
-      var line = el("div", "style-row");
+      var item = el("div", "style-row");
       var top = el("div", "style-top");
-      top.appendChild(el("b", "", ar ? row.s.ar : row.s.en));
-      top.appendChild(el("span", "muted", row.s.tf));
-      line.appendChild(top);
+      var name = el("div", "style-name");
+      name.appendChild(el("b", "", ar ? row.s.ar : row.s.en));
+      name.appendChild(el("span", "style-tf", row.s.tf));
+      top.appendChild(name);
       var sg = row.r && row.r.ready && row.r.signal;
-      if (!row.r) line.appendChild(el("p", "muted", ar ? "لا بيانات" : "No data"));
-      else if (!sg) line.appendChild(el("p", "muted", ar ? "لا توجد فرصة الآن" : "No setup now"));
+      var pill;
+      if (!row.r) pill = el("span", "style-pill", ar ? "لا بيانات" : "No data");
+      else if (!sg) pill = el("span", "style-pill", ar ? "انتظار" : "Wait");
       else {
         var side = sg.dir === "LONG" ? (ar ? "شراء" : "Buy") : (ar ? "بيع" : "Sell");
-        line.appendChild(el("p", "style-sig " + (sg.dir === "LONG" ? "up" : "down"), side + " · " + (ar ? "جودة " : "grade ") + sg.grade));
-        line.appendChild(el("p", "style-pts", (ar ? "دخول " : "Entry ") + sg.entry.toFixed(d) + "  ·  " + (ar ? "وقف " : "Stop ") + sg.sl.toFixed(d)
-          + "  ·  TP1 " + sg.tp1.toFixed(d) + "  ·  TP2 " + sg.tp2.toFixed(d) + "  ·  TP3 " + sg.tp3.toFixed(d)));
+        pill = el("span", "style-pill " + (sg.dir === "LONG" ? "up" : "down"), side + " · " + sg.grade);
       }
-      card.appendChild(line);
+      top.appendChild(pill);
+      item.appendChild(top);
+      if (sg) {
+        var grid = el("div", "style-grid");
+        [[ar ? "دخول" : "Entry", sg.entry, ""], [ar ? "وقف" : "Stop", sg.sl, "down"], ["TP1", sg.tp1, "up"], ["TP2", sg.tp2, "up"], ["TP3", sg.tp3, "up"]].forEach(function (x) {
+          var cell = el("div", "style-cell");
+          cell.appendChild(el("span", "muted", x[0]));
+          cell.appendChild(el("b", x[2], x[1].toFixed(d)));
+          grid.appendChild(cell);
+        });
+        item.appendChild(grid);
+      } else {
+        item.appendChild(el("p", "muted style-hint", ar ? "لا توجد فرصة الآن، النظام يراقب" : "No setup now, monitoring"));
+      }
+      card.appendChild(item);
     });
     box.appendChild(card);
   }
