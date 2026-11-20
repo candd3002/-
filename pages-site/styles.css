@@ -482,3 +482,14 @@ body{background:#070d17}
 
 .adv{margin:10px 0; border:1px solid var(--line); border-radius:14px; padding:10px 12px}
 .adv summary{cursor:pointer; color:var(--gold); font-weight:700; font-size:14px; padding:4px 0}
+
+/* always-on style cards on the analysis tab */
+.styles{display:grid; gap:10px; margin:8px 0}
+.style-card{background:#0b1830; border:1px solid rgba(70,120,200,.35); border-radius:14px; padding:12px 14px; display:grid; gap:6px}
+.style-h{display:flex; justify-content:space-between; align-items:center}
+.style-h b{color:#e8c35a; font-size:14px}
+.style-sig{font-weight:800; margin:0; font-size:13px}
+.style-sig.up{color:#2fd08b}
+.style-sig.down{color:#ff6464}
+.style-l{display:flex; justify-content:space-between; font-variant-numeric:tabular-nums; font-size:13px; border-top:1px solid rgba(255,255,255,.05); padding-top:5px}
+.style-card p{margin:0; font-size:13px}

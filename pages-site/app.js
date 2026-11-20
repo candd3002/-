@@ -335,6 +335,7 @@
     renderMarkets();
     if (OWN) paintOwn();
     evs.forEach(announce);
+    refreshStyles();
   }
 
   function renderTickers() {
@@ -695,6 +696,58 @@
     box.appendChild(btnLong);
     box.appendChild(out);
   }
+  // ---------- always-on analysis per style: scalp, day ICT and swing ----------
+  var STYLE_TF = [
+    { id: "scalp", tf: "15m", profile: "scalp", ar: "مضاربة سريعة", en: "Scalp" },
+    { id: "day", tf: "1h", profile: "balanced", ar: "تداول يومي ICT", en: "Day ICT" },
+    { id: "swing", tf: "4h", profile: "balanced", ar: "تداول متدرج", en: "Swing" }
+  ];
+  var STY_CACHE = {};
+  function styleCandles(id, tf) {
+    if (tf === st.tf) return Promise.resolve(candlesFor(id));
+    var key = id + "|" + tf, hit = STY_CACHE[key];
+    if (hit && Date.now() - hit.at < 900000) return Promise.resolve(hit.c);
+    delete BT_CACHE[id + "|" + tf];
+    return fetchTf(id, tf).then(function (c) { STY_CACHE[key] = { at: Date.now(), c: c }; return c; })
+      .catch(function () { return null; });
+  }
+  function refreshStyles() {
+    var id = st.inst;
+    return Promise.all(STYLE_TF.map(function (sty) {
+      return styleCandles(id, sty.tf).then(function (c) {
+        return { s: sty, r: c && c.length >= 60 ? A.analyze(c, sty.profile, learnFromJournal()) : null };
+      });
+    })).then(function (rows) {
+      if (st.inst !== id) return;
+      renderStyles(rows);
+    });
+  }
+  function renderStyles(rows) {
+    var box = $("styles"); if (!box) return;
+    var ar = st.lang === "ar", d = BY[st.inst].digits;
+    box.textContent = "";
+    rows.forEach(function (row) {
+      var card = el("div", "style-card");
+      var head = el("div", "style-h");
+      head.appendChild(el("b", "", ar ? row.s.ar : row.s.en));
+      head.appendChild(el("span", "muted", row.s.tf));
+      card.appendChild(head);
+      var sg = row.r && row.r.ready && row.r.signal;
+      if (!row.r) card.appendChild(el("p", "muted", ar ? "لا بيانات لهذا الإطار" : "No data for this timeframe"));
+      else if (!sg) card.appendChild(el("p", "muted", ar ? "لا توجد فرصة الآن، النظام يراقب" : "No setup now, monitoring"));
+      else {
+        card.appendChild(el("p", "style-sig " + (sg.dir === "LONG" ? "up" : "down"), (sg.dir === "LONG" ? (ar ? "شراء" : "Buy") : (ar ? "بيع" : "Sell")) + " · " + (ar ? "جودة " : "grade ") + sg.grade));
+        [[ar ? "دخول" : "Entry", sg.entry], [ar ? "وقف الخسارة" : "Stop", sg.sl], ["TP1", sg.tp1], ["TP2", sg.tp2], ["TP3", sg.tp3]].forEach(function (x) {
+          var line = el("div", "style-l");
+          line.appendChild(el("span", "muted", x[0]));
+          line.appendChild(el("b", "", x[1].toFixed(d)));
+          card.appendChild(line);
+        });
+      }
+      box.appendChild(card);
+    });
+  }
+
   // ---------- alerts: in-page message always, system notification when allowed ----------
   function toast(msg) {
     var t = el("div", "toast", msg);
@@ -1270,6 +1323,7 @@
   setInterval(renderSessions, 60000);
   loadAllForMarkets();
   setInterval(loadAllForMarkets, 900000);
+  setInterval(refreshStyles, 900000);
   setView("analysis");
   showWelcome();
   setInterval(tick, 1000); tick();
