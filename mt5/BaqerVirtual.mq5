@@ -17,7 +17,7 @@ input bool   InpWriteCsv   = true;
 input string InpCsvName    = "baqer_virtual_trades.csv";
 
 #define NUL (-1.0e300)
-#define MAXT 500
+#define MAXT 20000
 
 double P_slMaxATR, P_buf, P_tp[3];
 
