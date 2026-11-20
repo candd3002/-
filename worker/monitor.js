@@ -722,6 +722,7 @@ function setupMsg(inst, style, sig) {
       "دخول " + f(sig.entry) + " · وقف " + f(sig.sl) + "\nTP1 " + f(sig.tp1) + " · TP2 " + f(sig.tp2) + " · TP3 " + f(sig.tp3) };
 }
 async function run(env) {
+  const skipped = [];
   const raw = await env.MONITOR_KV.get("state");
   const state = raw ? JSON.parse(raw) : { init: false, seen: {}, open: {} };
   const now = Date.now(), firstRun = !state.init, out = [];
@@ -729,7 +730,7 @@ async function run(env) {
   for (const inst of INSTR) {
     for (const style of STYLES) {
       let bars;
-      try { bars = await fetchBars(inst.sym, style.tf); } catch (e) { console.log("skip " + inst.id + " " + style.tf + ": " + e.message); continue; }
+      try { bars = await fetchBars(inst.sym, style.tf); } catch (e) { skipped.push(inst.id + " " + style.tf + ": " + e.message); continue; }
       if (bars.length < 60) continue;
       const last = bars[bars.length - 1];
       const fresh = now - last.t <= 2 * TF_MS[style.tf];
@@ -775,16 +776,27 @@ async function run(env) {
     await pushAll(env);
   }
   console.log("run done: " + out.length + " notifications" + (firstRun ? " (first run: history recorded silently)" : ""));
+  return { firstRun: firstRun, notifications: out.length, skipped: skipped };
+}
+async function runSafe(env) {
+  const at = Date.now();
+  try {
+    const info = await run(env);
+    await env.MONITOR_KV.put("lastrun", JSON.stringify(Object.assign({ ok: true, at: at, finished: Date.now() }, info)));
+  } catch (e) {
+    await env.MONITOR_KV.put("lastrun", JSON.stringify({ ok: false, at: at, error: String(e && e.stack || e).slice(0, 500) }));
+  }
 }
 
 // ---- HTTP: subscribe from the app, expose the public key, send a test ----
 function json(obj, status) { return new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({ "content-type": "application/json" }, CORS) }); }
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(runSafe(env)); },
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
+    if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
     if (url.pathname === "/subscribe" && req.method === "POST") {
       let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
