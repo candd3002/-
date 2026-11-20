@@ -1138,27 +1138,36 @@
   // Entry gate: notifications must be allowed before the Enter button unlocks.
   // On iPhone web notifications only work after the site is added to the Home Screen; the gate explains that.
   var NOTIF_OK = "baqerNotifOk";
-  function unlockEnterBtn() { var b = $("wel-guest"); if (b) b.disabled = false; }
-  function setStep(kind, text) {
+  function unlockEnterBtn() { var b = $("wel-guest"); if (b) b.setAttribute("aria-disabled", "false"); }
+  function setStep(kind, msg) {
     var box = $("wel-step"); if (!box) return;
     box.className = "wel-step " + kind;
-    box.innerHTML = "<b>" + text[0] + "</b><span>" + text[1] + "</span>";
+    box.textContent = msg;
   }
+  function locked() { return !store(NOTIF_OK); }
   var notifGranted = ("Notification" in window) && Notification.permission === "granted";
-  if (store(NOTIF_OK) && notifGranted) { unlockEnterBtn(); setStep("ok", ["تم تفعيل الإشعارات", "اضغط ادخل لفتح التطبيق."]); }
-  $("wel-guest").addEventListener("click", function () { if (!this.disabled) hideWelcome(); });
+  if (store(NOTIF_OK) && notifGranted) { unlockEnterBtn(); setStep("ok", "الإشعارات مفعّلة، يمكنك الدخول"); }
+  // Enter stays closed until notifications are on. Tapping it while closed flags the notification button.
+  $("wel-guest").addEventListener("click", function () {
+    if (locked()) {
+      setStep("bad", "فعّل الإشعارات أولاً");
+      var n = $("wel-notify"); if (n) { n.classList.remove("shake"); void n.offsetWidth; n.classList.add("shake"); }
+      return;
+    }
+    hideWelcome();
+  });
   $("wel-notify").addEventListener("click", function () {
     var note = $("wel-notify-note");
     var standalone = (window.navigator.standalone === true) || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
     var isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
     if (isIos && !standalone) {
-      setStep("warn", ["أضف الموقع إلى الشاشة الرئيسية أولاً", "اضغط زر المشاركة (⬆) ثم «إضافة إلى الشاشة الرئيسية»، وافتح الأيقونة من الشاشة واضغط هذا الزر مرة أخرى."]);
+      setStep("warn", "أضف الموقع إلى الشاشة الرئيسية أولاً، ثم اضغط هنا");
       return;
     }
-    if (!("Notification" in window)) { setStep("bad", ["هذا المتصفح لا يدعم الإشعارات", "افتح الموقع من Safari على الآيفون بعد إضافته للشاشة الرئيسية."]); return; }
+    if (!("Notification" in window)) { setStep("bad", "هذا المتصفح لا يدعم الإشعارات"); return; }
     Notification.requestPermission().then(function (p) {
-      if (p === "granted") { store(NOTIF_OK, true); unlockEnterBtn(); setStep("ok", ["تم تفعيل الإشعارات", "اضغط ادخل لفتح التطبيق."]); }
-      else { setStep("bad", ["لم يُفعَّل الإشعار", "ادخل إلى الإعدادات وفعّل الإشعارات لهذا الموقع، ثم ارجع واضغط تفعيل الإشعارات مرة أخرى."]); }
+      if (p === "granted") { store(NOTIF_OK, true); unlockEnterBtn(); setStep("ok", "تم التفعيل، يمكنك الدخول"); }
+      else { setStep("bad", "فعّل الإشعارات من إعدادات الهاتف ثم أعد المحاولة"); }
     });
   });
 
