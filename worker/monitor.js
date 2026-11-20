@@ -750,7 +750,10 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " / TP" + k + " hit",
         body: label + "\nالسعر " + fmt(inst, level) + " · +" + pts.toFixed(dg) + " pts" });
       hist.push({ t: now, kind: "tp" + k, inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
-      if (k === 3) { delete state.open[id]; return; }
+      if (k === 3) {
+        hist.push({ t: now, kind: "win", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: Math.abs(tr.tp3 - tr.entry), digits: dg });
+        delete state.open[id]; return;
+      }
     }
   }
 }
