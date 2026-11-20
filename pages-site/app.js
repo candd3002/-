@@ -726,26 +726,26 @@
     var box = $("styles"); if (!box) return;
     var ar = st.lang === "ar", d = BY[st.inst].digits;
     box.textContent = "";
+    var card = el("div", "style-card");
+    card.appendChild(el("div", "style-title", ar ? "الفرص حسب الأسلوب" : "Setups by style"));
     rows.forEach(function (row) {
-      var card = el("div", "style-card");
-      var head = el("div", "style-h");
-      head.appendChild(el("b", "", ar ? row.s.ar : row.s.en));
-      head.appendChild(el("span", "muted", row.s.tf));
-      card.appendChild(head);
+      var line = el("div", "style-row");
+      var top = el("div", "style-top");
+      top.appendChild(el("b", "", ar ? row.s.ar : row.s.en));
+      top.appendChild(el("span", "muted", row.s.tf));
+      line.appendChild(top);
       var sg = row.r && row.r.ready && row.r.signal;
-      if (!row.r) card.appendChild(el("p", "muted", ar ? "لا بيانات لهذا الإطار" : "No data for this timeframe"));
-      else if (!sg) card.appendChild(el("p", "muted", ar ? "لا توجد فرصة الآن، النظام يراقب" : "No setup now, monitoring"));
+      if (!row.r) line.appendChild(el("p", "muted", ar ? "لا بيانات" : "No data"));
+      else if (!sg) line.appendChild(el("p", "muted", ar ? "لا توجد فرصة الآن" : "No setup now"));
       else {
-        card.appendChild(el("p", "style-sig " + (sg.dir === "LONG" ? "up" : "down"), (sg.dir === "LONG" ? (ar ? "شراء" : "Buy") : (ar ? "بيع" : "Sell")) + " · " + (ar ? "جودة " : "grade ") + sg.grade));
-        [[ar ? "دخول" : "Entry", sg.entry], [ar ? "وقف الخسارة" : "Stop", sg.sl], ["TP1", sg.tp1], ["TP2", sg.tp2], ["TP3", sg.tp3]].forEach(function (x) {
-          var line = el("div", "style-l");
-          line.appendChild(el("span", "muted", x[0]));
-          line.appendChild(el("b", "", x[1].toFixed(d)));
-          card.appendChild(line);
-        });
+        var side = sg.dir === "LONG" ? (ar ? "شراء" : "Buy") : (ar ? "بيع" : "Sell");
+        line.appendChild(el("p", "style-sig " + (sg.dir === "LONG" ? "up" : "down"), side + " · " + (ar ? "جودة " : "grade ") + sg.grade));
+        line.appendChild(el("p", "style-pts", (ar ? "دخول " : "Entry ") + sg.entry.toFixed(d) + "  ·  " + (ar ? "وقف " : "Stop ") + sg.sl.toFixed(d)
+          + "  ·  TP1 " + sg.tp1.toFixed(d) + "  ·  TP2 " + sg.tp2.toFixed(d) + "  ·  TP3 " + sg.tp3.toFixed(d)));
       }
-      box.appendChild(card);
+      card.appendChild(line);
     });
+    box.appendChild(card);
   }
 
   // ---------- alerts: in-page message always, system notification when allowed ----------
