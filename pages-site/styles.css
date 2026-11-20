@@ -630,3 +630,7 @@ body{background:#070d17}
 .tickers{display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; padding:4px 0 8px; margin:0 -2px; scroll-snap-type:x proximity}
 .tickers > *{flex:0 0 auto; min-width:150px; scroll-snap-align:start}
 .top{margin-bottom:6px}
+
+/* small coin badges in the price strip */
+.tk{display:flex; align-items:center; gap:8px}
+.tk-ic{width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; color:#0a0d12; font-size:11px; font-weight:900; flex:0 0 22px; box-shadow:0 0 0 2px rgba(255,255,255,.06) inset}

@@ -338,6 +338,9 @@
     refreshStyles();
   }
 
+  // Small coin badges shown beside each price in the strip.
+  var COIN_ICON = { BTC: "₿", XAU: "Au", XAG: "Ag", EURUSD: "€", GBPUSD: "£", NAS100: "N" };
+  var COIN_COLOR = { BTC: "#f7931a", XAU: "#e8c35a", XAG: "#9aa6b8", EURUSD: "#3b82f6", GBPUSD: "#8b5cf6", NAS100: "#10b981" };
   function renderTickers() {
     var row = $("tickers"); if (!row) return;
     row.textContent = "";
@@ -345,6 +348,9 @@
       var c = candlesFor(x.id), last = c.length ? c[c.length - 1].c : null, ch = changeFor(x.id);
       var b = el("button", "tk" + (x.id === "XAU" ? " gold" : ""));
       b.type = "button"; b.setAttribute("aria-pressed", String(x.id === st.inst));
+      var ic = el("span", "tk-ic", COIN_ICON[x.id] || "•");
+      ic.style.background = COIN_COLOR[x.id] || "#2a3850";
+      b.appendChild(ic);
       b.appendChild(el("span", "sym", x.name));
       b.appendChild(el("span", "px", fmtD(last, x.digits)));
       b.appendChild(el("span", "pct" + (ch != null && ch < 0 ? " neg" : ""), ch == null ? "—" : (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%"));
