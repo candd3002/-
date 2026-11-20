@@ -262,6 +262,12 @@ export default {
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
+    if (url.pathname === "/unsubscribe" && req.method === "POST") {
+      let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
+      const subs = (await getSubs(env)).filter(s => !sub || s.endpoint !== sub.endpoint);
+      await env.MONITOR_KV.put("subs", JSON.stringify(subs));
+      return json({ ok: true, left: subs.length });
+    }
     if (url.pathname === "/subscribe" && req.method === "POST") {
       let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
       if (!sub || typeof sub.endpoint !== "string" || !sub.endpoint.startsWith("https://")) return json({ error: "bad subscription" }, 400);

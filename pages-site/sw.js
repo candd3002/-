@@ -15,7 +15,12 @@ self.addEventListener("push", function (e) {
       items = (await r.json()).items || [];
     } catch (err) {}
     if (!items.length) items = [{ id: "generic-" + Date.now(), title: "Baqer Sniper", body: "\u062a\u062d\u062f\u064a\u062b \u062c\u062f\u064a\u062f \u0641\u064a \u0627\u0644\u062a\u0637\u0628\u064a\u0642" }];
+    // Show each item once on this device (the same batch is re-read by every push).
+    var cache = await caches.open("baqer-shown");
     for (const it of items.slice(-10)) {
+      var key = "/shown/" + encodeURIComponent(it.id);
+      if (await cache.match(key)) continue;
+      await cache.put(key, new Response("1"));
       await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: "icon.svg", badge: "icon.svg" });
     }
   })());

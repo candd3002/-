@@ -1758,6 +1758,18 @@
     });
   });
   if ("Notification" in window && Notification.permission === "granted") enablePush();
+  var off = $("push-off");
+  if (off) off.addEventListener("click", function () {
+    if (!window.PUSH_WORKER || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.getRegistration("sw.js").then(function (reg) {
+      if (!reg) return;
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (!sub) return;
+        return fetch(PUSH_WORKER + "/unsubscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) })
+          .then(function () { return sub.unsubscribe(); });
+      });
+    }).then(function () { txt("alerts-note", "أُوقفت الإشعارات على هذا الجهاز."); }).catch(function () {});
+  });
   var pSig = $("pref-signal"), pTp = $("pref-tp");
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   pSig.addEventListener("change", function () { st.prefs.signal = pSig.checked; store("baqerPrefs", st.prefs); });
