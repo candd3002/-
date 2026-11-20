@@ -1528,6 +1528,16 @@
     }
     if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.20)" : "rgba(139,92,246,.30)", r.ob.dir === "bull" ? "DEMAND" : "SUPPLY");
     if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(232,195,90,.14)", "FVG");
+    // BOS / CHoCH: a label on the candle where the structure break happened (from the engine's own event)
+    if (r.ev && d[r.ev.i]) {
+      var evX = xOf(d[r.ev.i].time), evY = cs.priceToCoordinate(r.ev.level);
+      if (evX != null && evY != null) {
+        var tag = el("div", "own-z");
+        tag.style.cssText = "left:" + (evX - 4) + "px;top:" + (evY - 14) + "px;width:auto;height:auto;background:none;color:" + (r.ev.dir === "bull" ? "#2fd08b" : "#ff6464") + ";font-size:11px;font-weight:700;padding:0;";
+        tag.textContent = (r.ev.type || "BOS");
+        ov.appendChild(tag);
+      }
+    }
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("class", "own-svg");
