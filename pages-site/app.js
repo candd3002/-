@@ -697,7 +697,7 @@
     wrap.appendChild(bar); wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
     var chart = LightweightCharts.createChart(host, {
       width: host.clientWidth || 340, height: 496,
-      layout: { background: { type: "solid", color: "#05080f" }, textColor: "#7d8aa3", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
+      layout: { background: { type: "solid", color: "#0b1424" }, textColor: "#8c99ad", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
       grid: { vertLines: { color: "rgba(70,120,200,.07)" }, horzLines: { color: "rgba(70,120,200,.07)" } },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.14, bottom: 0.12 } },
       timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4, barSpacing: 7 },

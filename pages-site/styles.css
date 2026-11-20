@@ -444,3 +444,6 @@ body{background:#070d17}
 /* tidy spacing: chart block sized to its content, no extra empty area */
 .tv:has(.own-wrap){min-height:0; height:auto; margin-bottom:12px}
 .own-wrap{height:556px}
+
+/* chart background = app card background */
+.own-wrap, .own-chart{background:#0b1424}
