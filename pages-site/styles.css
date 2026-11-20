@@ -436,3 +436,7 @@ body{background:#070d17}
 .own-btn.on{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-color:#f0cc6e}
 .own-chart{top:44px !important}
 .own-ov{top:44px !important}
+
+/* chart block matches the app cards exactly */
+.tv:has(.own-wrap){border:1.5px solid rgba(232,195,90,.35); border-radius:18px; background:#0b1424; box-shadow:none; padding:0}
+.own-wrap{padding:10px 10px 6px; background:transparent}
