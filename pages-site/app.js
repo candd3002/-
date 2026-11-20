@@ -824,8 +824,11 @@
       card.appendChild(el("p", "muted", ar ? "القاعدة: Order Block على 15 دقيقة، ثم الدقيقة، الدخول من شمعة الـOrder Block على الدقيقة، والوقف فوقها." : "Rule: 15m order block zone, 1m block entry, stop beyond the 1m block."));
       out.appendChild(card);
       btn.disabled = false; btn.textContent = label;
-    }).catch(function () {
-      out.textContent = ar ? "تعذّر تحميل بيانات الدقيقة من Binance." : "Could not load 1m data from Binance.";
+    }).catch(function (err) {
+      var isBtc = !id || id === "BTC";
+      var why = isBtc ? "Binance" : "Twelve Data (حصة الخطة المجانية)";
+      var msg = String((err && err.message) || "");
+      out.textContent = (ar ? "تعذّر تحميل بيانات الدقيقة من " : "Could not load 1m data from ") + why + (msg ? " · " + msg : "") + (ar ? ". جرّب بعد قليل." : ". Try again shortly.");
       btn.disabled = false; btn.textContent = label;
     });
   }
