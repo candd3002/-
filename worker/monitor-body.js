@@ -144,7 +144,9 @@ async function run(env) {
         const id = inst.id + "|" + tf + "|" + profile + "|" + sig.key + "|" + sig.entry.toFixed(inst.digits);
         if (state.seen[id]) continue;
         state.seen[id] = now;
-        if (!firstRun && fresh) {
+        // One entry message per open trade: skip if the same instrument, timeframe and direction is already open.
+        const alreadyOpen = Object.values(state.open).some(t => t.inst === inst.id && t.tf === tf && t.dir === sig.dir);
+        if (!firstRun && fresh && !alreadyOpen) {
           const m = setupMsg(inst, tf, profile, sig);
           state.open[id] = { inst: inst.id, tf: tf, profile: profile, dir: sig.dir, entry: sig.entry, sl: sig.sl,
             tp1: sig.tp1, tp2: sig.tp2, tp3: sig.tp3, tpHits: 0, t: last.t };
