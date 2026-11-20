@@ -41,6 +41,28 @@ export async function onRequest(context) {
     });
     let calSource = "finnhub";
 
+    // Primary: biquote economic calendar (no key). Field names are read defensively.
+    if (!calendar.length) {
+      try {
+        const r = await fetch("https://biquote.io/api/calendar?from=" + from + "&to=" + to);
+        if (r.ok) {
+          const j = await r.json();
+          const rows = Array.isArray(j) ? j : (j.events || j.items || j.calendar || []);
+          calendar = rows.map(function (e) {
+            return {
+              time: e.time || e.dateTime || e.timestamp || e.date || null,
+              country: e.country || e.currency || "",
+              event: e.event || e.title || e.name || "",
+              impact: String(e.importance || e.impact || "").toLowerCase(),
+              actual: e.actual ?? null, forecast: e.forecast ?? e.estimate ?? null,
+              previous: e.previous ?? e.prev ?? null, unit: e.unit || ""
+            };
+          });
+          calSource = "biquote (HTTP " + r.status + ")";
+        } else { calSource = "biquote (HTTP " + r.status + ")"; }
+      } catch (e) { calSource = "biquote (error)"; }
+    }
+
     // Fallback 1: Financial Modeling Prep (free key).
     if (!calendar.length && env.FMP_KEY) {
       try {
