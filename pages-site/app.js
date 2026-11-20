@@ -809,7 +809,8 @@
       out.textContent = "";
       var card = el("div", "rep-m");
       card.appendChild(el("b", "", (ar ? "المضاربة السريعة متعددة الأطر (BTC، " : "Scalp multi-timeframe (BTC, ") + days + (ar ? " يوماً)" : " days)")));
-      card.appendChild(el("p", "muted", ar ? "بعد خصم تكلفة 0.1% لكل صفقة" : "After 0.1% cost per trade"));
+      card.appendChild(el("p", "muted", (ar ? "قبل التكلفة: R " : "Gross R: ") + (b.grossR >= 0 ? "+" : "") + b.grossR.toFixed(2) + (ar ? " · بعد تكلفة 0.1%: R " : " · after 0.1% cost: R ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2)));
+      card.appendChild(el("p", "muted", (ar ? "متوسط حجم الوقف: $" : "Avg stop: $") + b.avgRiskUSD.toFixed(1) + (ar ? " · متوسط التكلفة لكل صفقة: " : " · avg cost per trade: ") + b.avgCostR.toFixed(2) + "R"));
       var decided = b.trades.filter(function (t) { return t.outcome !== "timeout"; }).length;
       card.appendChild(el("p", "muted", (ar ? "الصفقات: " : "Trades: ") + b.count + " · " + (ar ? "رابحة: " : "win rate: ") + Math.round(b.winRate * 100) + "% (" + decided + ")"));
       card.appendChild(el("p", "muted", (ar ? "صافي R: " : "Net R: ") + (b.netR >= 0 ? "+" : "") + b.netR.toFixed(2) + " · PF " + (isFinite(b.profitFactor) && b.profitFactor > 0 ? b.profitFactor.toFixed(2) : "—")));

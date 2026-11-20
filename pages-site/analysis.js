@@ -239,8 +239,8 @@
       }
       if (exit == null) { exit = Math.min(c1.length - 1, i + maxBars); outcome = "timeout"; R = 0; }
       // trading cost: a fixed share of the entry price, expressed in R
-      if (outcome !== "timeout") R -= costPct * s.entry / s.risk;
-      trades.push({ i: i, dir: s.dir, outcome: outcome, R: R });
+      var cost = outcome !== "timeout" ? costPct * s.entry / s.risk : 0;
+      trades.push({ i: i, dir: s.dir, outcome: outcome, R: R - cost, grossR: R, cost: cost, risk: s.risk });
       busy = exit;
     }
     var wins = trades.filter(function (x) { return x.R > 0; }).length;
@@ -251,6 +251,9 @@
       trades: trades, count: trades.length, wins: wins,
       winRate: decided ? wins / decided : 0,
       netR: trades.reduce(function (a, x) { return a + x.R; }, 0),
+      grossR: trades.reduce(function (a, x) { return a + x.grossR; }, 0),
+      avgCostR: trades.length ? trades.reduce(function (a, x) { return a + x.cost; }, 0) / trades.length : 0,
+      avgRiskUSD: trades.length ? trades.reduce(function (a, x) { return a + x.risk; }, 0) / trades.length : 0,
       profitFactor: grossL > 0 ? grossW / grossL : (grossW > 0 ? Infinity : 0)
     };
   }
