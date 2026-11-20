@@ -589,13 +589,14 @@
     return true;
   }
   function journalUpdate() {
-    var j = loadJournal(), changed = false, events = [], learn = learnFromJournal();
+    var j = loadJournal(), changed = false, events = [], learn = learnFromJournal(), trendOf = {}, lastOf = {};
     INST.forEach(function (x) {
       var c = candlesFor(x.id);
       if (c.length < 60) return;
       if (!feedFresh(c, st.tf)) return;
       if (backfill(x, c, st.profile, j, events)) changed = true;
       var r = A.analyze(c, st.profile, learn);
+      trendOf[x.id] = r.ready ? r.trend : null; lastOf[x.id] = c[c.length - 1];
       if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true)) changed = true;
     });
     j.forEach(function (e) {
@@ -609,6 +610,16 @@
         if (hitStop) { e.status = "loss"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
         if (hitTP) { e.status = "win"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
       }
+    });
+    // Reversal: when the trend turns against an open trade, the trade is closed at the last price.
+    j.forEach(function (e) {
+      if (e.status !== "open" || !trendOf[e.inst] || !lastOf[e.inst]) return;
+      if (e.tf && e.tf !== st.tf) return;
+      var against = (e.dir === "LONG" && trendOf[e.inst] === "bear") || (e.dir === "SHORT" && trendOf[e.inst] === "bull");
+      if (!against) return;
+      var last = lastOf[e.inst], exit = last.c, pnl = (e.dir === "LONG" ? 1 : -1) * (exit - e.entry);
+      e.status = pnl > 0 ? "win" : "loss"; e.exit = exit; e.exitReason = "reversal"; e.closeT = last.t;
+      changed = true; events.push({ type: "close", e: e });
     });
     j.forEach(function (e) { if (e.status === "loss" && !e.tags) { e.tags = tagLoss(e); changed = true; } });
     if (changed) saveJournal(j);
@@ -628,7 +639,7 @@
       var k = monthKey(e.closeT || e.t);
       var g = m[k] || (m[k] = { trades: 0, wins: 0, losses: 0, inst: {} });
       var gi = g.inst[e.inst] || (g.inst[e.inst] = { wins: 0, losses: 0, won: 0, lost: 0 });
-      var win = Math.abs(e.tp1 - e.entry), loss = Math.abs(e.entry - e.sl);
+      var win = e.exit != null ? Math.abs(e.exit - e.entry) : Math.abs(e.tp1 - e.entry), loss = e.exit != null ? Math.abs(e.exit - e.entry) : Math.abs(e.entry - e.sl);
       g.trades++; gi.wins += e.status === "win" ? 1 : 0; gi.losses += e.status === "loss" ? 1 : 0;
       if (e.status === "win") { g.wins++; gi.won += win; } else { g.losses++; gi.lost += loss; }
     });
@@ -645,7 +656,7 @@
       var riskDist = Math.abs(e.entry - e.sl);
       if (!riskDist) return;
       var riskAmt = eq * SIM.riskPct, units = riskAmt / riskDist;
-      var pnl = e.status === "win" ? units * Math.abs(e.tp1 - e.entry) : -units * riskDist;
+      var pnl = e.exit != null ? units * (e.dir === "LONG" ? 1 : -1) * (e.exit - e.entry) : (e.status === "win" ? units * Math.abs(e.tp1 - e.entry) : -units * riskDist);
       eq += pnl;
       if (e.status === "win") wins++;
       peak = Math.max(peak, eq);
@@ -906,7 +917,7 @@
       msg = (ar ? (ev.e.dir === "LONG" ? "إشارة شراء" : "إشارة بيع") : (ev.e.dir === "LONG" ? "Buy signal" : "Sell signal")) + " · " + x.name + " · " + ev.e.entry.toFixed(d);
     } else {
       if (!st.prefs.tp) return;
-      var won = ev.e.status === "win", pts = won ? Math.abs(ev.e.tp1 - ev.e.entry) : Math.abs(ev.e.entry - ev.e.sl);
+      var won = ev.e.status === "win", pts = ev.e.exit != null ? Math.abs(ev.e.exit - ev.e.entry) : (won ? Math.abs(ev.e.tp1 - ev.e.entry) : Math.abs(ev.e.entry - ev.e.sl));
       msg = (ar ? (won ? "ربح" : "خسارة") : (won ? "Win" : "Loss")) + " · " + x.name + " · " + (won ? "+" : "−") + pts.toFixed(d) + (ar ? " نقطة" : " pts");
     }
     toast(msg);
