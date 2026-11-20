@@ -148,6 +148,8 @@
   var AUTO = { XAU: "XAUUSD", XAG: "XAGUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD", NAS100: "NAS100" };
   // Only BTC streams live from Binance. Gold comes from Twelve Data (updates every minute).
   var LIVE_SYM = { BTC: "BTCUSDT" };
+  // biquote live stream (SignalR hub, no key): tick "mid" is the price. Gold and FX come from here.
+  var BQ_SYM = { XAU: "XAUUSD", EURUSD: "EURUSD", GBPUSD: "GBPUSD" };
   var LV = {};
   var autoOk = {}; // id -> true when the built-in data function returned candles
   var MAS = [
@@ -172,8 +174,45 @@
 
   // ---------- candles ----------
   function sampleFor(x) { return A.sampleCandles(x.base, x.vol, 500, x.seed); }
+  // Live candles from biquote ticks: the last bar is built from mid prices for the selected timeframe.
+  var BQ_TF_MS = { "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
+  function bqApply(id, mid, ts) {
+    if (!BQ_SYM[id] || !isFinite(mid)) return;
+    var ms = BQ_TF_MS[st.tf] || 60 * 60e3, t0 = Math.floor(ts / ms) * ms;
+    var c = LV[id] && LV[id].c;
+    if (!c || !c.length) return;
+    var last = c[c.length - 1];
+    if (last.t === t0) { last.c = mid; last.h = Math.max(last.h, mid); last.l = Math.min(last.l, mid); }
+    else if (t0 > last.t) { c.push({ t: t0, o: mid, h: mid, l: mid, c: mid, v: 0 }); if (c.length > 500) c.shift(); }
+    LV[id].live = Date.now();
+  }
+  var BQ_LAST = {}, bqConn = null;
+  function bqStart() {
+    if (!("WebSocket" in window)) return;
+    var ws;
+    try { ws = new WebSocket("wss://biquote.io/hubs/tick"); } catch (e) { return; }
+    bqConn = ws;
+    ws.onopen = function () {
+      ws.send(JSON.stringify({ protocol: "json", version: 1 }) + "\u001e");
+      ws.send(JSON.stringify({ type: 1, target: "Subscribe", arguments: [Object.keys(BQ_SYM).map(function (k) { return BQ_SYM[k]; })] }) + "\u001e");
+    };
+    ws.onmessage = function (ev) {
+      String(ev.data).split("\u001e").forEach(function (part) {
+        if (!part) return;
+        var m; try { m = JSON.parse(part); } catch (e) { return; }
+        if (m.type !== 1 || m.target !== "ReceiveTick" || !m.arguments || !m.arguments[0]) return;
+        var t = m.arguments[0], id = Object.keys(BQ_SYM).filter(function (k) { return BQ_SYM[k] === t.symbol; })[0];
+        if (!id) return;
+        BQ_LAST[id] = { mid: +t.mid, bid: +t.bid, ask: +t.ask, time: Date.parse(t.timestamp) || Date.now(), dayPct: +t.dayDiffPercent };
+        bqApply(id, +t.mid, BQ_LAST[id].time);
+      });
+      if (st.inst && BQ_SYM[st.inst]) analyzeAndRender();
+    };
+    ws.onclose = function () { bqConn = null; setTimeout(bqStart, 3000); };
+  }
   function candlesFor(id) {
     if (id === "BTC") return st.btc || [];
+    if (BQ_SYM[id] && LV[id] && LV[id].c && LV[id].c.length) return LV[id].c;
     if (LIVE_SYM[id]) return (LV[id] && LV[id].c) || [];
     return st.csv[id] || [];
   }
@@ -224,7 +263,13 @@
     return fetch(url, { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
       .then(function (text) {
-        st.csv[x.id] = parseJSONCandles(text);
+        var hist = parseJSONCandles(text);
+        st.csv[x.id] = hist;
+        if (BQ_SYM[x.id]) {
+          // keep the newest live bar if the stream already built one for this timeframe
+          var prev = LV[x.id], keepLive = prev && prev.tf === st.tf && prev.live && prev.c && prev.c.length;
+          LV[x.id] = { c: hist, tf: st.tf, live: keepLive ? prev.live : null };
+        }
         autoOk[x.id] = true; autoKey[key] = true; autoAt[key] = Date.now();
       })
       .catch(function () { autoOk[x.id] = false; });
@@ -1682,6 +1727,7 @@
   setInterval(renderSessions, 60000);
   loadAllForMarkets();
   setInterval(loadAllForMarkets, 900000);
+  bqStart();
   setInterval(refreshStyles, 900000);
   setView("analysis");
   showWelcome();
