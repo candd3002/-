@@ -1354,6 +1354,7 @@
   document.querySelectorAll("[data-lang]").forEach(function (b) { b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); }); });
   document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { openMenu(false); setView(b.getAttribute("data-go")); }); });
   $("menu-btn").addEventListener("click", function () { openMenu(true); });
+  $("reload-btn").addEventListener("click", function () { location.reload(); });
   $("drawer-close").addEventListener("click", function () { openMenu(false); });
   $("scrim").addEventListener("click", function () { openMenu(false); });
   $("signin-form").addEventListener("submit", function (ev) {
