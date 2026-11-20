@@ -42,10 +42,17 @@
     <section class="card chart-card">
       <div class="row"><span class="gold-t" data-i18n="chartTitle">Chart</span><span class="muted" id="chart-price">—</span></div>
       <div id="tv" class="tv" aria-label="TradingView chart"></div>
-      <div class="ctl" role="group" aria-label="Indicators">
+      <div class="ctl ctl-wrap" role="group" aria-label="Indicators">
         <button type="button" data-show="ema9" aria-pressed="false">EMA 9</button>
-        <button type="button" data-show="ema" aria-pressed="true">EMA 50</button>
+        <button type="button" data-show="ema21" aria-pressed="false">EMA 21</button>
+        <button type="button" data-show="ema" aria-pressed="false">EMA 50</button>
         <button type="button" data-show="ema200" aria-pressed="false">EMA 200</button>
+        <button type="button" data-show="sma20" aria-pressed="false">SMA 20</button>
+        <button type="button" data-show="sma50" aria-pressed="false">SMA 50</button>
+        <button type="button" data-show="sma100" aria-pressed="false">SMA 100</button>
+        <button type="button" data-show="sma200" aria-pressed="false">SMA 200</button>
+        <button type="button" data-show="wma20" aria-pressed="false">WMA 20</button>
+        <button type="button" data-show="vwap" aria-pressed="false">VWAP</button>
         <button type="button" data-show="bb" aria-pressed="false">Bollinger</button>
         <button type="button" data-show="vol" aria-pressed="false">Volume</button>
       </div>
