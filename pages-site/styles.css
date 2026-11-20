@@ -681,3 +681,19 @@ header.top .live,#reload-btn,#menu-btn{margin-top:14px}
 .tk .px{grid-column:2; grid-row:2; line-height:1.15}
 .tk .pct{grid-column:3; grid-row:1 / 3; justify-self:end; font-size:11px}
 .tk .sym,.tk .px,.tk .pct{white-space:nowrap}
+
+/* compact top area; price strip is one moving row again */
+header.top{padding-top:34px !important}
+header.top .title h1{font-size:17px !important; letter-spacing:.16em !important; text-shadow:0 0 12px rgba(246,207,107,.2) !important}
+header.top .title::after{width:44px !important; margin-top:6px !important}
+header.top .title p{margin-top:4px !important; font-size:11px !important}
+header.top .live,#reload-btn,#menu-btn{height:28px !important; margin-top:8px !important; font-size:11px !important; padding:0 10px !important}
+#reload-btn,#menu-btn{width:28px !important; padding:0 !important}
+.tickers{display:flex !important; grid-template-columns:none !important; overflow-x:auto !important; gap:8px !important; padding:10px 0 4px !important; scrollbar-width:none}
+.tickers::-webkit-scrollbar{display:none}
+.tickers > *{flex:0 0 auto !important; width:auto !important; min-width:138px !important}
+.tk{padding:4px 10px 4px 4px !important; min-height:0 !important; border-radius:999px !important; column-gap:7px !important; grid-template-columns:24px 1fr auto !important}
+.tk .tk-ic{width:24px !important; height:24px !important; flex-basis:24px !important; font-size:10px !important}
+.tk .sym{font-size:9px !important}
+.tk .px{font-size:12px !important}
+.tk .pct{font-size:10px !important}
