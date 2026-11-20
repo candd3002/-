@@ -154,7 +154,7 @@
     { key: "sma20", type: "sma", len: 20, color: "#8ecae6" },
     { key: "sma100", type: "sma", len: 100, color: "#fb8500" }
   ];
-  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, sma200: false, macd: false, ema9: false, ema21: false, sma20: false, sma100: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
+  var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, ema9: false, ema200: false, vol: false, macd: false, sma200: false, sma20: false, sma100: false, ema21: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
              csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
 
   function $(id) { return document.getElementById(id); }
@@ -657,7 +657,7 @@
   var OWN = null, owcFailed = false, owcLoading = false;
   var DRAW = {};   // drawings per instrument: { type: "trend" | "hline", ... }
   var drawMode = null, pending = null;
-  var MA_OWN = { ema9: ["ema", 9, "#f5c451"], ema21: ["ema", 21, "#b08cff"], ema: ["ema", 50, "#4f9bff"], sma20: ["sma", 20, "#ffffff"], sma100: ["sma", 100, "#ff9f43"], sma200: ["sma", 200, "#e15f8c"] };
+  var MA_OWN = { ema9: ["ema", 9, "#f5c451"], ema: ["ema", 50, "#4f9bff"], ema200: ["ema", 200, "#e15f8c"] };
   function loadOwnLib(cb) {
     if (window.LightweightCharts) return cb();
     if (owcLoading) return;
@@ -674,7 +674,7 @@
       var t = k.t > 1e12 ? Math.floor(k.t / 1000) : (k.t > 0 ? Math.floor(k.t / 1000) : i + 1);
       if (t <= prev) t = prev + 1;
       prev = t;
-      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c });
+      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c, volume: k.v || 0 });
     });
     return out;
   }
@@ -705,6 +705,11 @@
     var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6b6b" });
     var series = {};
     Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
+    series.bbU = chart.addLineSeries({ color: "rgba(79,155,255,.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.bbL = chart.addLineSeries({ color: "rgba(79,155,255,.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.bbM = chart.addLineSeries({ color: "rgba(79,155,255,.35)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol", priceLineVisible: false, lastValueVisible: false });
+    chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     OWN = { chart: chart, cs: cs, series: series, ov: ov, host: host, lines: [] };
     chart.timeScale().subscribeVisibleTimeRangeChange(paintOverlays);
     chart.subscribeClick(onOwnClick);
@@ -738,6 +743,12 @@
       var rows = st.show[k] ? data.map(function (d, i) { return vals[i] != null ? { time: d.time, value: vals[i] } : null; }).filter(Boolean) : [];
       OWN.series[k].setData(rows);
     });
+    var bb = A.bollinger(closes, 20, 2), bbOn = st.show.bb;
+    var pick = function (src) { return bbOn ? data.map(function (d, i) { return src[i] != null ? { time: d.time, value: src[i] } : null; }).filter(Boolean) : []; };
+    OWN.series.bbU.setData(pick(bb.up));
+    OWN.series.bbL.setData(pick(bb.lo));
+    OWN.series.bbM.setData(pick(bb.mid || A.sma(closes, 20)));
+    OWN.series.vol.setData(st.show.vol ? data.map(function (d) { return { time: d.time, value: d.volume || 0, color: d.close >= d.open ? "rgba(47,208,139,.35)" : "rgba(255,107,107,.35)" }; }) : []);
     OWN.data = data;
     OWN.lines.forEach(function (l) { try { OWN.cs.removePriceLine(l); } catch (x) {} });
     OWN.lines = [];
