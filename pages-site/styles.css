@@ -418,3 +418,8 @@ body{background:#070d17}
 .own-ov{position:absolute; inset:0; pointer-events:none; overflow:hidden}
 .own-z{position:absolute; border-radius:2px}
 .own-zl{position:absolute; left:6px; top:2px; font-size:10px; font-weight:800; color:#e8edf6; letter-spacing:.06em}
+
+.own-bar{display:flex; gap:6px; padding:6px 0 8px}
+.own-btn{background:#0c1424; color:#c9d2e0; border:1px solid rgba(120,140,170,.35); border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer}
+.own-btn.on{border-color:#e8c35a; color:#e8c35a}
+.own-svg{position:absolute; inset:0; pointer-events:none}

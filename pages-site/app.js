@@ -652,9 +652,12 @@
   }
   var tvLoading = false, tvWaiting = false;
 
-  // ---------- own chart: candles, EMA 50, order block, FVG, BSL and SSL drawn from our analysis ----------
-  var LWC_URL = "https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.2.0/lightweight-charts.standalone.production.js";
+  // ---------- own chart: candles, moving averages, zones from our analysis, drawing tools ----------
+  var LWC_URL = "vendor/lightweight-charts.js"; // served from this site (no external CDN needed)
   var OWN = null, owcFailed = false, owcLoading = false;
+  var DRAW = {};   // drawings per instrument: { type: "trend" | "hline", ... }
+  var drawMode = null, pending = null;
+  var MA_OWN = { ema9: ["ema", 9, "#f5c451"], ema21: ["ema", 21, "#b08cff"], ema: ["ema", 50, "#4f9bff"], sma20: ["sma", 20, "#ffffff"], sma100: ["sma", 100, "#ff9f43"], sma200: ["sma", 200, "#e15f8c"] };
   function loadOwnLib(cb) {
     if (window.LightweightCharts) return cb();
     if (owcLoading) return;
@@ -671,61 +674,117 @@
       var t = k.t > 1e12 ? Math.floor(k.t / 1000) : (k.t > 0 ? Math.floor(k.t / 1000) : i + 1);
       if (t <= prev) t = prev + 1;
       prev = t;
-      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c, _i: i });
+      out.push({ time: t, open: k.o, high: k.h, low: k.l, close: k.c });
     });
     return out;
   }
+  function drawsFor() { return DRAW[st.inst] || (DRAW[st.inst] = []); }
   function renderOwn(box) {
     box.textContent = "";
     var wrap = el("div", "own-wrap");
+    var bar = el("div", "own-bar");
+    [["trend", "خط"], ["hline", "أفقي"], ["clear", "مسح"]].forEach(function (b) {
+      var btn = el("button", "own-btn", b[1]); btn.type = "button"; btn.setAttribute("data-draw", b[0]);
+      btn.addEventListener("click", function () {
+        if (b[0] === "clear") { DRAW[st.inst] = []; pending = null; drawMode = null; }
+        else drawMode = draw_toggle(b[0]);
+        paintOwn(); refreshDrawBtns();
+      });
+      bar.appendChild(btn);
+    });
     var host = el("div", "own-chart");
     var ov = el("div", "own-ov");
-    wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
+    wrap.appendChild(bar); wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
     var chart = LightweightCharts.createChart(host, {
-      width: host.clientWidth || 340, height: 540,
+      width: host.clientWidth || 340, height: 500,
       layout: { background: { type: "solid", color: "#07090c" }, textColor: "#8fa0bb", fontSize: 11 },
       grid: { vertLines: { color: "rgba(120,140,170,.07)" }, horzLines: { color: "rgba(120,140,170,.07)" } },
       rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4 },
       crosshair: { mode: 0 }, handleScroll: true, handleScale: true
     });
     var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6b6b" });
-    var ema = chart.addLineSeries({ color: "#4f9bff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
-    OWN = { chart: chart, cs: cs, ema: ema, ov: ov, host: host, lines: [] };
+    var series = {};
+    Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
+    OWN = { chart: chart, cs: cs, series: series, ov: ov, host: host, lines: [] };
     chart.timeScale().subscribeVisibleTimeRangeChange(paintOverlays);
+    chart.subscribeClick(onOwnClick);
     window.addEventListener("resize", function () { if (OWN) OWN.chart.applyOptions({ width: host.clientWidth }); paintOverlays(); });
     paintOwn();
+  }
+  function draw_toggle(mode) { return drawMode === mode ? null : mode; }
+  function refreshDrawBtns() {
+    document.querySelectorAll("[data-draw]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-draw") === drawMode);
+    });
+  }
+  function onOwnClick(p) {
+    if (!OWN || !drawMode || !p || p.point == null) return;
+    var price = OWN.cs.coordinateToPrice(p.point.y);
+    if (price == null) return;
+    if (drawMode === "hline") { drawsFor().push({ type: "hline", price: price }); paintOwn(); return; }
+    if (drawMode === "trend") {
+      if (!p.time) return;
+      if (!pending) { pending = { time: p.time, price: price }; }
+      else { drawsFor().push({ type: "trend", a: pending, b: { time: p.time, price: price } }); pending = null; paintOwn(); }
+    }
   }
   function paintOwn() {
     if (!OWN) return;
     var data = ownData();
-    OWN.cs.setData(data.map(function (d) { return { time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }; }));
-    var closes = data.map(function (d) { return d.close; }), e = A.ema(closes, 50);
-    OWN.ema.setData(data.map(function (d, i) { return e[i] != null ? { time: d.time, value: e[i] } : null; }).filter(Boolean));
+    OWN.cs.setData(data);
+    var closes = data.map(function (d) { return d.close; });
+    Object.keys(MA_OWN).forEach(function (k) {
+      var spec = MA_OWN[k], vals = spec[0] === "ema" ? A.ema(closes, spec[1]) : A.sma(closes, spec[1]);
+      var rows = st.show[k] ? data.map(function (d, i) { return vals[i] != null ? { time: d.time, value: vals[i] } : null; }).filter(Boolean) : [];
+      OWN.series[k].setData(rows);
+    });
     OWN.data = data;
     OWN.lines.forEach(function (l) { try { OWN.cs.removePriceLine(l); } catch (x) {} });
     OWN.lines = [];
     var r = st.res || {};
     if (r.bsl) OWN.lines.push(OWN.cs.createPriceLine({ price: r.bsl, color: "#4f9bff", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "BSL" }));
     if (r.ssl) OWN.lines.push(OWN.cs.createPriceLine({ price: r.ssl, color: "#ff6b6b", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "SSL" }));
+    refreshDrawBtns();
     paintOverlays();
   }
   function paintOverlays() {
     if (!OWN || !OWN.data) return;
     var ov = OWN.ov, r = st.res || {}, d = OWN.data, ts = OWN.chart.timeScale(), cs = OWN.cs;
+    var W = OWN.host.clientWidth, H = OWN.host.clientHeight;
     ov.textContent = "";
+    function xOf(t) { var x = ts.timeToCoordinate(t); return x == null ? null : x; }
     function box(lo, hi, x0, color, label) {
       var y1 = cs.priceToCoordinate(hi), y2 = cs.priceToCoordinate(lo);
       if (y1 == null || y2 == null) return;
-      var x1 = x0 == null ? 0 : (ts.timeToCoordinate(x0) == null ? 0 : ts.timeToCoordinate(x0));
-      var w = OWN.host.clientWidth - x1;
+      var x1 = x0 == null ? 0 : (xOf(x0) == null ? 0 : xOf(x0));
       var b = el("div", "own-z");
-      b.style.cssText = "left:" + x1 + "px;width:" + Math.max(0, w) + "px;top:" + Math.min(y1, y2) + "px;height:" + Math.max(2, Math.abs(y2 - y1)) + "px;background:" + color;
+      b.style.cssText = "left:" + x1 + "px;width:" + Math.max(0, W - x1) + "px;top:" + Math.min(y1, y2) + "px;height:" + Math.max(2, Math.abs(y2 - y1)) + "px;background:" + color;
       if (label) b.appendChild(el("span", "own-zl", label));
       ov.appendChild(b);
     }
-    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.22)" : "rgba(255,107,107,.22)", r.ob.dir === "bull" ? "OB" : "OB");
+    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.22)" : "rgba(255,107,107,.22)", "OB");
     if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(160,110,255,.30)", "FVG");
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("class", "own-svg");
+    function line(x1, y1, x2, y2, dash) {
+      var l = document.createElementNS(svgNS, "line");
+      l.setAttribute("x1", x1); l.setAttribute("y1", y1); l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+      l.setAttribute("stroke", "#e8c35a"); l.setAttribute("stroke-width", "1.5");
+      if (dash) l.setAttribute("stroke-dasharray", "5 4");
+      svg.appendChild(l);
+    }
+    drawsFor().forEach(function (dr) {
+      if (dr.type === "hline") { var y = cs.priceToCoordinate(dr.price); if (y != null) line(0, y, W, y, true); }
+      if (dr.type === "trend") {
+        var x1 = xOf(dr.a.time), x2 = xOf(dr.b.time), ya = cs.priceToCoordinate(dr.a.price), yb = cs.priceToCoordinate(dr.b.price);
+        if (x1 != null && x2 != null && ya != null && yb != null) line(x1, ya, x2, yb, false);
+      }
+    });
+    if (pending) { var px = xOf(pending.time), py = cs.priceToCoordinate(pending.price); if (px != null && py != null) { var dot = document.createElementNS(svgNS, "circle"); dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("r", 4); dot.setAttribute("fill", "#e8c35a"); svg.appendChild(dot); } }
+    ov.appendChild(svg);
   }
+
   function renderTV() {
     var box = $("tv"); if (!box) return;
     if (!owcFailed) {
@@ -923,7 +982,7 @@
     b.addEventListener("click", function () {
       st.show[k] = !st.show[k];
       b.setAttribute("aria-pressed", String(!!st.show[k]));
-      renderTV();
+      if (OWN) paintOwn(); else renderTV();
     });
   });
   document.querySelectorAll(".nav [data-tab]").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-tab")); }); });
