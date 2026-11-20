@@ -1730,7 +1730,8 @@
     if (!window.PUSH_WORKER) { note.textContent = "خادم الإشعارات غير مضبوط بعد."; return; }
     enablePush().then(function (ok) {
       if (!ok) { note.textContent = "فعّل الإشعارات أولاً من الزر أعلاه."; return; }
-      return fetch(PUSH_WORKER + "/test").then(function () { note.textContent = "أُرسل إشعار تجريبي، يجب أن يظهر خلال ثوانٍ."; });
+      toast("اختبار الإشعارات");
+      return fetch(PUSH_WORKER + "/test").then(function () { note.textContent = "أُرسل إشعار خارجي. إن أردت رؤيته على الشاشة، اضغط الرئيسية أو أقفل الهاتف خلال ثوانٍ."; });
     }).catch(function () { note.textContent = "تعذّر الاتصال بالخادم."; });
   });
   $("notify-btn").addEventListener("click", function () {
