@@ -220,7 +220,6 @@
     var valid = up ? stop < entry : stop > entry;
     var risk = Math.abs(entry - stop);
     if (!valid || !risk || risk > P.slMaxATR * atr1) return { ready: false, reason: "stop outside the allowed range" };
-    if (risk < CFG.slMinATR * atr1) return { ready: false, reason: "stop too tight (below minimum ATR)" };
     var s = up ? 1 : -1;
     return {
       ready: true, price: p1, ema50: r15.ema50,
