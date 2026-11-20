@@ -447,3 +447,11 @@ body{background:#070d17}
 
 /* chart background = app card background */
 .own-wrap, .own-chart{background:#0b1424}
+
+/* drawing toolbar removed: chart uses full block */
+.own-chart{top:0 !important}
+.own-ov{top:0 !important}
+.own-wrap{height:500px !important}
+.own-chart{top:12px !important; bottom:8px !important}
+.own-ov{top:12px !important; bottom:8px !important}
+.own-wrap{height:520px !important}

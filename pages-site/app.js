@@ -682,19 +682,9 @@
   function renderOwn(box) {
     box.textContent = "";
     var wrap = el("div", "own-wrap");
-    var bar = el("div", "own-bar");
-    [["trend", "خط"], ["hline", "أفقي"], ["clear", "مسح"]].forEach(function (b) {
-      var btn = el("button", "own-btn", b[1]); btn.type = "button"; btn.setAttribute("data-draw", b[0]);
-      btn.addEventListener("click", function () {
-        if (b[0] === "clear") { DRAW[st.inst] = []; pending = null; drawMode = null; }
-        else drawMode = draw_toggle(b[0]);
-        paintOwn(); refreshDrawBtns();
-      });
-      bar.appendChild(btn);
-    });
     var host = el("div", "own-chart");
     var ov = el("div", "own-ov");
-    wrap.appendChild(bar); wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
+    wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
     var chart = LightweightCharts.createChart(host, {
       width: host.clientWidth || 340, height: 496,
       layout: { background: { type: "solid", color: "#0b1424" }, textColor: "#8c99ad", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
@@ -709,7 +699,6 @@
     Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
     OWN = { chart: chart, cs: cs, series: series, ov: ov, host: host, lines: [] };
     chart.timeScale().subscribeVisibleTimeRangeChange(paintOverlays);
-    chart.subscribeClick(onOwnClick);
     window.addEventListener("resize", function () { if (OWN) OWN.chart.applyOptions({ width: host.clientWidth }); paintOverlays(); });
     paintOwn();
   }
