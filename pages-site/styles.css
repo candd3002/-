@@ -616,3 +616,8 @@ body{background:#070d17}
 
 .welcome .wel-title,.welcome .wel-sub{direction:ltr; text-align:left}
 .welcome .wel-vert{top:360px !important}
+
+/* only the headline text moves: all other motion is off */
+.welcome *, .welcome *::before, .welcome *::after{animation:none !important}
+.welcome .wel-title span, .welcome .wel-title .grad{background:none !important; -webkit-text-fill-color:#f0c35a !important; color:#f0c35a !important}
+.welcome::before{transform:none !important}
