@@ -75,6 +75,7 @@ function setupMsg(inst, style, sig) {
 }
 async function run(env) {
   const skipped = [];
+  const hist = JSON.parse((await env.MONITOR_KV.get("history")) || "[]");
   const raw = await env.MONITOR_KV.get("state");
   const state = raw ? JSON.parse(raw) : { init: false, seen: {}, open: {} };
   const now = Date.now(), firstRun = !state.init, out = [];
@@ -96,6 +97,7 @@ async function run(env) {
             state.open[id] = { inst: inst.id, style: style.id, tf: style.tf, dir: r.signal.dir, entry: r.signal.entry,
               sl: r.signal.sl, tp1: r.signal.tp1, tp2: r.signal.tp2, tp3: r.signal.tp3, t: last.t };
             out.push({ id: "new|" + id, title: m.title, body: m.body });
+            hist.push({ t: now, kind: "open", inst: inst.name, tf: style.tf, dir: r.signal.dir, entry: r.signal.entry, sl: r.signal.sl, tp1: r.signal.tp1, digits: inst.digits });
           }
         }
       }
@@ -113,6 +115,7 @@ async function run(env) {
           out.push({ id: "exit|" + id, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
             body: inst.name + " · " + (won ? "+" : "−") + pts.toFixed(inst.digits) + " نقطة / pts · " + style.tf.toUpperCase() + "\n" +
               "دخول " + tr.entry.toFixed(inst.digits) + " · وقف " + tr.sl.toFixed(inst.digits) + " · TP1 " + tr.tp1.toFixed(inst.digits) });
+          hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: style.tf, dir: tr.dir, entry: tr.entry, sl: tr.sl, tp1: tr.tp1, pts: won ? Math.abs(tr.tp1 - tr.entry) : -Math.abs(tr.entry - tr.sl), digits: inst.digits });
           delete state.open[id];
           break;
         }
@@ -123,6 +126,8 @@ async function run(env) {
   for (const k of Object.keys(state.seen)) if (state.seen[k] < cutoff) delete state.seen[k];
   state.init = true;
   await env.MONITOR_KV.put("state", JSON.stringify(state));
+  while (hist.length > 200) hist.shift();
+  await env.MONITOR_KV.put("history", JSON.stringify(hist));
   if (out.length) {
     await env.MONITOR_KV.put("latest", JSON.stringify({ at: now, items: out }));
     await pushAll(env);
@@ -142,12 +147,33 @@ async function runSafe(env) {
 
 // ---- HTTP: subscribe from the app, expose the public key, send a test ----
 function json(obj, status) { return new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({ "content-type": "application/json" }, CORS) }); }
+function historyHtml(h) {
+  const d = (n, x) => (x == null || isNaN(x) ? "—" : Number(x).toFixed(n));
+  const rows = h.slice().reverse().map(e => {
+    const dt = new Date(e.t).toISOString().replace("T", " ").slice(0, 16);
+    const res = e.kind === "open" ? "مفتوحة / open" : e.kind === "win" ? "ربح / win" : "خسارة / loss";
+    const cls = e.kind === "win" ? "w" : e.kind === "loss" ? "l" : "o";
+    const pts = e.kind === "open" ? "" : (e.pts >= 0 ? "+" : "") + d(e.digits, e.pts) + " pts";
+    return '<tr class="' + cls + '"><td>' + dt + "</td><td>" + e.inst + " · " + e.tf + "</td><td>" +
+      (e.dir === "LONG" ? "شراء" : "بيع") + "</td><td>" + d(e.digits, e.entry) + "</td><td>" + res + "</td><td>" + pts + "</td></tr>";
+  }).join("");
+  const closed = h.filter(e => e.kind !== "open");
+  const wins = closed.filter(e => e.kind === "win").length;
+  const net = closed.reduce((s, e) => s + (e.pts || 0), 0);
+  const summary = "ربح " + wins + " · خسارة " + (closed.length - wins) + " · صافي " + net.toFixed(2) + " نقطة";
+  return '<!doctype html><html dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>سجل الصفقات</title>' +
+    '<style>body{font-family:system-ui,sans-serif;background:#0b1424;color:#eee;margin:16px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #1e2c44;padding:6px;text-align:start}.w td:nth-child(5){color:#6fd08c}.l td:nth-child(5){color:#ff6b6b}h2{color:#e8c35a}</style></head>' +
+    "<body><h2>سجل الصفقات</h2><p>" + summary + '</p><table><tr><th>الوقت UTC</th><th>الأداة</th><th>الاتجاه</th><th>الدخول</th><th>النتيجة</th><th>النقاط</th></tr>' +
+    (rows || '<tr><td colspan="6">لا توجد صفقات بعد</td></tr>') + "</table></body></html>";
+}
+
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runSafe(env)); },
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
+    if (url.pathname === "/history") { const h = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
     if (url.pathname === "/subscribe" && req.method === "POST") {
