@@ -1378,7 +1378,7 @@
     ov.appendChild(svg);
   }
 
-  var USE_OWN_CHART = false;
+  var USE_OWN_CHART = true;
   function renderTV() {
     var box = $("tv"); if (!box) return;
     // Chart is TradingView (display only). The own-chart path is kept below but disabled.
