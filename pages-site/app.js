@@ -657,7 +657,7 @@
   var OWN = null, owcFailed = false, owcLoading = false;
   var DRAW = {};   // drawings per instrument: { type: "trend" | "hline", ... }
   var drawMode = null, pending = null;
-  var MA_OWN = { ema9: ["ema", 9, "#f5c451"], ema21: ["ema", 21, "#b08cff"], ema: ["ema", 50, "#4f9bff"], ema200: ["ema", 200, "#e15f8c"], sma20: ["sma", 20, "#ffffff"], sma50: ["sma", 50, "#7fd1ff"], sma100: ["sma", 100, "#ff9f43"], sma200: ["sma", 200, "#ff5ea8"], wma20: ["wma", 20, "#ffd166"] };
+  var MA_OWN = { ema9: ["ema", 9, "#f0cc6e"], ema21: ["ema", 21, "#a78bfa"], ema: ["ema", 50, "#5aa8ff"], ema200: ["ema", 200, "#f472b6"], sma20: ["sma", 20, "#e2e8f0"], sma50: ["sma", 50, "#67e8f9"], sma100: ["sma", 100, "#fb923c"], sma200: ["sma", 200, "#fb7185"], wma20: ["wma", 20, "#a3e635"] };
   function wmaOf(vals, len) {
     var out = new Array(vals.length).fill(null), den = len * (len + 1) / 2;
     for (var i = len - 1; i < vals.length; i++) {
@@ -714,18 +714,20 @@
     wrap.appendChild(bar); wrap.appendChild(host); wrap.appendChild(ov); box.appendChild(wrap);
     var chart = LightweightCharts.createChart(host, {
       width: host.clientWidth || 340, height: 496,
-      layout: { background: { type: "solid", color: "#07090c" }, textColor: "#8fa0bb", fontSize: 11 },
-      grid: { vertLines: { color: "rgba(120,140,170,.07)" }, horzLines: { color: "rgba(120,140,170,.07)" } },
-      rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4 },
-      crosshair: { mode: 0 }, handleScroll: true, handleScale: true
+      layout: { background: { type: "solid", color: "#0b1424" }, textColor: "#8c99ad", fontSize: 11, fontFamily: "Inter, system-ui, sans-serif" },
+      grid: { vertLines: { color: "rgba(70,120,200,.07)" }, horzLines: { color: "rgba(70,120,200,.07)" } },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.14, bottom: 0.12 } },
+      timeScale: { borderVisible: false, timeVisible: true, rightOffset: 4, barSpacing: 7 },
+      crosshair: { mode: 0, vertLine: { color: "rgba(232,195,90,.55)", width: 1, style: 2, labelBackgroundColor: "#e8c35a" }, horzLine: { color: "rgba(232,195,90,.55)", width: 1, style: 2, labelBackgroundColor: "#e8c35a" } },
+      handleScroll: true, handleScale: true
     });
-    var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6b6b", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6b6b" });
+    var cs = chart.addCandlestickSeries({ upColor: "#2fd08b", downColor: "#ff6464", borderVisible: false, wickUpColor: "#2fd08b", wickDownColor: "#ff6464", priceLineColor: "#e8c35a", priceLineStyle: 2 });
     var series = {};
     Object.keys(MA_OWN).forEach(function (k) { series[k] = chart.addLineSeries({ color: MA_OWN[k][2], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }); });
-    series.vwap = chart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-    series.bbU = chart.addLineSeries({ color: "rgba(79,155,255,.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-    series.bbL = chart.addLineSeries({ color: "rgba(79,155,255,.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-    series.bbM = chart.addLineSeries({ color: "rgba(79,155,255,.35)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.vwap = chart.addLineSeries({ color: "#e8c35a", lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    series.bbU = chart.addLineSeries({ color: "rgba(90,168,255,.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.bbL = chart.addLineSeries({ color: "rgba(90,168,255,.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    series.bbM = chart.addLineSeries({ color: "rgba(90,168,255,.3)", lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
     series.vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol", priceLineVisible: false, lastValueVisible: false });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     OWN = { chart: chart, cs: cs, series: series, ov: ov, host: host, lines: [] };
@@ -768,7 +770,7 @@
     OWN.series.bbU.setData(pick(bb.up));
     OWN.series.bbL.setData(pick(bb.lo));
     OWN.series.bbM.setData(pick(bb.mid || A.sma(closes, 20)));
-    OWN.series.vol.setData(st.show.vol ? data.map(function (d) { return { time: d.time, value: d.volume || 0, color: d.close >= d.open ? "rgba(47,208,139,.35)" : "rgba(255,107,107,.35)" }; }) : []);
+    OWN.series.vol.setData(st.show.vol ? data.map(function (d) { return { time: d.time, value: d.volume || 0, color: d.close >= d.open ? "rgba(47,208,139,.28)" : "rgba(255,100,100,.28)" }; }) : []);
     OWN.data = data;
     OWN.lines.forEach(function (l) { try { OWN.cs.removePriceLine(l); } catch (x) {} });
     OWN.lines = [];
@@ -793,15 +795,15 @@
       if (label) b.appendChild(el("span", "own-zl", label));
       ov.appendChild(b);
     }
-    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.22)" : "rgba(255,107,107,.22)", "OB");
-    if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(160,110,255,.30)", "FVG");
+    if (r.ob && d[r.ob.i]) box(r.ob.lo, r.ob.hi, d[r.ob.i].time, r.ob.dir === "bull" ? "rgba(47,208,139,.16)" : "rgba(255,100,100,.16)", "OB");
+    if (r.fvg && d[r.fvg.i]) box(r.fvg.lo, r.fvg.hi, d[r.fvg.i].time, "rgba(232,195,90,.14)", "FVG");
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("class", "own-svg");
     function line(x1, y1, x2, y2, dash) {
       var l = document.createElementNS(svgNS, "line");
       l.setAttribute("x1", x1); l.setAttribute("y1", y1); l.setAttribute("x2", x2); l.setAttribute("y2", y2);
-      l.setAttribute("stroke", "#e8c35a"); l.setAttribute("stroke-width", "1.5");
+      l.setAttribute("stroke", "#e8c35a"); l.setAttribute("stroke-width", "1.6");
       if (dash) l.setAttribute("stroke-dasharray", "5 4");
       svg.appendChild(l);
     }

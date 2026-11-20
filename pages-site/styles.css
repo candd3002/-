@@ -426,3 +426,13 @@ body{background:#070d17}
 .own-svg{position:absolute; inset:0; pointer-events:none}
 
 .ctl-wrap{display:flex; flex-wrap:wrap; gap:6px}
+
+/* chart block: same palette as the rest of the app */
+.tv:has(.own-wrap){border:1px solid var(--line); background:#0b1424; border-radius:16px; box-shadow:0 0 0 1px rgba(232,195,90,.06), 0 18px 40px -22px rgba(232,195,90,.25)}
+.own-wrap{padding:8px 8px 4px}
+.own-bar{justify-content:flex-start; gap:8px; padding:4px 4px 8px}
+.own-btn{background:#0c1830; color:#e8c35a; border:1.5px solid rgba(232,195,90,.45); border-radius:999px; padding:5px 13px; font-size:12px; font-weight:700; min-height:32px; transition:all .15s ease}
+.own-btn:active{transform:scale(.97)}
+.own-btn.on{background:linear-gradient(180deg,#f0cc6e,#d4a037); color:#15110a; border-color:#f0cc6e}
+.own-chart{top:44px !important}
+.own-ov{top:44px !important}
