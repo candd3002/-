@@ -499,12 +499,13 @@
     };
   }
   // Records a signal once per instrument, direction and entry price.
-  function addSignal(j, x, sg, t, price, ema50, events, emit) {
+  function addSignal(j, x, sg, t, price, ema50, events, emit, tfOpt, styleOpt) {
     var d = x.digits;
-    var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d);
+    var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d) + (tfOpt ? "|" + tfOpt : "");
     if (j.some(function (e) { return e.id === id; })) return false;
     var against = (sg.dir === "LONG" && !(price > ema50)) || (sg.dir === "SHORT" && !(price < ema50));
     var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, tp2: sg.tp2, tp3: sg.tp3, t: t, status: "open", against: against };
+    if (tfOpt) { e.tf = tfOpt; e.style = styleOpt || tfOpt; }
     j.push(e);
     if (emit) events.push({ type: "open", e: e });
     return true;
@@ -542,7 +543,7 @@
     });
     j.forEach(function (e) {
       if (e.status !== "open") return;
-      var c = candlesFor(e.inst), long = e.dir === "LONG";
+      var c = e.tf && e.tf !== st.tf ? ((STY_CACHE[e.inst + "|" + e.tf] || {}).c || []) : candlesFor(e.inst), long = e.dir === "LONG";
       for (var i = 0; i < c.length; i++) {
         if (!(c[i].t > e.t)) continue;
         var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
@@ -729,7 +730,25 @@
     })).then(function (rows) {
       if (st.inst !== id) return;
       renderStyles(rows);
+      recordStyleSetups(rows);
     });
+  }
+  // Every setup shown in the style list is recorded with its own timeframe and followed to its exit.
+  function recordStyleSetups(rows) {
+    var x = INST.filter(function (q) { return q.id === st.inst; })[0];
+    if (!x) return;
+    var j = loadJournal(), events = [], changed = false;
+    rows.forEach(function (row) {
+      var r = row.r, c = STY_CACHE[x.id + "|" + row.s.tf];
+      if (!r || !r.ready || !r.signal) return;
+      var candles = row.s.tf === st.tf ? candlesFor(x.id) : (c && c.c) || [];
+      if (!candles.length || !feedFresh(candles, row.s.tf)) return;
+      if (addSignal(j, x, r.signal, candles[candles.length - 1].t, r.price, r.ema50, events, true, row.s.tf, row.s.id)) changed = true;
+    });
+    if (changed) saveJournal(j);
+    var closed = journalUpdate();
+    events.concat(closed).forEach(announce);
+    renderJournal();
   }
   function renderStyles(rows) {
     var box = $("styles"); if (!box) return;
