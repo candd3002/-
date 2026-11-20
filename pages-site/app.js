@@ -601,12 +601,49 @@
     });
     return m;
   }
+  // Paper account: starts with a virtual balance and risks a fixed share on every closed trade.
+  // Position size = risk amount / distance to stop. Profit and loss are in dollars (quote currency).
+  var SIM = { start: 10000, riskPct: 0.01 };
+  function simulate(j) {
+    var closed = j.filter(function (e) { return (e.status === "win" || e.status === "loss") && e.closeT; })
+      .sort(function (a, b) { return a.closeT - b.closeT; });
+    var eq = SIM.start, peak = SIM.start, maxDD = 0, wins = 0, curve = [];
+    closed.forEach(function (e) {
+      var riskDist = Math.abs(e.entry - e.sl);
+      if (!riskDist) return;
+      var riskAmt = eq * SIM.riskPct, units = riskAmt / riskDist;
+      var pnl = e.status === "win" ? units * Math.abs(e.tp1 - e.entry) : -units * riskDist;
+      eq += pnl;
+      if (e.status === "win") wins++;
+      peak = Math.max(peak, eq);
+      maxDD = Math.max(maxDD, (peak - eq) / peak);
+      curve.push(eq);
+    });
+    return { n: closed.length, wins: wins, equity: eq, net: eq - SIM.start, ret: (eq - SIM.start) / SIM.start, maxDD: maxDD, curve: curve };
+  }
+  function renderSim(box) {
+    var ar = st.lang === "ar", r = simulate(loadJournal());
+    var card = el("div", "rep-m");
+    card.appendChild(el("b", "", ar ? "حساب المحاكاة (ورقي)" : "Paper account"));
+    card.appendChild(el("p", "muted", (ar ? "رصيد البداية: " : "Start: ") + "$" + SIM.start.toLocaleString("en-US") + " · " + (ar ? "مخاطرة الصفقة: " : "risk per trade: ") + (SIM.riskPct * 100) + "%"));
+    if (!r.n) { card.appendChild(el("p", "muted", ar ? "لا توجد صفقات مغلقة بعد." : "No closed trades yet.")); box.appendChild(card); return; }
+    var row = el("div", "rep-i");
+    row.appendChild(el("span", "", ar ? "الرصيد" : "Equity"));
+    row.appendChild(el("b", r.net >= 0 ? "up" : "down", "$" + r.equity.toFixed(2)));
+    row.appendChild(el("span", r.net >= 0 ? "up" : "down", (r.net >= 0 ? "+" : "−") + "$" + Math.abs(r.net).toFixed(2)));
+    row.appendChild(el("span", "muted", (r.ret * 100).toFixed(2) + "%"));
+    card.appendChild(row);
+    card.appendChild(el("p", "muted", (ar ? "صفقات: " : "Trades: ") + r.n + " · " + (ar ? "رابحة: " : "wins: ") + r.wins + " (" + Math.round(r.wins / r.n * 100) + "%) · " + (ar ? "أقصى تراجع: " : "max drawdown: ") + (r.maxDD * 100).toFixed(2) + "%"));
+    card.appendChild(el("p", "muted", ar ? "حجم الصفقة يُحسب من الوقف، والربح بالدولار للأصول المقوّمة بالدولار. هذا حساب تقريبي للتعلّم، وليس تنفيذاً فعلياً." : "Position size comes from the stop distance. Results are approximate, for learning, not real execution."));
+    box.appendChild(card);
+  }
   function renderReport() {
     var box = $("report-box"); if (!box) return;
     var L = st.lang === "ar" ? REP.ar : REP.en;
     var m = monthlyReport(loadJournal()), keys = Object.keys(m).sort().reverse();
     box.textContent = "";
     box.appendChild(el("h2", "", L.title));
+    renderSim(box);
     if (!keys.length) { box.appendChild(el("p", "muted", L.none)); return; }
     keys.slice(0, 12).forEach(function (k) {
       var g = m[k];
