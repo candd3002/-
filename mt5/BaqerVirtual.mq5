@@ -40,6 +40,8 @@ int   statWins = 0, statLoss = 0;
 double statPts = 0;
 int   fh = INVALID_HANDLE;
 datetime lastBar = 0;
+string gWhy = "init";
+int gTicks = 0, gBars = 0, gSignals = 0;
 
 bool IsNul(double x) { return x < -1.0e299; }
 
@@ -207,14 +209,14 @@ Sig Build(bool up, double price, double atrV, bool hasSh, const Piv &sh, bool ha
 Sig Analyze(int n)
 {
    Sig none; none.ok = false; none.isLong = false; none.entry = 0; none.sl = 0; none.tp1 = 0; none.tp2 = 0; none.tp3 = 0;
-   if(n < 60) return none;
+   if(n < 60) { gWhy = "need 60 bars, have " + IntegerToString(n); return none; }
    double closes[]; ArrayResize(closes, n);
    for(int k = 0; k < n; k++) closes[k] = Cc[k];
    double E[], R[], A[];
    EMAc(closes, n, 50, E); RSIc(closes, n, 14, R); ATRc(n, 14, A);
    int i = n - 1;
    double price = Cc[i], ema50 = E[i], rsiV = R[i], atrV = A[i];
-   if(IsNul(ema50) || IsNul(rsiV) || IsNul(atrV) || IsNul(E[i - 5])) return none;
+   if(IsNul(ema50) || IsNul(rsiV) || IsNul(atrV) || IsNul(E[i - 5])) { gWhy = "indicators not ready"; return none; }
 
    Swings(n, InpPivot);
    bool hasSh = gnH >= 1, hasSh2 = gnH >= 2, hasSl = gnL >= 1, hasSl2 = gnL >= 2;
@@ -307,8 +309,9 @@ Sig Analyze(int n)
    bool qualLong  = score[0] >= thr && cnt[0] >= InpMinConfirm && !blockLong  && brkLong;
    bool qualShort = score[1] >= thr && cnt[1] >= InpMinConfirm && !blockShort && brkShort;
 
-   if(qualLong && !qualShort)  return Build(true,  price, atrV, hasSh, sh, hasSl, sl, ob, sw, n);
-   if(qualShort && !qualLong)  return Build(false, price, atrV, hasSh, sh, hasSl, sl, ob, sw, n);
+   gWhy = "no setup: L " + IntegerToString(score[0]) + "/" + IntegerToString(cnt[0]) + " S " + IntegerToString(score[1]) + "/" + IntegerToString(cnt[1]) + " BOS " + IntegerToString(ev.dir) + " rsi " + DoubleToString(rsiV, 0);
+   if(qualLong && !qualShort) { gWhy = "LONG candidate"; return Build(true,  price, atrV, hasSh, sh, hasSl, sl, ob, sw, n); }
+   if(qualShort && !qualLong) { gWhy = "SHORT candidate"; return Build(false, price, atrV, hasSh, sh, hasSl, sl, ob, sw, n); }
    return none;
 }
 
@@ -399,6 +402,7 @@ void OnDeinit(const int reason)
 
 void OnTick()
 {
+   gTicks++;
    datetime cur = iTime(_Symbol, _Period, 0);
    if(cur == lastBar) return;
    lastBar = cur;
@@ -406,7 +410,8 @@ void OnTick()
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
    int got = CopyRates(_Symbol, _Period, 1, InpBars, rates); // bar 1 = last closed bar
-   if(got < 60) return;
+   gBars = got;
+   if(got < 60) { Comment("BaqerVirtual: only " + IntegerToString(got) + " bars"); return; }
 
    ArrayResize(O, got); ArrayResize(Hh, got); ArrayResize(Ll, got); ArrayResize(Cc, got); ArrayResize(T, got);
    for(int k = 0; k < got; k++)
@@ -417,6 +422,10 @@ void OnTick()
 
    ProcessBar(Hh[got - 1], Ll[got - 1], T[got - 1]);
    Sig s = Analyze(got);
-   if(s.ok) OpenVirtual(s, T[got - 1]);
+   if(s.ok) { OpenVirtual(s, T[got - 1]); gSignals++; }
+   Comment("BaqerVirtual " + InpProfile + "\nticks " + IntegerToString(gTicks) + " bars " + IntegerToString(gBars) +
+           "\nopen " + IntegerToString(nvt) + " closed " + IntegerToString(statWins + statLoss) +
+           " wins " + IntegerToString(statWins) + "\nsignals " + IntegerToString(gSignals) + "\nlast: " + gWhy);
+   if(gTicks <= 2) Print("BaqerVirtual OnTick called, bars=", got);
 }
 //+------------------------------------------------------------------+
