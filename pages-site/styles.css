@@ -708,3 +708,17 @@ header.top .live,#reload-btn,#menu-btn{height:28px !important; margin-top:8px !i
 /* no empty space above the title */
 header.top{padding-top:10px !important; margin-top:0 !important}
 .phone{padding-top:0 !important}
+
+/* top row as in the approved sample: title on the left, controls on the right, live strip below */
+header.top{direction:ltr !important; display:flex !important; flex-wrap:nowrap !important; justify-content:space-between !important; align-items:center !important; padding:12px 0 0 !important; text-align:left}
+header.top .title{flex:0 0 auto !important; order:0; text-align:left}
+header.top .title::after{display:none !important}
+header.top .title p{display:none !important}
+header.top .title h1{font-size:18px !important; letter-spacing:.16em !important; margin:0 !important; text-shadow:none !important}
+#menu-btn{order:1 !important; margin-top:0 !important}
+#reload-btn{order:2 !important; margin-top:0 !important}
+header.top .live{order:3 !important; margin-top:0 !important; gap:6px !important}
+header.top .live #clock, header.top .live .rf{display:none !important}
+header.top .live,#reload-btn,#menu-btn{height:30px !important}
+#menu-btn,#reload-btn{width:30px !important; padding:0 !important}
+.tickers{margin-top:8px !important}

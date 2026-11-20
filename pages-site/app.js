@@ -341,7 +341,7 @@
   // Small coin badges shown beside each price in the strip.
   var COIN_ICON = { BTC: "₿", XAU: "Au", XAG: "Ag", EURUSD: "€", GBPUSD: "£", NAS100: "N" };
   var COIN_COLOR = { BTC: "#f7931a", XAU: "#e8c35a", XAG: "#9aa6b8", EURUSD: "#3b82f6", GBPUSD: "#8b5cf6", NAS100: "#10b981" };
-  // Price strip: a CSS marquee (works on iPhone and in RTL). It pauses while touched.
+  // Price strip: a CSS marquee that never stops (works on iPhone and in RTL).
   function marqueeTickers(row) {
     if (!row || row.querySelector(".tk-track")) return;
     var items = Array.prototype.slice.call(row.children);
@@ -349,12 +349,6 @@
     items.forEach(function (n) { track.appendChild(n); });
     items.forEach(function (n) { track.appendChild(n.cloneNode(true)); });
     row.appendChild(track);
-    ["touchstart", "pointerdown", "mousedown"].forEach(function (ev) {
-      row.addEventListener(ev, function () { row.classList.add("paused"); }, { passive: true });
-    });
-    ["touchend", "pointerup", "mouseup", "pointercancel", "mouseleave"].forEach(function (ev) {
-      row.addEventListener(ev, function () { row.classList.remove("paused"); }, { passive: true });
-    });
   }
   function renderTickers() {
     var row = $("tickers"); if (!row) return;
