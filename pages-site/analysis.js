@@ -18,8 +18,8 @@
     congMaxATR: 5,       // range in ATR      (same as Hamoody 1M)
     bodyLen: 20,         // average body lookback
     bodyMult: 1.5,       // breakout body multiplier (same as Hamoody 1M)
-    threshold: 6,        // minimum score to fire
-    minConfirm: 3,       // minimum confirmations ticked
+    threshold: 7,        // strict: minimum score to fire (was 6)
+    minConfirm: 4,       // strict: minimum confirmations ticked (was 3)
     rsiOB: 70, rsiOS: 30,
     slMinATR: 0.5, slMaxATR: 4,
     slBufferATR: 0.2

@@ -522,11 +522,20 @@
     return true;
   }
   // Called on every refresh. Returns events (new signal / closed trade) for the notifier.
+  // Strict data guard: a feed whose last candle is older than 2 bars is stale. Nothing is recorded
+  // or closed from stale data, so a late or cached price cannot create a false win or loss.
+  function feedFresh(c, tf) {
+    if (!c || !c.length) return false;
+    var ms = TF_MS[tf] || 60 * 60e3, last = c[c.length - 1].t;
+    if (last > 1e12) return Date.now() - last <= 2 * ms;
+    return true;
+  }
   function journalUpdate() {
     var j = loadJournal(), changed = false, events = [], learn = learnFromJournal();
     INST.forEach(function (x) {
       var c = candlesFor(x.id);
       if (c.length < 60) return;
+      if (!feedFresh(c, st.tf)) return;
       if (backfill(x, c, st.profile, j, events)) changed = true;
       var r = A.analyze(c, st.profile, learn);
       if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true)) changed = true;
