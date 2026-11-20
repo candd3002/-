@@ -179,6 +179,39 @@
   }
 
   // ---------- main analysis ----------
+  // Scalp, multi-timeframe: 15m order block is the zone; on 1m the trend must agree, and when price
+  // reaches the 15m zone a 1m order block in the same direction gives the entry and the stop.
+  // Entry: open of the 1m order block candle. Stop: beyond its far edge (above its high for shorts,
+  // below its low for longs), plus the profile buffer.
+  function scalpSetup(c15, c1, profileName) {
+    var P = PROFILES[profileName] || PROFILES.scalp;
+    var r15 = analyze(c15, profileName), r1 = analyze(c1, profileName);
+    if (!r15.ready || !r1.ready) return { ready: false, reason: "not enough data" };
+    var ob15 = r15.ob;
+    if (!ob15) return { ready: false, reason: "no 15m order block" };
+    var dir = ob15.dir === "bear" ? "SHORT" : "LONG";
+    var up = dir === "LONG";
+    var tol = 0.3 * r15.atr, p1 = r1.price;
+    var inZone = p1 >= ob15.lo - tol && p1 <= ob15.hi + tol;
+    if (!inZone) return { ready: false, reason: "price not at the 15m order block yet" };
+    if (r1.trend !== (up ? "bull" : "bear")) return { ready: false, reason: "1m trend does not agree" };
+    var ob1 = r1.ob;
+    if (!ob1 || ob1.dir !== (up ? "bull" : "bear")) return { ready: false, reason: "no 1m order block in direction" };
+    var k = c1[ob1.i];
+    if (!k) return { ready: false, reason: "1m order block candle missing" };
+    var entry = k.o;
+    var atr1 = r1.atr;
+    var stop = up ? k.l - P.slBufferATR * atr1 : k.h + P.slBufferATR * atr1;
+    var valid = up ? stop < entry : stop > entry;
+    var risk = Math.abs(entry - stop);
+    if (!valid || !risk || risk > P.slMaxATR * atr1) return { ready: false, reason: "stop outside the allowed range" };
+    var s = up ? 1 : -1;
+    return {
+      ready: true, price: p1, ema50: r15.ema50,
+      signal: { dir: dir, key: "scalp-mtf", score: 0, count: 0, grade: "A", entry: entry, sl: stop, risk: risk,
+        tp1: entry + s * P.tp[0] * risk, tp2: entry + s * P.tp[1] * risk, tp3: entry + s * P.tp[2] * risk }
+    };
+  }
   function analyze(c, profileName, learn) {
     var P = PROFILES[profileName] || PROFILES.balanced;
     var n = c.length;
@@ -510,7 +543,7 @@
   }
 
   return {
-    CFG: CFG, PROFILES: PROFILES, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
+    CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
   };

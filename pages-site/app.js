@@ -835,6 +835,14 @@
   function refreshStyles() {
     var id = st.inst;
     return Promise.all(STYLE_TF.map(function (sty) {
+      if (sty.id === "scalp") {
+        // Scalp: 15m order block zone, 1m trend and 1m order block for the entry (see analysis.scalpSetup).
+        return Promise.all([styleCandles(id, "15m"), styleCandles(id, "1m")]).then(function (cs) {
+          var c15 = cs[0], c1 = cs[1];
+          var r = c15 && c1 && c15.length >= 60 && c1.length >= 60 ? A.scalpSetup(c15, c1, sty.profile) : null;
+          return { s: sty, own: styleLearn(sty.id), r: r && r.ready ? r : null, mtf: true, reason: r && r.reason };
+        });
+      }
       return styleCandles(id, sty.tf).then(function (c) {
         var L = learnFromJournal(), own = styleLearn(sty.id);
         L.extra = (L.extra || 0) + own.extra;

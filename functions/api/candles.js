@@ -1,7 +1,7 @@
 // Cloudflare Pages Function (project root /functions): /api/candles?symbol=XAUUSD&interval=1h
 // Key is read from the TWELVE_DATA_KEY secret (never sent to the browser).
 const SYMBOLS = { XAUUSD: "XAU/USD", XAGUSD: "XAG/USD", EURUSD: "EUR/USD", GBPUSD: "GBP/USD", NAS100: "NDX" };
-const INTERVALS = { "15m": "15min", "1h": "1h", "4h": "4h" };
+const INTERVALS = { "1m": "1min", "15m": "15min", "1h": "1h", "4h": "4h" };
 const HEADERS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" };
 
 export async function onRequest(context) {
