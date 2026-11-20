@@ -479,6 +479,20 @@
     }
     return tags;
   }
+  // Self-adjustment per style. It only looks at that style's closed trades and changes one thing:
+  // the decision bar. Weak results raise it, strong results lower it again. Bounded to +0..+2.
+  function styleLearn(styleId) {
+    var closed = loadJournal().filter(function (e) { return e.style === styleId && (e.status === "win" || e.status === "loss"); });
+    var n = closed.length, w = closed.filter(function (e) { return e.status === "win"; }).length;
+    var extra = 0, note = "";
+    if (n >= 6) {
+      var wr = w / n;
+      if (wr < 0.25 && n >= 10) { extra = 2; note = "نسبة الربح " + Math.round(wr * 100) + "% من " + n + " صفقة: رفعت حد الدخول نقطتين"; }
+      else if (wr < 0.35) { extra = 1; note = "نسبة الربح " + Math.round(wr * 100) + "% من " + n + " صفقة: رفعت حد الدخول نقطة"; }
+      else { note = "نسبة الربح " + Math.round(wr * 100) + "% من " + n + " صفقة: حد الدخول كما هو"; }
+    } else { note = "تعلّم بعد " + (6 - n) + " صفقات مغلقة إضافية"; }
+    return { extra: extra, note: note, n: n };
+  }
   function learnFromJournal() {
     var j = loadJournal(), s = journalStats(j), block = [];
     Object.keys(s.byKey).forEach(function (k) { var g = s.byKey[k]; if (g.n >= 6 && g.w / g.n < 0.25) block.push(k); });
@@ -725,7 +739,9 @@
     var id = st.inst;
     return Promise.all(STYLE_TF.map(function (sty) {
       return styleCandles(id, sty.tf).then(function (c) {
-        return { s: sty, r: c && c.length >= 60 ? A.analyze(c, sty.profile, learnFromJournal()) : null };
+        var L = learnFromJournal(), own = styleLearn(sty.id);
+        L.extra = (L.extra || 0) + own.extra;
+        return { s: sty, own: own, r: c && c.length >= 60 ? A.analyze(c, sty.profile, L) : null };
       });
     })).then(function (rows) {
       if (st.inst !== id) return;
@@ -768,6 +784,7 @@
       top.appendChild(name);
       var sg = row.r && row.r.ready && row.r.signal;
       var pill;
+      if (row.own) top.title = row.own.note;
       if (!row.r) pill = el("span", "style-pill", ar ? "لا بيانات" : "No data");
       else if (!sg) pill = el("span", "style-pill", ar ? "انتظار" : "Wait");
       else {
@@ -776,6 +793,7 @@
       }
       top.appendChild(pill);
       item.appendChild(top);
+      if (row.own) item.appendChild(el("p", "muted style-learn", (ar ? "تعلّم: " : "Learning: ") + row.own.note));
       if (sg) {
         var grid = el("div", "style-grid");
         [[ar ? "دخول" : "Entry", sg.entry, ""], [ar ? "وقف" : "Stop", sg.sl, "down"], ["TP1", sg.tp1, "up"], ["TP2", sg.tp2, "up"], ["TP3", sg.tp3, "up"]].forEach(function (x) {
