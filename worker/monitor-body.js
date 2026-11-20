@@ -65,6 +65,18 @@ async function pushAll(env) {
   if (keep.length !== subs.length) await env.MONITOR_KV.put("subs", JSON.stringify(keep));
 }
 
+// ---- Bar archive: closed candles kept in KV, saved once per hour (KV free plan write limit) ----
+const HIST_KEEP = 10000;
+async function getHist(env, id, tf) { const r = await env.MONITOR_KV.get("hist:" + id + ":" + tf); return r ? JSON.parse(r) : []; }
+async function saveHist(env, id, tf, bars) {
+  const map = new Map();
+  for (const b of await getHist(env, id, tf)) map.set(b.t, b);
+  for (const b of bars) map.set(b.t, { t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v });
+  const arr = [...map.values()].sort((a, b) => a.t - b.t).slice(-HIST_KEEP);
+  await env.MONITOR_KV.put("hist:" + id + ":" + tf, JSON.stringify(arr));
+  return arr.length;
+}
+
 // ---- Monitor ----
 const PROFILES = ["balanced", "sniper"];
 const TFS = ["15m", "1h", "4h"];
@@ -115,12 +127,14 @@ async function run(env) {
   const raw = await env.MONITOR_KV.get("state");
   const state = raw ? JSON.parse(raw) : { init: false, seen: {}, open: {} };
   const now = Date.now(), firstRun = !state.init, out = [];
+  const histDue = now - (state.histAt || 0) >= 3600e3;
 
   for (const inst of INSTR) {
     for (const tf of TFS) {
       let bars;
       try { bars = await fetchBars(inst.sym, tf); } catch (e) { skipped.push(inst.id + " " + tf + ": " + e.message); continue; }
       if (bars.length < 60) continue;
+      if (histDue) await saveHist(env, inst.id, tf, bars.slice(0, -1));
       const last = bars[bars.length - 1];
       const fresh = now - last.t <= 2 * TF_MS[tf];
       for (const profile of PROFILES) {
@@ -148,6 +162,7 @@ async function run(env) {
   const cutoff = now - 30 * 864e5;
   for (const k of Object.keys(state.seen)) if (state.seen[k] < cutoff) delete state.seen[k];
   state.init = true;
+  if (histDue) state.histAt = now;
   await env.MONITOR_KV.put("state", JSON.stringify(state));
   while (hist.length > 200) hist.shift();
   await env.MONITOR_KV.put("history", JSON.stringify(hist));
@@ -209,13 +224,15 @@ async function exportCsv(url) {
 }
 
 // Backtest with the same engine as the app: /backtest?symbol=XAU&tf=15m&profile=balanced
-async function backtestRoute(url) {
+async function backtestRoute(url, env) {
   const id = url.searchParams.get("symbol") || "XAU";
   const tf = url.searchParams.get("tf") || "15m";
   const profile = url.searchParams.get("profile") || "balanced";
   const inst = INSTR.find(x => x.id === id);
   if (!inst || !TF_MS[tf]) return new Response("usage: /backtest?symbol=XAU|EURUSD|GBPUSD|BTC&tf=15m|1h|4h&profile=balanced|sniper", { status: 400 });
-  const bars = await fetchBars(inst.sym, tf);
+  let bars = await fetchBars(inst.sym, tf);
+  const archived = url.searchParams.get("src") === "live" ? [] : await getHist(env, inst.id, tf);
+  if (archived.length > bars.length) bars = archived;
   if (bars.length < 80) return new Response("not enough bars: " + bars.length, { status: 500 });
   const r = A.backtest(bars, 120, profile);
   const f = (v, d) => (v == null || isNaN(v) ? "—" : Number(v).toFixed(d));
@@ -228,7 +245,7 @@ async function backtestRoute(url) {
   const html = '<!doctype html><html dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>باك تيست</title>' +
     '<style>body{font-family:system-ui,sans-serif;background:#0b1424;color:#eee;margin:16px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #1e2c44;padding:6px;text-align:start}.w td:nth-child(5){color:#6fd08c}.l td:nth-child(5){color:#ff6b6b}h2{color:#e8c35a}</style></head>' +
     "<body><h2>باك تيست: " + inst.name + " · " + tf + " · " + profile + "</h2>" +
-    "<p>الشموع: " + bars.length + " · الصفقات: " + r.count + " · الرابحة: " + r.wins + " · نسبة الربح: " + f(r.winRate * 100, 1) + "% · الصافي: " + f(r.netR, 2) + "R · عامل الربح: " + f(r.profitFactor, 2) + "</p>" +
+    "<p>" + (archived.length > 0 && bars === archived ? "من الأرشيف" : "من biquote المباشر") + " · الشموع: " + bars.length + " · الصفقات: " + r.count + " · الرابحة: " + r.wins + " · نسبة الربح: " + f(r.winRate * 100, 1) + "% · الصافي: " + f(r.netR, 2) + "R · عامل الربح: " + f(r.profitFactor, 2) + "</p>" +
     '<table><tr><th>الوقت UTC</th><th>الاتجاه</th><th>الدرجة</th><th>النتيجة</th><th>R</th></tr>' +
     (rows || '<tr><td colspan="5">لا توجد صفقات في هذه البيانات</td></tr>') + "</table></body></html>";
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
@@ -241,7 +258,7 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
     if (url.pathname === "/history") { const h = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
-    if (url.pathname === "/backtest") return backtestRoute(url);
+    if (url.pathname === "/backtest") return backtestRoute(url, env);
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
     if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
