@@ -1135,13 +1135,12 @@
       box.classList.remove("wel-swap");
     }, 600);
   }, 3000);
-  // Entry gate: the visitor must open the Instagram follow link first. This is a request, not a check.
-  var FOLLOW_KEY = "baqerFollowClicked";
-  function unlockEnter() { var b = $("wel-guest"); if (b) b.disabled = false; }
-  $("wel-follow").addEventListener("click", function () { store(FOLLOW_KEY, true); });
-  $("wel-guest").addEventListener("click", hideWelcome);
-  // Notification opt-in from the first page. iPhone only allows web notifications after the site is
-  // added to the Home Screen, so the button checks that first and explains the step if needed.
+  // Entry gate: notifications must be allowed before the Enter button unlocks.
+  // On iPhone web notifications only work after the site is added to the Home Screen; the gate explains that.
+  var NOTIF_OK = "baqerNotifOk";
+  function unlockEnterBtn() { var b = $("wel-guest"); if (b) b.disabled = false; }
+  if (store(NOTIF_OK) && ("Notification" in window) && Notification.permission === "granted") unlockEnterBtn();
+  $("wel-guest").addEventListener("click", function () { if (!this.disabled) hideWelcome(); });
   $("wel-notify").addEventListener("click", function () {
     var note = $("wel-notify-note");
     var standalone = (window.navigator.standalone === true) || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
@@ -1150,9 +1149,10 @@
       note.textContent = "أولاً: زر المشاركة ← إضافة إلى الشاشة الرئيسية، ثم افتح الأيقونة واضغط هذا الزر مرة أخرى.";
       return;
     }
-    if (!("Notification" in window)) { note.textContent = "هذا المتصفح لا يدعم الإشعارات."; return; }
+    if (!("Notification" in window)) { note.textContent = "هذا المتصفح لا يدعم الإشعارات، لا يمكن الدخول من هنا."; return; }
     Notification.requestPermission().then(function (p) {
-      note.textContent = p === "granted" ? "تم تفعيل الإشعارات." : "لم تُفعّل الإشعارات.";
+      if (p === "granted") { store(NOTIF_OK, true); unlockEnterBtn(); note.textContent = "تم تفعيل الإشعارات. يمكنك الدخول الآن."; }
+      else { note.textContent = "يجب السماح بالإشعارات حتى تدخل التطبيق."; }
     });
   });
 
