@@ -145,7 +145,7 @@ async function run(env) {
         const r = A.analyze(bars, profile, null);
         if (!(r.ready && r.signal)) continue;
         const sig = r.signal;
-        const id = inst.id + "|" + tf + "|" + profile + "|" + sig.key + "|" + sig.entry.toFixed(inst.digits);
+        const id = inst.id + "|" + tf + "|" + profile + "|" + sig.dir;
         if (state.seen[id]) continue;
         state.seen[id] = now;
         // One entry message per open trade: skip if the same instrument, timeframe and direction is already open.
