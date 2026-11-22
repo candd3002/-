@@ -98,6 +98,12 @@
 
     <section class="card analysis-card">
       <h2 data-i18n="detailTitle">Detailed analysis (ICT + SMC)</h2>
+      <div class="ctl ctl-wrap" role="group" aria-label="Smart analysis frame">
+        <button type="button" data-smart-tf="5m" aria-pressed="false">5M</button>
+        <button type="button" data-smart-tf="15m" aria-pressed="true">15M</button>
+        <button type="button" data-smart-tf="1h" aria-pressed="false">1H</button>
+        <button type="button" data-smart-tf="4h" aria-pressed="false">4H</button>
+      </div>
       <button type="button" class="btn" id="smart-run">تشغيل التحليل الذكي</button>
       <div id="smart-out" class="levels"></div>
       <div id="analysis" class="levels"></div>

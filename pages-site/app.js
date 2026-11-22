@@ -1860,10 +1860,12 @@
   // ---------- smart analysis: combines the schools we compute from real bars ----------
   // Built now: ICT + SMC (BOS/CHoCH, order block, FVG), EMA 50, RSI.
   // Not counted yet (no tested rule): Price Action, Fibonacci, Wyckoff. Shown as "not active", never guessed.
+  var smartTf = "15m";
   function runSmart() {
     var out = $("smart-out"); if (!out) return;
     out.textContent = "";
-    var frames = [["5m", "5M"], ["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
+    var all = [["5m", "5M"], ["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
+    var frames = all.filter(function (f) { return f[0] === smartTf; });
     var rows = [], trade = null;
     frames.forEach(function (f) {
       var bars = (LV[st.inst] && LV[st.inst].tf === f[0]) ? LV[st.inst].c : null;
@@ -1916,6 +1918,13 @@
     }
     out.appendChild(t);
   }
+  document.querySelectorAll("[data-smart-tf]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      smartTf = b.getAttribute("data-smart-tf");
+      document.querySelectorAll("[data-smart-tf]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      runSmart();
+    });
+  });
   var smartBtn = $("smart-run");
   if (smartBtn) smartBtn.addEventListener("click", runSmart);
 
