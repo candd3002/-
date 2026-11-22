@@ -747,3 +747,15 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 .lvl.trade-stop{border-color:rgba(255,100,100,.35)}
 .lvl.trade-target{border-color:rgba(47,208,139,.35)}
 .lvl > div.muted{padding-top:6px}
+
+/* Smart analysis: clear frame cards, school chips, and a prominent trade card, in the site palette */
+#smart-out{display:grid; gap:10px; margin-top:12px}
+#smart-out > .lvl{padding:14px; border-radius:16px; background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line)}
+#smart-out > .lvl > b{display:flex; align-items:center; justify-content:space-between; font-size:14px; color:var(--fg); margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed var(--line)}
+#smart-out > .lvl > div{font-size:13px; line-height:1.7; padding:3px 0}
+#smart-out > .lvl > div.up{color:#6fd08c}
+#smart-out > .lvl > div.down{color:#ff7a7a}
+#smart-out > .lvl > div.muted{color:var(--muted); font-size:12px}
+/* the trade card (the last block) gets the gold accent */
+#smart-out > .lvl:last-child{border-color:rgba(217,177,90,.55); box-shadow:0 0 0 1px rgba(217,177,90,.12) inset}
+#smart-out > .lvl:last-child > b{color:var(--gold); font-size:15px}
