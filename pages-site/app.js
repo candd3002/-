@@ -751,7 +751,7 @@
   // Records a signal once per instrument, direction and entry price.
   function addSignal(j, x, sg, t, price, ema50, events, emit, tfOpt, styleOpt) {
     var d = x.digits;
-    var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d) + (tfOpt ? "|" + tfOpt : "");
+    var id = x.id + "|" + sg.dir + "|" + (tfOpt || "") + "|" + (styleOpt || "");
     if (j.some(function (e) { return e.id === id; })) return false;
     var against = (sg.dir === "LONG" && !(price > ema50)) || (sg.dir === "SHORT" && !(price < ema50));
     var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, tp2: sg.tp2, tp3: sg.tp3, t: t, status: "open", against: against };
