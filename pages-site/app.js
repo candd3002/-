@@ -1863,36 +1863,58 @@
   function runSmart() {
     var out = $("smart-out"); if (!out) return;
     out.textContent = "";
-    var frames = [["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
-    var votes = { bull: 0, bear: 0 }, rows = [];
+    var frames = [["5m", "5M"], ["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
+    var rows = [], trade = null;
     frames.forEach(function (f) {
       var bars = (LV[st.inst] && LV[st.inst].tf === f[0]) ? LV[st.inst].c : null;
-      if (!bars || bars.length < 60) { rows.push({ label: f[1], dir: null }); return; }
+      var row = { label: f[1], tf: f[0], dir: null, schools: [], trade: null, note: "" };
+      if (f[0] === "5m" || !bars || bars.length < 60) { row.note = f[0] === "5m" ? "بيانات 5M غير متوفرة بعد" : "بيانات غير متوفرة"; rows.push(row); return; }
       var rr = A.analyze(bars, st.profile, null);
-      if (!rr || !rr.ready) { rows.push({ label: f[1], dir: null }); return; }
+      if (!rr || !rr.ready) { row.note = "لا تكفي البيانات"; rows.push(row); return; }
       var lean = rr.longScore >= rr.shortScore ? "bull" : "bear";
-      var structure = rr.ev ? rr.ev.dir : 0;
-      var agree = (rr.price > rr.ema50 ? "bull" : "bear") === lean && (structure === 0 || (structure === 1 ? "bull" : "bear") === lean);
-      if (agree) votes[lean]++;
-      rows.push({ label: f[1], dir: lean, ok: agree });
+      row.dir = lean;
+      var emaOk = (rr.price > rr.ema50 ? "bull" : "bear") === lean;
+      var structOk = rr.ev ? (rr.ev.dir === 1 ? "bull" : "bear") === lean : false;
+      var rsiOk = lean === "bull" ? rr.rsi >= 45 && rr.rsi <= 68 : rr.rsi >= 32 && rr.rsi <= 55;
+      row.schools = [
+        { name: "ICT + SMC", ok: structOk, why: rr.ev ? (rr.ev.type || "BOS") + (structOk ? " متفق" : " معاكس") : "لا كسر هيكل" },
+        { name: "EMA 50", ok: emaOk, why: emaOk ? "السعر في الاتجاه" : "السعر عكس الاتجاه" },
+        { name: "RSI", ok: rsiOk, why: "RSI " + rr.rsi.toFixed(0) }
+      ];
+      if (rr.signal && !trade) { trade = { label: f[1], s: rr.signal, lean: lean }; row.trade = true; }
+      rows.push(row);
     });
-    var known = rows.filter(function (x) { return x.dir; }).length;
-    var card = el("div", "lvl");
-    card.appendChild(el("b", "", "التحليل الذكي (ICT + SMC + EMA + RSI)"));
-    if (!known) {
-      card.appendChild(el("div", "muted", "لا توجد بيانات كافية على الفريمات الآن."));
-    } else {
-      var win = votes.bull >= votes.bear ? "bull" : "bear";
-      var n = Math.max(votes.bull, votes.bear);
-      card.appendChild(el("div", win === "bull" ? "up" : "down", (win === "bull" ? "اتجاه صاعد" : "اتجاه هابط") + " · " + n + "/" + known + " فريمات متفقة"));
-      rows.forEach(function (x) {
-        var arrow = x.dir === "bull" ? "↑" : x.dir === "bear" ? "↓" : "—";
-        card.appendChild(el("div", x.ok ? "up" : "muted", x.label + " " + arrow + (x.ok ? " متفق" : x.dir ? " غير متفق" : " بيانات غير متوفرة")));
+    // the header and frame rows
+    var head = el("div", "lvl");
+    head.appendChild(el("b", "", "التحليل الذكي · ICT + SMC + EMA + RSI"));
+    rows.forEach(function (r) {
+      var card = el("div", "lvl");
+      var arrow = r.dir === "bull" ? "↑ صاعد" : r.dir === "bear" ? "↓ هابط" : "—";
+      var tone = r.dir === "bull" ? "up" : r.dir === "bear" ? "down" : "muted";
+      card.appendChild(el("b", "", r.label + " · " + arrow));
+      if (r.note) card.appendChild(el("div", "muted", r.note));
+      r.schools.forEach(function (sc) {
+        card.appendChild(el("div", sc.ok ? "up" : "muted", (sc.ok ? "✓ " : "✗ ") + sc.name + " · " + sc.why));
       });
+      if (r.schools.length) {
+        card.appendChild(el("div", "muted", "غير مفعّل بعد: Price Action وFibonacci وWyckoff"));
+      }
+      out.appendChild(card);
+    });
+    // the trade, if one of the frames produced a signal
+    var t = el("div", "lvl");
+    if (trade) {
+      var buy = trade.s.dir === "LONG";
+      t.appendChild(el("b", "", (buy ? "صفقة شراء" : "صفقة بيع") + " · " + trade.label));
+      var d = (OWN && OWN.data && OWN.data.length && (st.inst === "BTC" ? 2 : 5)) || 5;
+      t.appendChild(el("div", buy ? "up" : "down", "الدخول " + trade.s.entry.toFixed(d) + " · الوقف " + trade.s.sl.toFixed(d)));
+      t.appendChild(el("div", "up", "TP1 " + trade.s.tp1.toFixed(d) + " · TP2 " + trade.s.tp2.toFixed(d) + " · TP3 " + trade.s.tp3.toFixed(d)));
+      t.appendChild(el("div", "muted", "ليست توصية. النتيجة تحتاج اختباراً أولاً."));
+    } else {
+      t.appendChild(el("b", "", "لا توجد صفقة الآن"));
+      t.appendChild(el("div", "muted", "لم تكتمل شروط الدخول في أي فريم متوفر."));
     }
-    card.appendChild(el("div", "muted", "غير مفعّل بعد: Price Action وFibonacci وWyckoff، لأن قواعدها لم تُختبر."));
-    card.appendChild(el("div", "muted", "الفريم 5M يحتاج مصدر بيانات لم يُربط بعد، لذلك لا يُحسب."));
-    out.appendChild(card);
+    out.appendChild(t);
   }
   var smartBtn = $("smart-run");
   if (smartBtn) smartBtn.addEventListener("click", runSmart);
