@@ -759,3 +759,14 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 /* the trade card (the last block) gets the gold accent */
 #smart-out > .lvl:last-child{border-color:rgba(217,177,90,.55); box-shadow:0 0 0 1px rgba(217,177,90,.12) inset}
 #smart-out > .lvl:last-child > b{color:var(--gold); font-size:15px}
+
+/* Smart analysis, tidy layout: frame header, school rows, and a clean trade block */
+#smart-out > .lvl{display:grid; gap:4px}
+#smart-out > .lvl > b{margin-bottom:6px}
+#smart-out > .lvl > div{display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid rgba(255,255,255,.04)}
+#smart-out > .lvl > div:first-of-type{border-top:0}
+#smart-out > .lvl > div.up::before{content:"●"; color:#2fd08b; font-size:9px}
+#smart-out > .lvl > div.down::before{content:"●"; color:#ff6464; font-size:9px}
+#smart-out > .lvl > div.muted::before{content:"○"; color:var(--muted); font-size:9px}
+#smart-out > .lvl:last-child > div{display:block; border-top:0; padding:4px 0}
+#smart-out > .lvl:last-child > div::before{content:none}
