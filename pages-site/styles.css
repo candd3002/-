@@ -770,3 +770,6 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 #smart-out > .lvl > div.muted::before{content:"○"; color:var(--muted); font-size:9px}
 #smart-out > .lvl:last-child > div{display:block; border-top:0; padding:4px 0}
 #smart-out > .lvl:last-child > div::before{content:none}
+
+/* School chips above the smart analysis: one row, each school in its own colour */
+#school-chips{display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 4px}

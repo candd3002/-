@@ -1861,6 +1861,25 @@
   // Built now: ICT + SMC (BOS/CHoCH, order block, FVG), EMA 50, RSI.
   // Not counted yet (no tested rule): Price Action, Fibonacci, Wyckoff. Shown as "not active", never guessed.
   var smartTf = "15m";
+  var SCHOOLS = [
+    { name: "ICT + SMC", active: true, color: "#d9b15a" },
+    { name: "EMA 50", active: true, color: "#5aa8ff" },
+    { name: "RSI", active: true, color: "#2fd08b" },
+    { name: "Elliott + Fib", active: false, color: "#ff7ab8" },
+    { name: "Wyckoff", active: false, color: "#4fd1c5" },
+    { name: "Price Action", active: false, color: "#8fb8ff" },
+    { name: "SNR", active: false, color: "#ffb36b" }
+  ];
+  function drawSchoolChips() {
+    var box = $("school-chips"); if (!box) return;
+    box.textContent = "";
+    SCHOOLS.forEach(function (s) {
+      var c = el("span", "chip", s.name + (s.active ? "" : " · قيد الاختبار"));
+      c.style.cssText = "border:1px " + (s.active ? "solid" : "dashed") + " " + s.color + ";color:" + s.color + ";border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;margin:3px;display:inline-block";
+      box.appendChild(c);
+    });
+  }
+  drawSchoolChips();
   function runSmart() {
     var out = $("smart-out"); if (!out) return;
     out.textContent = "";
