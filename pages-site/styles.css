@@ -808,3 +808,15 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 #analysis .lvl > div, #smart-out > .lvl > div{padding:2px 0; font-size:13px; line-height:1.6}
 #smart-out > .lvl:last-child{border-color:var(--line)}
 #smart-out > .lvl:last-child > b{font-size:12px}
+
+/* ===== Full compact redesign (final layer): clear, dense, consistent across the whole app ===== */
+:root{ --bg:#070b12; --card:#0f1620; --card2:#131c28; --line:rgba(255,255,255,.07); --fg:#eef1f5; --muted:#7d8898; --gold:#e0b65a; }
+body{ background:var(--bg); color:var(--fg); font-size:13.5px; }
+.card, .panel, section.panel{ background:var(--card) !important; border:1px solid var(--line) !important; border-radius:14px !important; padding:12px !important; box-shadow:none !important; }
+h2, h3, .panel > h2, .panel > h3{ font-size:13px !important; color:var(--gold) !important; font-weight:800 !important; letter-spacing:.2px; margin:0 0 8px !important; }
+.tk, .tile, .kpi, .zone, .lvl, .lv{ background:var(--card2) !important; border:1px solid var(--line) !important; border-radius:12px !important; padding:9px 10px !important; box-shadow:none !important; }
+.tk .p, .tile .v, .kpi .v{ font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; }
+.row, .r{ display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid var(--line); font-size:13px; }
+.row:first-child, .r:first-child{ border-top:0; }
+.muted, .note, .small{ color:var(--muted) !important; font-size:11.5px; line-height:1.6; }
+.chip, .tag{ font-size:11px !important; padding:4px 9px !important; }
