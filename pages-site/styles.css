@@ -794,3 +794,17 @@ header.top .live,#reload-btn,#menu-btn{height:30px !important}
 #smart-out > .lvl:last-child{border-color:rgba(217,177,90,.5)}
 #smart-out > .lvl:last-child > b{color:var(--gold); font-size:15px}
 #school-chips .chip{font-family:Tajawal,system-ui,sans-serif; letter-spacing:0}
+
+/* ===== Compact layout: all analysis in one card with clear sections, no decoration ===== */
+#analysis, #smart-out{display:block; gap:0}
+#analysis .lvl, #smart-out > .lvl{
+  background:transparent; border:0; border-top:1px solid var(--line); border-radius:0;
+  padding:12px 2px; display:block; box-shadow:none;
+}
+#analysis .lvl:first-child, #smart-out > .lvl:first-child{border-top:0}
+#analysis .lvl > b, #smart-out > .lvl > b{
+  display:block; font-size:12px; font-weight:800; color:var(--gold); border:0; padding:0; margin:0 0 6px;
+}
+#analysis .lvl > div, #smart-out > .lvl > div{padding:2px 0; font-size:13px; line-height:1.6}
+#smart-out > .lvl:last-child{border-color:var(--line)}
+#smart-out > .lvl:last-child > b{font-size:12px}
