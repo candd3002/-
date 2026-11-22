@@ -1476,6 +1476,11 @@
     paintOwn();
   }
   function draw_toggle(mode) { return drawMode === mode ? null : mode; }
+  document.querySelectorAll("[data-draw]").forEach(function (b) {
+    b.addEventListener("click", function () { drawMode = draw_toggle(b.getAttribute("data-draw")); pending = null; refreshDrawBtns(); });
+  });
+  var clr = document.querySelector("[data-clear-draws]");
+  if (clr) clr.addEventListener("click", function () { DRAW[st.inst] = []; pending = null; paintOwn(); });
   function refreshDrawBtns() {
     document.querySelectorAll("[data-draw]").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-draw") === drawMode);
@@ -1486,6 +1491,17 @@
     var price = OWN.cs.coordinateToPrice(p.point.y);
     if (price == null) return;
     if (drawMode === "hline") { drawsFor().push({ type: "hline", price: price }); paintOwn(); return; }
+    if (drawMode === "range") {
+      if (!p.time) return;
+      if (!pending) { pending = { time: p.time, price: price }; }
+      else {
+        var d0 = pending.price, d1 = price, diff = d1 - d0, pct = d0 ? (diff / d0) * 100 : 0;
+        var dg = (OWN && OWN.data && OWN.data.length) ? (st.inst === "XAU" || st.inst === "BTC" ? 2 : 5) : 5;
+        drawsFor().push({ type: "range", a: pending, b: { time: p.time, price: price }, label: (diff >= 0 ? "+" : "") + diff.toFixed(dg) + " (" + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%)" });
+        pending = null; paintOwn();
+      }
+      return;
+    }
     if (drawMode === "trend") {
       if (!p.time) return;
       if (!pending) { pending = { time: p.time, price: price }; }
@@ -1550,6 +1566,18 @@
     }
     drawsFor().forEach(function (dr) {
       if (dr.type === "hline") { var y = cs.priceToCoordinate(dr.price); if (y != null) line(0, y, W, y, true); }
+      if (dr.type === "range") {
+        var rx1 = xOf(dr.a.time), rx2 = xOf(dr.b.time), ry1 = cs.priceToCoordinate(dr.a.price), ry2 = cs.priceToCoordinate(dr.b.price);
+        if (rx1 != null && rx2 != null && ry1 != null && ry2 != null) {
+          var rect = document.createElementNS(svgNS, "rect");
+          rect.setAttribute("x", Math.min(rx1, rx2)); rect.setAttribute("y", Math.min(ry1, ry2)); rect.setAttribute("width", Math.abs(rx2 - rx1)); rect.setAttribute("height", Math.abs(ry2 - ry1));
+          rect.setAttribute("fill", dr.b.price >= dr.a.price ? "rgba(47,208,139,.12)" : "rgba(255,100,100,.12)"); rect.setAttribute("stroke", "#e8c35a"); rect.setAttribute("stroke-dasharray", "4 3");
+          svg.appendChild(rect);
+          var rt = document.createElementNS(svgNS, "text");
+          rt.setAttribute("x", Math.min(rx1, rx2) + 4); rt.setAttribute("y", Math.min(ry1, ry2) - 4); rt.setAttribute("fill", "#e8c35a"); rt.setAttribute("font-size", "11");
+          rt.textContent = dr.label; svg.appendChild(rt);
+        }
+      }
       if (dr.type === "trend") {
         var x1 = xOf(dr.a.time), x2 = xOf(dr.b.time), ya = cs.priceToCoordinate(dr.a.price), yb = cs.priceToCoordinate(dr.b.price);
         if (x1 != null && x2 != null && ya != null && yb != null) line(x1, ya, x2, yb, false);
