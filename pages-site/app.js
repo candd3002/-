@@ -3,7 +3,7 @@
   var A = window.Analysis;
   var NS = "http://www.w3.org/2000/svg";
   var TF_MS = { "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
-  var TF_NAME = { "15m": "15M", "1h": "1H", "4h": "4H" };
+  var TF_NAME = { "5m": "5M", "15m": "15M", "1h": "1H", "4h": "4H" };
 
   // Only BTC has a keyless live feed. Other instruments use CSV from MT5 or labelled sample candles.
   var INST = [
@@ -1857,6 +1857,46 @@
     renderJournal();
   }
   $("tg-practice") && $("tg-practice").addEventListener("click", addPracticeTrade);
+  // ---------- smart analysis: combines the schools we compute from real bars ----------
+  // Built now: ICT + SMC (BOS/CHoCH, order block, FVG), EMA 50, RSI.
+  // Not counted yet (no tested rule): Price Action, Fibonacci, Wyckoff. Shown as "not active", never guessed.
+  function runSmart() {
+    var out = $("smart-out"); if (!out) return;
+    out.textContent = "";
+    var frames = [["15m", "15M"], ["1h", "1H"], ["4h", "4H"]];
+    var votes = { bull: 0, bear: 0 }, rows = [];
+    frames.forEach(function (f) {
+      var bars = (LV[st.inst] && LV[st.inst].tf === f[0]) ? LV[st.inst].c : null;
+      if (!bars || bars.length < 60) { rows.push({ label: f[1], dir: null }); return; }
+      var rr = A.analyze(bars, st.profile, null);
+      if (!rr || !rr.ready) { rows.push({ label: f[1], dir: null }); return; }
+      var lean = rr.longScore >= rr.shortScore ? "bull" : "bear";
+      var structure = rr.ev ? rr.ev.dir : 0;
+      var agree = (rr.price > rr.ema50 ? "bull" : "bear") === lean && (structure === 0 || (structure === 1 ? "bull" : "bear") === lean);
+      if (agree) votes[lean]++;
+      rows.push({ label: f[1], dir: lean, ok: agree });
+    });
+    var known = rows.filter(function (x) { return x.dir; }).length;
+    var card = el("div", "lvl");
+    card.appendChild(el("b", "", "التحليل الذكي (ICT + SMC + EMA + RSI)"));
+    if (!known) {
+      card.appendChild(el("div", "muted", "لا توجد بيانات كافية على الفريمات الآن."));
+    } else {
+      var win = votes.bull >= votes.bear ? "bull" : "bear";
+      var n = Math.max(votes.bull, votes.bear);
+      card.appendChild(el("div", win === "bull" ? "up" : "down", (win === "bull" ? "اتجاه صاعد" : "اتجاه هابط") + " · " + n + "/" + known + " فريمات متفقة"));
+      rows.forEach(function (x) {
+        var arrow = x.dir === "bull" ? "↑" : x.dir === "bear" ? "↓" : "—";
+        card.appendChild(el("div", x.ok ? "up" : "muted", x.label + " " + arrow + (x.ok ? " متفق" : x.dir ? " غير متفق" : " بيانات غير متوفرة")));
+      });
+    }
+    card.appendChild(el("div", "muted", "غير مفعّل بعد: Price Action وFibonacci وWyckoff، لأن قواعدها لم تُختبر."));
+    card.appendChild(el("div", "muted", "الفريم 5M يحتاج مصدر بيانات لم يُربط بعد، لذلك لا يُحسب."));
+    out.appendChild(card);
+  }
+  var smartBtn = $("smart-run");
+  if (smartBtn) smartBtn.addEventListener("click", runSmart);
+
   // Trade log from the monitor, shown inside the app (refreshed every 2 minutes).
   function refreshTradeLog() {
     var f = $("trade-log"); if (!f || !window.PUSH_WORKER) return;

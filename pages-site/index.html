@@ -67,6 +67,7 @@
 
     <div class="modes" role="tablist" aria-label="Trading style">
       <button type="button" role="tab" data-tf="1h" aria-selected="true" data-i18n="modeDay">Day ICT</button>
+      <button type="button" role="tab" data-tf="5m" aria-selected="false">5M</button>
       <button type="button" role="tab" data-tf="15m" aria-selected="false" data-i18n="modeScalp">Scalp</button>
       <button type="button" role="tab" data-tf="4h" aria-selected="false" data-i18n="modeSwing">Swing</button>
     </div>
@@ -97,6 +98,8 @@
 
     <section class="card analysis-card">
       <h2 data-i18n="detailTitle">Detailed analysis (ICT + SMC)</h2>
+      <button type="button" class="btn" id="smart-run">تشغيل التحليل الذكي</button>
+      <div id="smart-out" class="levels"></div>
       <div id="analysis" class="levels"></div>
     </section>
 
