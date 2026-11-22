@@ -585,12 +585,12 @@
         });
         var label = ar(st.lang) ? s[1] : s[0];
         var state = inside ? (ar(st.lang) ? "مفتوحة" : "open") : (ar(st.lang) ? "مغلقة" : "closed");
-        var txtS = isFinite(hi) ? label + " · " + state + " · " + hi.toFixed(5) + " / " + lo.toFixed(5) : label + " · " + state + " · —";
+        var txtS = isFinite(hi) ? label + " · " + state + " · " + hi.toFixed(dg) + " / " + lo.toFixed(dg) : label + " · " + state + " · —";
         sBox.appendChild(el("div", inside ? "up" : "muted", txtS));
       });
       var pdh = -Infinity, pdl = Infinity;
       cs.forEach(function (b) { if (b.t >= prevStart && b.t < dayStart) { pdh = Math.max(pdh, b.h); pdl = Math.min(pdl, b.l); } });
-      sBox.appendChild(el("div", "", "PDH " + (isFinite(pdh) ? pdh.toFixed(5) : "—") + " · PDL " + (isFinite(pdl) ? pdl.toFixed(5) : "—")));
+      sBox.appendChild(el("div", "", "PDH " + (isFinite(pdh) ? pdh.toFixed(dg) : "—") + " · PDL " + (isFinite(pdl) ? pdl.toFixed(dg) : "—")));
       sBox.appendChild(el("div", "muted", ar(st.lang) ? "الأوقات بتوقيت UTC. الجلسات تقريبية حسب الساعة، وليست لحظة إغلاق البورصة." : "Times in UTC. Sessions are approximate by hour, not exchange closing times."));
       box.appendChild(sBox);
     }
@@ -611,13 +611,14 @@
     var known = tfRows.filter(function (x) { return x.dir; });
     var agree = known.filter(function (x) { return x.dir === lean; }).length;
     var tfBox = el("div", "lvl");
-    tfBox.appendChild(el("b", "", (ar(st.lang) ? "توافق الفريمات " : "Timeframe agreement ") + (known.length ? Math.round(100 * agree / known.length) + "%" : "—")));
+    tfBox.appendChild(el("b", "", (ar(st.lang) ? "توافق الفريمات " : "Timeframe agreement ") + (known.length ? agree + " من " + known.length + " فريمات متوفرة" : "—")));
     tfRows.forEach(function (x) {
       var arrow = x.dir === "bull" ? "↑" : x.dir === "bear" ? "↓" : "—";
       tfBox.appendChild(el("div", x.dir === lean ? "up" : (x.dir ? "down" : "muted"), x.label + " " + arrow));
     });
     tfBox.appendChild(el("div", "muted", ar(st.lang) ? "الفريمات 5 و30 دقيقة تحتاج بيانات غير متوفرة حالياً، فلم تُحسب." : "5m and 30m need data that is not available yet, so they are not counted."));
     box.appendChild(tfBox);
+    var dg = BY[st.inst] ? BY[st.inst].digits : 2;
     // Pending orders from the order-block zone of the current timeframe (our rule, not copied from anywhere).
     // Buy Limit below price for longs, Sell Limit above price for shorts; stop beyond the block, targets from the same risk.
     if (r.ob && (r.ob.dir === "bull" || r.ob.dir === "bear")) {
@@ -631,10 +632,10 @@
         var tgts = mult.map(function (m) { return obLong ? entryP + m * riskP : entryP - m * riskP; });
         var pend = el("div", "lvl trade-entry");
         pend.appendChild(el("b", "", (ar(st.lang) ? "أوامر معلقة من منطقة الأوردر بلوك" : "Pending orders from the order block")));
-        pend.appendChild(el("div", obLong ? "up" : "", (obLong ? "Buy Limit " : "Sell Limit ") + (ar(st.lang) ? "عند " : "at ") + zLo.toFixed(5) + " - " + zHi.toFixed(5)));
-        pend.appendChild(el("div", "", (ar(st.lang) ? "الدخول " : "Entry ") + entryP.toFixed(5)));
-        pend.appendChild(el("div", "down", (ar(st.lang) ? "الوقف " : "Stop ") + stopP.toFixed(5)));
-        tgts.forEach(function (t, i) { pend.appendChild(el("div", "up", "TP" + (i + 1) + " " + t.toFixed(5))); });
+        pend.appendChild(el("div", obLong ? "up" : "", (obLong ? "Buy Limit " : "Sell Limit ") + (ar(st.lang) ? "عند " : "at ") + zLo.toFixed(dg) + " - " + zHi.toFixed(dg)));
+        pend.appendChild(el("div", "", (ar(st.lang) ? "الدخول " : "Entry ") + entryP.toFixed(dg)));
+        pend.appendChild(el("div", "down", (ar(st.lang) ? "الوقف " : "Stop ") + stopP.toFixed(dg)));
+        tgts.forEach(function (t, i) { pend.appendChild(el("div", "up", "TP" + (i + 1) + " " + t.toFixed(dg))); });
         pend.appendChild(el("div", "muted", ar(st.lang) ? "أوامر معلقة بانتظار وصول السعر للمنطقة. ليست توصية، اختبرها أولاً." : "Pending orders wait for price to reach the zone. Not advice; test first."));
         box.appendChild(pend);
       }
