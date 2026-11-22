@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نموذج الأوامر المعلقة</title>
+<style>
+  :root{ --bg:#0a0d12; --card:#11161e; --card2:#161c26; --line:rgba(255,255,255,.08); --fg:#f1f2f4; --muted:#7f8794; --gold:#d9b15a; --up:#2fd08b; --down:#ff6464; --blue:#5aa8ff; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:Tajawal,"Segoe UI",system-ui,sans-serif;padding:16px}
+  .wrap{max-width:430px;margin:0 auto;display:grid;gap:12px}
+  h2{margin:0;color:var(--gold);font-size:17px}
+  .note{color:var(--muted);font-size:12px;line-height:1.6}
+  .order{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px}
+  .order.buy{border-color:rgba(47,208,139,.35)} .order.sell{border-color:rgba(255,100,100,.35)}
+  .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .side{font-weight:800;font-size:15px} .buy .side{color:var(--up)} .sell .side{color:var(--down)}
+  .pill{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:#cfd3da}
+  .zone{background:var(--card2);border:1px solid rgba(217,177,90,.35);border-radius:12px;padding:10px;display:grid;gap:4px}
+  .zone .lbl{font-size:11px;color:var(--muted)} .zone .val{font-size:16px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cell{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:9px}
+  .cell .lbl{font-size:11px;color:var(--muted)} .cell .val{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .stop .val{color:var(--down)} .tp .val{color:var(--up)} .entry .val{color:var(--gold)}
+  .meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+  .checks{display:flex;flex-wrap:wrap;gap:6px}
+  .chk{font-size:11px;border-radius:999px;padding:3px 9px;border:1px solid var(--line);color:#cfd3da}
+  .chk.ok{border-color:rgba(47,208,139,.45);color:var(--up)}
+  .foot{font-size:11px;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>الأوامر المعلقة من مناطق أوردر البلوك</h2>
+  <p class="note">نموذج تصميمي بقيم تجريبية، يوضح ما سيعرضه التطبيق. الأرقام هنا ليست إشارة تداول.</p>
+
+  <div class="order buy">
+    <div class="head"><span class="side">Buy Limit · شراء</span><span class="pill">فريم 15M</span></div>
+    <div class="zone"><span class="lbl">منطقة الدخول</span><span class="val">3503.48 – 3509.61</span></div>
+    <div class="grid">
+      <div class="cell entry"><div class="lbl">سعر الدخول</div><div class="val">3506.54</div></div>
+      <div class="cell stop"><div class="lbl">وقف الخسارة</div><div class="val">3498.89</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 1</div><div class="val">3535.18</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 2</div><div class="val">3543.76</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 3</div><div class="val">3579.83</div></div>
+      <div class="cell"><div class="lbl">العائد : المخاطرة</div><div class="val">1 : 4.9</div></div>
+    </div>
+    <div class="checks"><span class="chk ok">✓ اتجاه الفريم الأكبر</span><span class="chk ok">✓ أوردر بلوك</span><span class="chk">✗ كسر هيكل</span></div>
+    <div class="meta"><span>قوة المنطقة 97%</span><span>المسافة عن السعر 7.36</span></div>
+  </div>
+
+  <div class="order sell">
+    <div class="head"><span class="side">Sell Limit · بيع</span><span class="pill">فريم 1H</span></div>
+    <div class="zone"><span class="lbl">منطقة الدخول</span><span class="val">3634.87 – 3655.36</span></div>
+    <div class="grid">
+      <div class="cell entry"><div class="lbl">سعر الدخول</div><div class="val">3644.71</div></div>
+      <div class="cell stop"><div class="lbl">وقف الخسارة</div><div class="val">3660.46</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 1</div><div class="val">3588.35</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 2</div><div class="val">3560.70</div></div>
+      <div class="cell tp"><div class="lbl">الهدف 3</div><div class="val">3551.71</div></div>
+      <div class="cell"><div class="lbl">العائد : المخاطرة</div><div class="val">1 : 5.3</div></div>
+    </div>
+    <div class="checks"><span class="chk ok">✓ اتجاه الفريم الأكبر</span><span class="chk">✗ أوردر بلوك قوي</span></div>
+    <div class="meta"><span>قوة المنطقة 67%</span><span>المسافة عن السعر 118.28</span></div>
+  </div>
+
+  <p class="foot">العرض يعتمد على الشروط المتحققة فقط. الأوامر المعلقة تنتظر وصول السعر للمنطقة، وليست توصية. اختبرها قبل أي استخدام.</p>
+</div>
+</body>
+</html>
