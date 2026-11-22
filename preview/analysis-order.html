@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نموذج ترتيب التحليل</title>
+<style>
+  :root{ --bg:#0a0d12; --card:#11161e; --card2:#161c26; --line:rgba(255,255,255,.08); --fg:#f1f2f4; --muted:#7f8794; --gold:#d9b15a; --up:#2fd08b; --down:#ff6464; --blue:#5aa8ff; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:Tajawal,"Segoe UI",system-ui,sans-serif;padding:16px}
+  .wrap{max-width:430px;margin:0 auto;display:grid;gap:12px}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .sec h3{margin:0 0 10px;font-size:14px;color:var(--gold);padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .tfs{display:flex;gap:8px;flex-wrap:wrap}
+  .tf{border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:#cfd3da}
+  .tf.on{border-color:var(--gold);color:var(--gold)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}
+  .dec{font-size:18px;font-weight:800;color:var(--up)}
+  .row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:0}
+  .row span:first-child{color:var(--muted)}
+  .fr{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}
+  .up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)}
+  .small{font-size:12px;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="sec">
+    <h3>الفريم</h3>
+    <div class="tfs">
+      <span class="tf">5M</span><span class="tf on">15M</span><span class="tf">1H</span><span class="tf">4H</span>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h3>المدارس</h3>
+    <div class="chips">
+      <span class="chip" style="border:1px solid #d9b15a;color:#d9b15a">ICT + SMC</span>
+      <span class="chip" style="border:1px solid #5aa8ff;color:#5aa8ff">EMA 50</span>
+      <span class="chip" style="border:1px solid #2fd08b;color:#2fd08b">RSI</span>
+      <span class="chip" style="border:1px dashed #ff7ab8;color:#ff7ab8">Elliott + Fib · قيد الاختبار</span>
+      <span class="chip" style="border:1px dashed #4fd1c5;color:#4fd1c5">Wyckoff · قيد الاختبار</span>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h3>القرار</h3>
+    <div class="dec">صفقة شراء · 15M</div>
+    <div class="row"><span>الدخول</span><span>60783.25</span></div>
+    <div class="row"><span>الوقف</span><span class="down">58496.60</span></div>
+    <div class="row"><span>الهدف 1</span><span class="up">64213.23</span></div>
+    <div class="row"><span>الهدف 2</span><span class="up">66499.89</span></div>
+    <div class="row"><span>الهدف 3</span><span class="up">69929.87</span></div>
+    <p class="small">ليست توصية. النتيجة تحتاج اختباراً أولاً.</p>
+  </section>
+
+  <section class="sec">
+    <h3>الفريمات</h3>
+    <div class="fr"><span>5M</span><span class="muted">بيانات غير متوفرة</span></div>
+    <div class="fr"><span>15M</span><span class="up">↑ صاعد · 3 من 3 متفقة</span></div>
+    <div class="fr"><span>1H</span><span class="up">↑ صاعد</span></div>
+    <div class="fr"><span>4H</span><span class="muted">—</span></div>
+  </section>
+
+  <section class="sec">
+    <h3>الجلسات وPDH / PDL</h3>
+    <div class="row"><span>سيدني</span><span class="up">مفتوحة · 61118.01 / 55555.55</span></div>
+    <div class="row"><span>طوكيو</span><span class="muted">مغلقة · 60410 / 55130</span></div>
+    <div class="row"><span>PDH / PDL</span><span>60996 / 55130</span></div>
+  </section>
+
+  <section class="sec">
+    <h3>لماذا هذه الصفقة؟</h3>
+    <div class="row"><span>اتجاه السعر فوق EMA 50</span><span class="up">✓</span></div>
+    <div class="row"><span>RSI في منطقة الزخم</span><span class="up">✓</span></div>
+    <div class="row"><span>كسر الهيكل في الاتجاه</span><span class="down">✗</span></div>
+    <p class="small">هذه قراءة للشروط المتحققة، وليست احتمال ربح.</p>
+  </section>
+
+</div>
+</body>
+</html>
