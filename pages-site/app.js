@@ -1899,7 +1899,10 @@
         card.appendChild(el("div", sc.ok ? "up" : "muted", (sc.ok ? "✓ " : "✗ ") + sc.name + " · " + sc.why));
       });
       if (r.schools.length) {
-        card.appendChild(el("div", "muted", "غير مفعّل بعد: Price Action وFibonacci وWyckoff"));
+        card.appendChild(el("div", "muted", "قيد الاختبار (لا تدخل القرار بعد):"));
+        ["Elliott + Fib", "Wyckoff", "Price Action", "SNR"].forEach(function (nm) {
+          card.appendChild(el("div", "muted", "· " + nm + " · قيد الاختبار"));
+        });
       }
       out.appendChild(card);
     });
