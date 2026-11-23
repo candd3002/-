@@ -15,7 +15,7 @@ export async function onRequestPost({ request, env }) {
   if (nE > MAX_SENDS_PER_HOUR || nI > MAX_SENDS_PER_HOUR * 4) return json({ error: "too_many" }, 429);
   const code = randomCode(), exp = Date.now() + CODE_MINUTES * 60e3, nn = nonce();
   try { await sendCodeEmail(env, email, name, code); }
-  catch (e) { console.log("mail error: " + e.message); return json({ error: "mail_failed" }, 502); }
+  catch (e) { console.log("mail error: " + e.message); return json({ error: e.reason || "mail_failed" }, 502); }
   const pending = await sign(env.AUTH_SECRET, { k: "p", e: email, n: name, x: exp, j: nn, h: await codeMac(env.AUTH_SECRET, email, code, exp, nn) });
   return json({ ok: true, minutes: CODE_MINUTES }, 200, [["set-cookie", cookie(PENDING_COOKIE, pending, CODE_MINUTES * 60)]]);
 }
