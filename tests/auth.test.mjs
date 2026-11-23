@@ -87,3 +87,16 @@ r = await start.onRequestPost({ request: post("/api/auth/start", { name: "Owner"
 r = await verify.onRequestPost({ request: post("/api/auth/verify", { code: /(\d{6})/.exec(sent[0].body.subject)[1] }, cookiesOf(r)), env });
 assert.strictEqual((await r.json()).owner, true);
 console.log("auth tests passed");
+
+// 8) failed sends never count toward the limit
+{
+  const kv2 = new Map(), env2 = Object.assign({}, env, { AUTH_KV: { get: async k => kv2.get(k) ?? null, put: async (k, v) => { kv2.set(k, v); } } });
+  globalThis.fetch = async () => new Response('{"message":"Key not found"}', { status: 401 });
+  for (let i = 0; i < 8; i++) {
+    const res = await start.onRequestPost({ request: post("/api/auth/start", { name: "D", email: "d@d.co" }), env: env2 });
+    assert.strictEqual(res.status, 502); assert.strictEqual((await res.json()).error, "mail_key");
+  }
+  globalThis.fetch = async () => new Response("{}", { status: 200 });
+  assert.strictEqual((await start.onRequestPost({ request: post("/api/auth/start", { name: "D", email: "d@d.co" }), env: env2 })).status, 200, "not locked by failures");
+  console.log("failed sends do not count: ok");
+}
