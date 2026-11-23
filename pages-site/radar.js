@@ -232,7 +232,12 @@ function analyze(a, tf){
   const c=closedC(a,tf);
   const tfs=Object.keys(TFS), mtf=tfs.map(t=>({tf:t, votes:frameVotes(a,t)})), votes=frameVotes(a,tf);
   const r = c.length>=60 ? ENG.analyze(c, PROFILE[tf], null) : {ready:false};
-  const sig = r.ready ? r.signal : null;
+  // A setup is reported on the candle it forms on; after that the trade stays open until its stop or
+  // first target. An open trade is therefore still the current plan, even when the newest candle has
+  // no fresh setup (this is what the phone notification announced).
+  const open = (S.journal||[]).filter(e=>e.status==='open' && e.inst===a && e.tf===tf).sort((x,y)=>y.t-x.t)[0];
+  const fresh = r.ready ? r.signal : null;
+  const sig = fresh || (open ? {dir:open.dir, entry:open.entry, sl:open.sl, tp1:open.tp1, tp2:open.tp2, tp3:open.tp3, grade:open.grade, key:'open', active:true, since:open.t} : null);
   const bias = sig ? (sig.dir==='SHORT'?'bear':'bull') : frameBias(votes);
   const sell = bias==='bear';
   const agree = bias==='neutral' ? 0 : votes.filter(v=>sell?v.bear:v.bull).length;
@@ -240,7 +245,7 @@ function analyze(a, tf){
   const gradeB = sig ? ({A:10,B:5,C:0}[sig.grade]||0) : 0;
   const conf = Math.round(Math.max(5, Math.min(97, 35 + (votes.length? agree/votes.length*35 : 0) + aligned/tfs.length*17 + gradeB)));
   const L=c[c.length-1]||{t:0,c:S.price[a]}, at=r.atr||0;
-  const A={a, tf, sell, bias, wait:!sig, conf, votes, agree, mtf, aligned, nTf:tfs.length, barT:L.t, at:Date.now(), grade:sig?sig.grade:null, price:L.c, key:sig?sig.key:null};
+  const A={a, tf, sell, bias, wait:!sig, active:!!(sig&&sig.active), since:sig&&sig.since, conf, votes, agree, mtf, aligned, nTf:tfs.length, barT:L.t, at:Date.now(), grade:sig?sig.grade:null, price:L.c, key:sig?sig.key:null};
   if(sig){
     A.mid=sig.entry; A.lo=sig.entry-0.15*at; A.hi=sig.entry+0.15*at; A.sl=sig.sl; A.risk=Math.abs(sig.entry-sig.sl);
     A.tps=[sig.tp1,sig.tp2,sig.tp3].filter(v=>isFinite(v));
@@ -253,7 +258,7 @@ function analyze(a, tf){
 }
 // The plan drawn on the chart and used by buttons: only a confirmed setup has one.
 function planOf(a, tf){ const A=S.analysis[a+'|'+tf]; return A && !A.wait && A.tps.length===3 ? A : null; }
-const decTitle = A => A.wait ? (A.bias==='neutral' ? 'انتظار · لا اتجاه واضح' : 'انتظار · الميل '+(A.sell?'هابط':'صاعد')) : (A.sell?'صفقة بيع':'صفقة شراء');
+const decTitle = A => A.wait ? (A.bias==='neutral' ? 'انتظار · لا اتجاه واضح' : 'انتظار · الميل '+(A.sell?'هابط':'صاعد')) : (A.sell?'صفقة بيع':'صفقة شراء')+(A.active?' قائمة':'');
 const decCol = A => A.wait ? C.gold : (A.sell?C.sell:C.buy);
 const sigWord = A => A.wait ? 'انتظار' : (A.sell?'بيع':'شراء');
 function miniPlan(a, A){
@@ -287,6 +292,25 @@ function notifyUser(title, body, kind, tag){
 }
 function beep(){ try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; const ac=beep.ac||(beep.ac=new AC()), o=ac.createOscillator(), g=ac.createGain(); o.frequency.value=880; g.gain.setValueAtTime(.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(.15,ac.currentTime+.02); g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.35); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+.4); }catch(e){} }
 function signalAlertOn(){ return S.alerts.some(x=>x.type==='signal' && x.on); }
+// When the app opens, the last few closed candles are replayed (silently) so a setup that formed while
+// the app was closed is in the journal and still shown as the open trade until its stop or target.
+const BACKFILL_BARS = 16;
+function backfillJournal(done){
+  const jobs=[]; Object.keys(ASSETS).forEach(a=>Object.keys(TFS).forEach(tf=>jobs.push([a,tf])));
+  const step=()=>{
+    const job=jobs.shift(); if(!job){ S.journal=S.journal.slice(-400); store.set('journal',S.journal); rebuildJournal(); if(done) done(); return; }
+    const [a,tf]=job, c=closedC(a,tf), ms=TF_MS(tf);
+    for(let i=Math.max(60,c.length-1-BACKFILL_BARS); i<c.length-1; i++){
+      const r=ENG.analyze(c.slice(0,i+1), PROFILE[tf], null); if(!(r.ready&&r.signal)) continue;
+      const g=r.signal, t=c[i].t; if(ENG.isRepeat(S.journal,a,tf,g.dir,t,ms)) continue;
+      const e={id:ENG.setupId(a,tf,g.dir,t), inst:a, tf, dir:g.dir, entry:g.entry, sl:g.sl, tp1:g.tp1, tp2:g.tp2, tp3:g.tp3, t, status:'open', grade:g.grade, backfill:true};
+      const ex=ENG.resolveExit(e,c); if(ex){ e.status=ex.status; e.closeT=ex.closeT; }
+      S.journal.push(e);
+    }
+    setTimeout(step,0);
+  };
+  step();
+}
 function autoScan(){
   if(!S.loaded) return;
   let changed=false; const now=Date.now();
@@ -305,7 +329,7 @@ function autoScan(){
     });
     if(S.autoSeen[k]===L.t) return; S.autoSeen[k]=L.t;
     const A=analyze(a,tf);
-    if(A.wait) return;
+    if(A.wait || A.active) return;
     const dir=A.sell?'SHORT':'LONG';
     if(ENG.isRepeat(S.journal, a, tf, dir, L.t, ms)) return;
     const e={id:ENG.setupId(a,tf,dir,L.t), inst:a, tf, dir, entry:A.mid, sl:A.sl, tp1:A.tps[0], tp2:A.tps[1], tp3:A.tps[2], t:L.t, status:'open', conf:A.conf, grade:A.grade};
@@ -2074,7 +2098,7 @@ loadAll((d,n)=>bootScreen('جارٍ تحميل الأسعار الحية… '+Ma
   if(!n){ bootScreen('تعذّر تحميل بيانات الأسواق', true); return; }
   buildTicker();
   startBiquote(); startBinance();
-  autoScan();
+  backfillJournal(()=>{ Object.keys(S.analysis).forEach(k=>{ const [a,tf]=k.split('|'); analyze(a,tf); }); autoScan(); if(['home','chart','scanner'].includes(S.route) && !document.querySelector('.sheetwrap')) render(); });
   rebuildJournal();
   window.addEventListener('hashchange',route);
   route();
