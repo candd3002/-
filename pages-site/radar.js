@@ -59,7 +59,7 @@ const pct = v => (v>=0?'+':'')+v.toFixed(2)+'%';
 const ENG = window.Analysis, SCHOOLS = window.Schools;
 const TF_IV = {'15m':'15m','1H':'1h','4H':'4h'};
 const TF_MS = tf => TFS[tf]*60000;
-const PROFILE = {'15m':'scalp','1H':'balanced','4H':'balanced'};
+const PROFILE = {'15m':'balanced','1H':'balanced','4H':'balanced'}; // same as the server monitor
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 S.lastTick = {}; S.fetchedAt = {}; S.live = {bq:false, bn:false}; S.loaded = false;
 
@@ -232,7 +232,12 @@ function analyze(a, tf){
   const c=closedC(a,tf);
   const tfs=Object.keys(TFS), mtf=tfs.map(t=>({tf:t, votes:frameVotes(a,t)})), votes=frameVotes(a,tf);
   const r = c.length>=60 ? ENG.analyze(c, PROFILE[tf], null) : {ready:false};
-  const sig = r.ready ? r.signal : null;
+  // A setup is reported on the candle it forms on; after that the trade stays open until its stop or
+  // first target. An open trade is therefore still the current plan, even when the newest candle has
+  // no fresh setup (this is what the phone notification announced).
+  const open = (S.journal||[]).filter(e=>e.status==='open' && e.inst===a && e.tf===tf).sort((x,y)=>y.t-x.t)[0];
+  const fresh = r.ready ? r.signal : null;
+  const sig = fresh || (open ? {dir:open.dir, entry:open.entry, sl:open.sl, tp1:open.tp1, tp2:open.tp2, tp3:open.tp3, grade:open.grade, key:'open', active:true, since:open.t} : null);
   const bias = sig ? (sig.dir==='SHORT'?'bear':'bull') : frameBias(votes);
   const sell = bias==='bear';
   const agree = bias==='neutral' ? 0 : votes.filter(v=>sell?v.bear:v.bull).length;
@@ -240,7 +245,7 @@ function analyze(a, tf){
   const gradeB = sig ? ({A:10,B:5,C:0}[sig.grade]||0) : 0;
   const conf = Math.round(Math.max(5, Math.min(97, 35 + (votes.length? agree/votes.length*35 : 0) + aligned/tfs.length*17 + gradeB)));
   const L=c[c.length-1]||{t:0,c:S.price[a]}, at=r.atr||0;
-  const A={a, tf, sell, bias, wait:!sig, conf, votes, agree, mtf, aligned, nTf:tfs.length, barT:L.t, at:Date.now(), grade:sig?sig.grade:null, price:L.c, key:sig?sig.key:null};
+  const A={a, tf, sell, bias, wait:!sig, active:!!(sig&&sig.active), since:sig&&sig.since, conf, votes, agree, mtf, aligned, nTf:tfs.length, barT:L.t, at:Date.now(), grade:sig?sig.grade:null, price:L.c, key:sig?sig.key:null};
   if(sig){
     A.mid=sig.entry; A.lo=sig.entry-0.15*at; A.hi=sig.entry+0.15*at; A.sl=sig.sl; A.risk=Math.abs(sig.entry-sig.sl);
     A.tps=[sig.tp1,sig.tp2,sig.tp3].filter(v=>isFinite(v));
@@ -253,7 +258,7 @@ function analyze(a, tf){
 }
 // The plan drawn on the chart and used by buttons: only a confirmed setup has one.
 function planOf(a, tf){ const A=S.analysis[a+'|'+tf]; return A && !A.wait && A.tps.length===3 ? A : null; }
-const decTitle = A => A.wait ? (A.bias==='neutral' ? 'انتظار · لا اتجاه واضح' : 'انتظار · الميل '+(A.sell?'هابط':'صاعد')) : (A.sell?'صفقة بيع':'صفقة شراء');
+const decTitle = A => A.wait ? (A.bias==='neutral' ? 'انتظار · لا اتجاه واضح' : 'انتظار · الميل '+(A.sell?'هابط':'صاعد')) : (A.sell?'صفقة بيع':'صفقة شراء')+(A.active?' قائمة':'');
 const decCol = A => A.wait ? C.gold : (A.sell?C.sell:C.buy);
 const sigWord = A => A.wait ? 'انتظار' : (A.sell?'بيع':'شراء');
 function miniPlan(a, A){
@@ -280,14 +285,32 @@ function claimOnce(key){
 function notifyUser(title, body, kind, tag){
   island(title, body, kind);
   if(S.prefs.sound) beep();
-  if(S.prefs.push && 'Notification' in window && Notification.permission==='granted'){
-    try{ const n=new Notification(title,{body, tag, renotify:false, icon:'assets/apple-touch-icon.png'}); n.onclick=()=>{ window.focus(); n.close(); }; }catch(e){}
-  }
+  // Phone notifications come from one place only: the server monitor (Web Push via sw.js), so the
+  // same signal never arrives twice. Here the app shows it inside the screen.
   S.history.unshift({kind:kind||'', title, body, at:Date.now()}); S.history=S.history.slice(0,40); saveAlerts();
   const d=$('bellDot'); if(d) d.hidden=false;
 }
 function beep(){ try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; const ac=beep.ac||(beep.ac=new AC()), o=ac.createOscillator(), g=ac.createGain(); o.frequency.value=880; g.gain.setValueAtTime(.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(.15,ac.currentTime+.02); g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.35); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+.4); }catch(e){} }
 function signalAlertOn(){ return S.alerts.some(x=>x.type==='signal' && x.on); }
+// When the app opens, the last few closed candles are replayed (silently) so a setup that formed while
+// the app was closed is in the journal and still shown as the open trade until its stop or target.
+const BACKFILL_BARS = 16;
+function backfillJournal(done){
+  const jobs=[]; Object.keys(ASSETS).forEach(a=>Object.keys(TFS).forEach(tf=>jobs.push([a,tf])));
+  const step=()=>{
+    const job=jobs.shift(); if(!job){ S.journal=S.journal.slice(-400); store.set('journal',S.journal); rebuildJournal(); if(done) done(); return; }
+    const [a,tf]=job, c=closedC(a,tf), ms=TF_MS(tf);
+    for(let i=Math.max(60,c.length-1-BACKFILL_BARS); i<c.length-1; i++){
+      const r=ENG.analyze(c.slice(0,i+1), PROFILE[tf], null); if(!(r.ready&&r.signal)) continue;
+      const g=r.signal, t=c[i].t; if(ENG.isRepeat(S.journal,a,tf,g.dir,t,ms)) continue;
+      const e={id:ENG.setupId(a,tf,g.dir,t), inst:a, tf, dir:g.dir, entry:g.entry, sl:g.sl, tp1:g.tp1, tp2:g.tp2, tp3:g.tp3, t, status:'open', grade:g.grade, backfill:true};
+      const ex=ENG.resolveExit(e,c); if(ex){ e.status=ex.status; e.closeT=ex.closeT; }
+      S.journal.push(e);
+    }
+    setTimeout(step,0);
+  };
+  step();
+}
 function autoScan(){
   if(!S.loaded) return;
   let changed=false; const now=Date.now();
@@ -306,7 +329,7 @@ function autoScan(){
     });
     if(S.autoSeen[k]===L.t) return; S.autoSeen[k]=L.t;
     const A=analyze(a,tf);
-    if(A.wait) return;
+    if(A.wait || A.active) return;
     const dir=A.sell?'SHORT':'LONG';
     if(ENG.isRepeat(S.journal, a, tf, dir, L.t, ms)) return;
     const e={id:ENG.setupId(a,tf,dir,L.t), inst:a, tf, dir, entry:A.mid, sl:A.sl, tp1:A.tps[0], tp2:A.tps[1], tp3:A.tps[2], t:L.t, status:'open', conf:A.conf, grade:A.grade};
@@ -1058,11 +1081,12 @@ AFTER.prefs = function(){
   v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.flag; S.prefs[k]=!S.prefs[k];
     // Turning phone notifications on asks the browser for permission (it must come from a tap).
     if(k==='push' && S.prefs.push){
-      if(!('Notification' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
-      else if(Notification.permission!=='granted'){ let r='denied'; try{ r=await Notification.requestPermission(); }catch(e){}
+      if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
+      else { let r=Notification.permission; if(r!=='granted'){ try{ r=await Notification.requestPermission(); }catch(e){} }
         if(r!=='granted'){ S.prefs.push=false; island('الإشعارات مرفوضة','فعّلها من إعدادات المتصفح لهذا الموقع ثم أعد المحاولة','sell'); }
-        else island('تم تفعيل الإشعارات','ستصلك الإشارات أثناء فتح التطبيق','buy'); }
-    }
+        else if(await enablePush()) island('تم تفعيل الإشعارات','تصلك الإشارات على الهاتف حتى والتطبيق مغلق','buy');
+        else { S.prefs.push=false; island('تعذّر التفعيل','تحقق من الإنترنت ثم أعد المحاولة','sell'); } }
+    } else if(k==='push') disablePush();
     save(); b.setAttribute('aria-checked',String(S.prefs[k])); });
   v.querySelectorAll('[data-clock]').forEach(b=>b.onclick=()=>{ S.prefs.clock=+b.dataset.clock; save(); render(); });
   $('p-cleard').onclick=()=>{ try{ Object.keys(localStorage).filter(k=>k.startsWith('mrpro-draw-')).forEach(k=>localStorage.removeItem(k)); }catch(e){} S._d=null; toast('تم المسح','حُذفت كل الرسومات'); };
@@ -2045,6 +2069,23 @@ AFTER.chart = function(){ chartAfterSchools(); const b=$('cSchools'); if(b) b.on
 const moreBeforeSchools = VIEWS.more;
 VIEWS.more = function(){ return moreBeforeSchools().replace('<div class="tilegrid">', `<div class="tilegrid"><a class="mtile" href="#schools" style="--tc:#f0d28f"><span class="mti"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="10" cy="18" r="1.6"/></svg></span><b>المدارس والأطر</b><span class="label">5 مدارس · 3 أطر</span></a>`); };
 
+/* ---------- phone notifications (Web Push from the server monitor) ---------- */
+function b64uToU8(b){ const p='='.repeat((4-b.length%4)%4), s=atob((b+p).replace(/-/g,'+').replace(/_/g,'/')), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+async function enablePush(){
+  try{
+    if(!window.PUSH_WORKER || !('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    const reg=await navigator.serviceWorker.register('sw.js');
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){ const j=await (await fetch(PUSH_WORKER+'/vapid-public',{cache:'no-store'})).json(); sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(j.key)}); }
+    const r=await fetch(PUSH_WORKER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(sub)});
+    return r.ok;
+  }catch(e){ return false; }
+}
+async function disablePush(){
+  try{ const reg=await navigator.serviceWorker.getRegistration('sw.js'); const sub=reg && await reg.pushManager.getSubscription(); if(!sub) return;
+    await fetch(PUSH_WORKER+'/unsubscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe(); }catch(e){}
+}
+
 /* ---------- boot: real data first, then the app ---------- */
 function bootScreen(msg, err){
   const v=$('view'); if(!v) return;
@@ -2057,12 +2098,13 @@ loadAll((d,n)=>bootScreen('جارٍ تحميل الأسعار الحية… '+Ma
   if(!n){ bootScreen('تعذّر تحميل بيانات الأسواق', true); return; }
   buildTicker();
   startBiquote(); startBinance();
-  autoScan();
+  backfillJournal(()=>{ Object.keys(S.analysis).forEach(k=>{ const [a,tf]=k.split('|'); analyze(a,tf); }); autoScan(); if(['home','chart','scanner'].includes(S.route) && !document.querySelector('.sheetwrap')) render(); });
   rebuildJournal();
   window.addEventListener('hashchange',route);
   route();
   cloudChanged(false);
   loadNews();
+  if(S.prefs.push && 'Notification' in window && Notification.permission==='granted') enablePush();
   setInterval(tick,1500); setInterval(updateSess,30000);
   setInterval(refreshClosed,15000); setInterval(pollBinance,5000);
   setInterval(()=>loadState(false),120000); setInterval(loadNews,30*60000);

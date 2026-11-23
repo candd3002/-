@@ -1,0 +1,16 @@
+{
+  // Keep in sync with the Worker "alert" configured in the Cloudflare dashboard.
+  // Replace REPLACE_WITH_NAMESPACE_ID with the Namespace ID shown on the baqer-monitor-kv page (Storage & databases → Workers KV).
+  "name": "alert",
+  "main": "monitor.js",
+  "compatibility_date": "2025-01-01",
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "MONITOR_KV",
+      "id": "REPLACE_WITH_NAMESPACE_ID"
+    }
+  ]
+}
