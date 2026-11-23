@@ -693,7 +693,7 @@ function renderPanel(){
   $('run').onclick=()=>{ runScan(a,S.tf,()=>{ S.reveal=true; S.ch.show.lv=true; const t=document.querySelector('[data-show="lv"]'); if(t) t.setAttribute('aria-pressed','true'); toast('اكتمل التحليل', ASSETS[a].name+' · '+S.tf); renderPanel(); chartDraw(); }); };
   S.reveal=false;
   p.querySelectorAll('[data-ptab]').forEach(b=>b.onclick=()=>{ S.ch.panelTab=b.dataset.ptab; renderPanel(); });
-  const ae=$('alertEntry'); if(ae) ae.onclick=()=>{ const A=S.analysis[a+'|'+S.tf]; addAlert(a, A.sell?'above':'below', A.sell?A.lo:A.hi, 'منطقة الدخول'); };
+  const ae=$('alertEntry'); if(ae) ae.onclick=()=>{ const A=planOf(a,S.tf); if(!A){ toast('لا توجد صفقة مؤكدة','شغّل الرادار أولاً'); return; } addAlert(a, A.sell?'above':'below', A.sell?A.lo:A.hi, 'منطقة الدخول'); };
   const cp=$('copyPlan'); if(cp) cp.onclick=()=>{ const A=S.analysis[a+'|'+S.tf]; const txt=`${ASSETS[a].sym} ${S.tf} ${A.sell?'SELL':'BUY'}\nEntry ${fp(a,A.lo)} - ${fp(a,A.hi)}\nSL ${fp(a,A.sl)}\nTP1 ${fp(a,A.tps[0])}\nTP2 ${fp(a,A.tps[1])}\nTP3 ${fp(a,A.tps[2])}`; (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('تم النسخ','خطة الصفقة في الحافظة'),()=>toast('تعذّر النسخ','انسخ القيم من الخطة يدوياً')); };
   const cd=$('clearD'); if(cd) cd.onclick=()=>{ setDrawings([]); renderPanel(); chartDraw(); };
   p.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ const D=getDrawings(); D.splice(+b.dataset.del,1); setDrawings(D); renderPanel(); chartDraw(); });
@@ -1078,7 +1078,7 @@ AFTER.prefs = function(){
   [['p-bal','balance'],['p-risk','risk'],['p-min','minConf']].forEach(([id,k])=>$(id).addEventListener('change',e=>{ const n=parseFloat(e.target.value); if(isFinite(n)){ S.prefs[k]=n; save(); toast('تم الحفظ','الإعدادات محدثة'); } }));
   $('p-tf').onchange=e=>{ S.prefs.tf=e.target.value; S.tf=e.target.value; save(); };
   v.querySelectorAll('[data-school]').forEach(b=>b.onclick=()=>{ const k=b.dataset.school; S.prefs.schools[k]=!S.prefs.schools[k]; save(); render(); });
-  v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.flag; S.prefs[k]=!S.prefs[k];
+  v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.flag; S.prefs[k] = b.getAttribute('aria-checked')!=='true'; // follow what the switch shows
     // Turning phone notifications on asks the browser for permission (it must come from a tap).
     if(k==='push' && S.prefs.push){
       if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
@@ -2090,6 +2090,12 @@ async function disablePush(){
 function bootScreen(msg, err){
   const v=$('view'); if(!v) return;
   v.innerHTML=`<div class="screen"><section class="card lux pad" style="text-align:center;margin-top:30vh"><div class="miniradar" style="margin:0 auto 14px;width:80px;height:80px"><span></span></div><b style="font-size:16px">${msg}</b>${err?'<p class="mut" style="margin:10px 0 14px;line-height:1.7">تحقق من الإنترنت ثم أعد المحاولة.</p><button class="btn" onclick="location.reload()">إعادة المحاولة</button>':''}</section></div>`;
+}
+// The app runs only on its real address, where the server checks the email sign-in. Copies of the
+// files served elsewhere (for example GitHub Pages) stop here.
+if(!/(^|\.)baqersniper\.pages\.dev$|^localhost$|^127\.0\.0\.1$/.test(location.hostname)){
+  document.body.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;background:#0a0a0b;color:#f4efe6;font-family:Tahoma,Arial,sans-serif;text-align:center;padding:16px"><div><b style="color:#d4af6a;letter-spacing:.3em">BAQER SNIPER</b><p>افتح التطبيق من رابطه الرسمي</p><a style="color:#f6dc9c" href="https://baqersniper.pages.dev">baqersniper.pages.dev</a></div></div>';
+  throw new Error('wrong host');
 }
 navLinks(); updateSess(); startFx(); splash();
 bootScreen('جارٍ تحميل الأسعار الحية…');
