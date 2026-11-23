@@ -64,6 +64,8 @@
 
     <div id="styles" class="styles" aria-label="Trading styles"></div>
 
+    <section class="card schools-card" id="schools" aria-label="Five schools and timeframe confluence"></section>
+
     <section class="card trend-card">
       <div class="row">
         <span class="muted"><span data-i18n="marketTrend">Market trend</span> (<span id="tf-name">1H</span>)</span>
@@ -103,15 +105,21 @@
     </section></div>
   </section>
 
+  <section class="panel" id="tf-panel" hidden>
+    <div id="tf-page"></div>
+  </section>
+
   <section class="panel" id="alerts-panel" hidden>
     <h2 data-i18n="alertsTitle">Alerts</h2>
     <label class="toggle"><input type="checkbox" id="pref-signal"> <span data-i18n="alertSignal">Notify me when a new signal appears</span></label>
     <label class="toggle"><input type="checkbox" id="pref-tp"> <span data-i18n="alertTp">Notify me when a trade closes (win or loss)</span></label>
+    <div id="alert-prefs" class="alert-prefs"></div>
     <button type="button" class="btn" id="notify-btn" data-i18n="enableNotif">Enable notifications</button>
     <button type="button" class="ghost" id="tg-test">اختبار اتصال Telegram</button>
     <button type="button" class="ghost" id="tg-practice">صفقة تجريبية محلية</button>
     <p class="muted" id="tg-note"></p>
     <p class="muted" id="alerts-note" data-i18n="alertsNote">Notifications appear only while the page is open in your browser.</p>
+    <div id="alert-log" class="alert-log"></div>
       <div id="backtest-box" class="journal rep"></div>
       <div id="report-box" class="journal rep"></div>
     <div id="journal-box" class="journal"></div>
@@ -212,6 +220,7 @@
     <div class="dr-label" data-i18n="go">Go to</div>
     <button type="button" class="dr-item" data-go="settings" data-i18n="menuSettings">Settings and risk profile</button>
     <button type="button" class="dr-item" data-go="alerts" data-i18n="alertsTitle">Alerts</button>
+    <button type="button" class="dr-item" data-go="tf" data-i18n="tfPages">Timeframe pages</button>
     <button type="button" class="dr-item" data-go="markets" data-i18n="marketsTitle">Markets</button>
     <button type="button" class="dr-item" data-go="calendar" data-i18n="calendarTitle">Calendar</button>
   </section>
@@ -231,6 +240,7 @@
 </nav>
 
 <script src="analysis.js"></script>
+<script src="schools.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
   "use strict";
   var A = window.Analysis;
   var NS = "http://www.w3.org/2000/svg";
-  var TF_MS = { "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
+  var TF_MS = { "1m": 60e3, "15m": 15 * 60e3, "1h": 60 * 60e3, "4h": 4 * 60 * 60e3 };
   var TF_NAME = { "15m": "15M", "1h": "1H", "4h": "4H" };
 
   // Only BTC has a keyless live feed. Other instruments use CSV from MT5 or labelled sample candles.
@@ -24,7 +24,7 @@
       sniperEntry: "SNIPER ENTRY", stop: "Stop", entry: "Entry", finalTarget: "Final target", targets: "Targets", sweep: "Sweep",
       noSetup: "No active setup", marketsTitle: "Markets", alertsTitle: "Alerts", settingsTitle: "Settings", calendarTitle: "Calendar",
       alertSignal: "Notify me when a new signal appears", alertTp: "Notify me when a trade closes (win or loss)",
-      enableNotif: "Enable notifications", alertsNote: "Messages appear on screen while the site is open. On iPhone, system notifications need the site added to the Home Screen.",
+      tfPages: "Timeframe pages", enableNotif: "Enable notifications", alertsNote: "Messages appear on screen while the site is open. On iPhone, system notifications need the site added to the Home Screen.",
       risk: "Risk profile", riskBalanced: "Balanced (targets 1.5R, 2.5R, 4R)", riskSniper: "Sniper (tight stop, far targets)",
       riskNote: "Sniper uses a tighter stop and farther targets. Far targets are hit less often. This is a setting, not a promise of results.",
       instrument: "Instrument", importCsv: "Import candles (CSV from MT5)",
@@ -51,7 +51,7 @@
       sniperEntry: "دخول القناص", stop: "وقف", entry: "دخول", finalTarget: "الهدف النهائي", targets: "الأهداف", sweep: "سحب",
       noSetup: "لا توجد صفقة نشطة", marketsTitle: "الأسواق", alertsTitle: "التنبيهات", settingsTitle: "الإعدادات", calendarTitle: "التقويم",
       alertSignal: "أخبرني عند ظهور إشارة جديدة", alertTp: "أخبرني عند إغلاق صفقة (ربح أو خسارة)",
-      enableNotif: "تفعيل الإشعارات", alertsNote: "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.",
+      tfPages: "صفحات الفريمات", enableNotif: "تفعيل الإشعارات", alertsNote: "تظهر الإشعارات فقط أثناء فتح الصفحة في المتصفح.",
       risk: "نمط المخاطرة", riskBalanced: "متوازن (أهداف 1.5R و2.5R و4R)", riskSniper: "Sniper (وقف قريب وأهداف بعيدة)",
       riskNote: "نمط Sniper يطلب وقفاً أضيق وأهدافاً أبعد. الأهداف البعيدة تُصاب بنسبة أقل. هذا خيار وليس ضماناً لأي نتيجة.",
       instrument: "الأصل", importCsv: "استيراد الشموع (CSV من MT5)",
@@ -86,12 +86,12 @@
   I18N.en.welGuest = "Enter"; I18N.en.welFollow = "Follow me on Instagram";
   I18N.en.welContinue = "Continue";
   I18N.en.welHint = "Your sign-in is saved on this device only.";
-  I18N.en.welBack = "Welcome back, ";
+  I18N.en.welBack = "Welcome, ";
   I18N.ar.welSub = "هيكل السوق، مشروحاً ببساطة.";
   I18N.ar.welGuest = "ادخل إلى التطبيق"; I18N.ar.welFollow = "تابعني على إنستغرام";
   I18N.ar.welContinue = "متابعة";
   I18N.ar.welHint = "يُحفظ تسجيل الدخول على هذا الجهاز فقط.";
-  I18N.ar.welBack = "أهلاً بعودتك، ";
+  I18N.ar.welBack = "مرحبا، ";
   var NEW = {
     en: { appName: "Radar", appSub: "Gold & crypto market analysis", live: "Live", structTitle: "ICT + SMC structure",
           modeSwing: "Swing", modeScalp: "Scalp", modeDay: "Day ICT", marketTrend: "Market trend",
@@ -159,7 +159,7 @@
     { key: "sma100", type: "sma", len: 100, color: "#fb8500" }
   ];
   var st = { show: { ema: true, zones: true, levels: true, rsi: true, bb: false, ema9: false, ema21: false, sma20: false, sma100: false, sma200: false, macd: false }, inst: "BTC", tf: "1h", profile: "balanced", lang: "en", btc: null, btcFetchedTf: null, btcChange: null,
-             csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true } };
+             csv: {}, res: null, lastSig: null, ws: null, poll: null, prefs: { signal: true, tp: true, rev: true, sound: false, minGrade: "C", insts: {}, tfs: {} } };
 
   function $(id) { return document.getElementById(id); }
   function T(k) { return (I18N[st.lang] && I18N[st.lang][k]) || I18N.en[k] || k; }
@@ -420,18 +420,26 @@
   }
 
   // ---------- analysis and render ----------
-  function analyzeAndRender() {
-    var c = candlesFor(st.inst);
-    st.res = c.length ? A.analyze(c, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
-    st.res.inst = st.inst; // tag: a result belongs to the instrument it was computed for
-    var evs = journalUpdate();
+  // Live ticks arrive many times a second. Prices repaint on every tick, but the analysis, the journal
+  // and the alerts only run again when a candle closes (or every 20 s for the other instruments).
+  var heavyKey = null, heavyAt = 0;
+  function analyzeAndRender(force) {
+    var c = candlesFor(st.inst), cc = closedFor(c, st.tf);
+    var key = st.inst + "|" + st.tf + "|" + st.profile + "|" + (cc.length ? cc[cc.length - 1].t + ":" + cc.length : "0");
+    var heavy = force === true || key !== heavyKey || Date.now() - heavyAt > 20000 || !st.res || st.res.inst !== st.inst;
+    if (heavy) {
+      heavyKey = key; heavyAt = Date.now();
+      // Decisions use closed candles only (no repainting); prices on screen stay live.
+      st.res = cc.length ? A.analyze(cc, st.profile, learnFromJournal()) : { ready: false, reason: T("noData") };
+      st.res.inst = st.inst; // tag: a result belongs to the instrument it was computed for
+    }
+    var evs = heavy ? journalUpdate() : [];
     renderTickers();
     render();
-    renderJournal();
-    renderMarkets();
+    if (heavy) { renderJournal(); renderMarkets(); }
     if (OWN) paintOwn();
     evs.forEach(announce);
-    refreshStyles();
+    if (heavy) refreshStyles();
   }
 
   // Small coin badges shown beside each price in the strip.
@@ -653,26 +661,35 @@
       ].filter(Boolean)
     };
   }
-  // Records a signal once per instrument, direction and entry price.
-  function addSignal(j, x, sg, t, price, ema50, events, emit, tfOpt, styleOpt) {
-    var d = x.digits;
-    var id = x.id + "|" + sg.key + "|" + sg.entry.toFixed(d) + (tfOpt ? "|" + tfOpt : "");
-    if (j.some(function (e) { return e.id === id; })) return false;
+  // Records a setup once. Identity = instrument + timeframe + direction + the closed bar it formed on
+  // (never the entry price, which used to change while a candle was forming and caused repeat alerts).
+  // A.isRepeat also keeps the same instrument/timeframe/direction silent while a trade is open and
+  // for a few bars after it (see analysis.js, ALERT.cooldownBars).
+  function styleOfTf(tf) { return tf === "4h" ? "swing" : (tf === "15m" ? "scalp" : "day"); }
+  function closedFor(c, tf) { return A.closedBars(c || [], TF_MS[tf] || 60 * 60e3, Date.now()); }
+  function addSignal(j, x, sg, barT, price, ema50, events, emit, tf, styleOpt) {
+    if (A.isRepeat(j, x.id, tf, sg.dir, barT, TF_MS[tf])) return false;
     var against = (sg.dir === "LONG" && !(price > ema50)) || (sg.dir === "SHORT" && !(price < ema50));
-    var e = { id: id, inst: x.id, key: sg.key, dir: sg.dir, entry: sg.entry, sl: sg.sl, tp1: sg.tp1, tp2: sg.tp2, tp3: sg.tp3, t: t, status: "open", against: against };
-    if (tfOpt) { e.tf = tfOpt; e.style = styleOpt || tfOpt; }
+    var e = { id: A.setupId(x.id, tf, sg.dir, barT), inst: x.id, key: sg.key, dir: sg.dir, grade: sg.grade, entry: sg.entry, sl: sg.sl,
+      tp1: sg.tp1, tp2: sg.tp2, tp3: sg.tp3, t: barT, status: "open", against: against, tf: tf, style: styleOpt || styleOfTf(tf) };
     j.push(e);
     if (emit) events.push({ type: "open", e: e });
     return true;
   }
-  // Replays the analysis over past candles once per instrument and timeframe, so the journal and
+  // Replays the analysis over past closed candles once per instrument and timeframe, so the journal and
   // the monthly report already contain the signals the app would have given before this visit.
-  function backfill(x, c, profile, j, events) {
-    var flag = "baqerBf|" + x.id + "|" + st.tf + "|" + profile;
+  // Each replayed trade is resolved right away, so the no-repeat rule works the same as live.
+  function backfill(x, c, profile, j) {
+    var flag = "baqerBf2|" + x.id + "|" + st.tf + "|" + profile;
     if (store(flag)) return false;
     for (var i = 60; i < c.length; i++) {
       var r = A.analyze(c.slice(0, i + 1), profile, null);
-      if (r.ready && r.signal) addSignal(j, x, r.signal, c[i].t, r.price, r.ema50, events, false, st.tf, st.tf === "4h" ? "swing" : (st.tf === "15m" ? "scalp" : "day"));
+      if (!(r.ready && r.signal)) continue;
+      if (addSignal(j, x, r.signal, c[i].t, r.price, r.ema50, [], false, st.tf, styleOfTf(st.tf))) {
+        var e = j[j.length - 1], ex = A.resolveExit(e, c);
+        if (ex) { e.status = ex.status; e.closeT = ex.closeT; }
+        e.backfill = true;
+      }
     }
     store(flag, true);
     return true;
@@ -689,35 +706,30 @@
   function journalUpdate() {
     var j = loadJournal(), changed = false, events = [], learn = learnFromJournal(), trendOf = {}, lastOf = {};
     INST.forEach(function (x) {
-      var c = candlesFor(x.id);
+      var live = candlesFor(x.id);
+      if (!feedFresh(live, st.tf)) return;
+      var c = closedFor(live, st.tf);
       if (c.length < 60) return;
-      if (!feedFresh(c, st.tf)) return;
-      if (backfill(x, c, st.profile, j, events)) changed = true;
+      if (backfill(x, c, st.profile, j)) changed = true;
       var r = A.analyze(c, st.profile, learn);
       trendOf[x.id] = r.ready ? r.trend : null; lastOf[x.id] = c[c.length - 1];
-      // Tag with the timeframe the signal came from, so the same signal is never recorded twice
-      // (the style cards record the same setup with the same timeframe tag).
-      if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true, st.tf, st.tf === "4h" ? "swing" : (st.tf === "15m" ? "scalp" : "day"))) changed = true;
+      if (r.ready && r.signal && addSignal(j, x, r.signal, c[c.length - 1].t, r.price, r.ema50, events, true, st.tf, styleOfTf(st.tf))) changed = true;
     });
     j.forEach(function (e) {
       if (e.status !== "open") return;
-      var c = srcFor(e), long = e.dir === "LONG";
-      if (!feedFresh(c, e.tf || st.tf)) return;
-      for (var i = 0; i < c.length; i++) {
-        if (!(c[i].t > e.t)) continue;
-        var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
-        var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
-        if (hitStop) { e.status = "loss"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
-        if (hitTP) { e.status = "win"; e.closeT = c[i].t; changed = true; events.push({ type: "close", e: e }); break; }
-      }
+      var live = srcFor(e);
+      if (!feedFresh(live, e.tf || st.tf)) return;
+      var ex = A.resolveExit(e, closedFor(live, e.tf || st.tf));
+      if (ex) { e.status = ex.status; e.closeT = ex.closeT; changed = true; events.push({ type: "close", e: e }); }
     });
-    // Reversal: when the trend turns against an open trade, the trade is closed at the last price.
+    // Reversal: when the closed-bar trend turns against an open trade, the trade is closed at the last close.
     j.forEach(function (e) {
-      if (e.status !== "open" || !trendOf[e.inst] || !lastOf[e.inst]) return;
-      if (e.tf && e.tf !== st.tf) return;
+      if (e.status !== "open" || e.practice || !trendOf[e.inst] || !lastOf[e.inst]) return;
+      if ((e.tf || st.tf) !== st.tf) return;
       var against = (e.dir === "LONG" && trendOf[e.inst] === "bear") || (e.dir === "SHORT" && trendOf[e.inst] === "bull");
       if (!against) return;
-      var last = lastOf[e.inst], exit = last.c, pnl = (e.dir === "LONG" ? 1 : -1) * (exit - e.entry);
+      var last = lastOf[e.inst]; if (!(last.t > e.t)) return;
+      var exit = last.c, pnl = (e.dir === "LONG" ? 1 : -1) * (exit - e.entry);
       e.status = pnl > 0 ? "win" : "loss"; e.exit = exit; e.exitReason = "reversal"; e.closeT = last.t;
       changed = true; events.push({ type: "close", e: e });
     });
@@ -819,7 +831,7 @@
     if (extra) box.appendChild(el("p", "muted", extra));
     L.lessons.forEach(function (t) { box.appendChild(el("p", "muted", "• " + t)); });
     var btn = el("button", "btn", T("clearJournal")); btn.type = "button";
-    btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(); });
+    btn.addEventListener("click", function () { saveJournal([]); analyzeAndRender(true); });
     box.appendChild(btn);
     renderReport();
   }
@@ -1015,16 +1027,18 @@
       if (sty.id === "scalp") {
         // Scalp: 15m order block zone, 1m trend and 1m order block for the entry (see analysis.scalpSetup).
         return Promise.all([styleCandles(id, "15m"), styleCandles(id, "1m")]).then(function (cs) {
-          var c15 = cs[0], c1 = cs[1];
+          var live15 = cs[0], c15 = closedFor(cs[0], "15m"), c1 = closedFor(cs[1], "1m");
           var r = c15 && c1 && c15.length >= 60 && c1.length >= 60 ? A.scalpSetup(c15, c1, sty.profile) : null;
           // r is null only when candles are missing; a not-ready result is kept so it shows "waiting", not "no data".
-          return { s: sty, own: styleLearn(sty.id), r: r || null, mtf: true, reason: r && r.reason };
+          return { s: sty, own: styleLearn(sty.id), r: r || null, mtf: true, reason: r && r.reason,
+            live: live15, barT: c15 && c15.length ? c15[c15.length - 1].t : null };
         });
       }
       return styleCandles(id, sty.tf).then(function (c) {
-        var L = learnFromJournal(), own = styleLearn(sty.id);
+        var L = learnFromJournal(), own = styleLearn(sty.id), cc = closedFor(c, sty.tf);
         L.extra = (L.extra || 0) + own.extra;
-        return { s: sty, own: own, r: c && c.length >= 60 ? A.analyze(c, sty.profile, L) : null };
+        return { s: sty, own: own, r: cc.length >= 60 ? A.analyze(cc, sty.profile, L) : null,
+          live: c, barT: cc.length ? cc[cc.length - 1].t : null };
       });
     })).then(function (rows) {
       if (st.inst !== id) return;
@@ -1038,16 +1052,16 @@
     if (!x) return;
     var j = loadJournal(), events = [], changed = false;
     rows.forEach(function (row) {
-      var r = row.r, c = STY_CACHE[x.id + "|" + row.s.tf];
-      if (!r || !r.ready || !r.signal) return;
-      var candles = row.s.tf === st.tf ? candlesFor(x.id) : (c && c.c) || [];
-      if (!candles.length || !feedFresh(candles, row.s.tf)) return;
-      if (addSignal(j, x, r.signal, candles[candles.length - 1].t, r.price, r.ema50, events, true, row.s.tf, row.s.id)) changed = true;
+      var r = row.r;
+      if (!r || !r.ready || !r.signal || row.barT == null) return;
+      if (!row.live || !row.live.length || !feedFresh(row.live, row.s.tf)) return;
+      if (addSignal(j, x, r.signal, row.barT, r.price, r.ema50, events, true, row.s.tf, row.s.id)) changed = true;
     });
     if (changed) saveJournal(j);
     var closed = journalUpdate();
     events.concat(closed).forEach(announce);
     renderJournal();
+    renderSchools();
   }
   function renderStyles(rows) {
     var box = $("styles"); if (!box) return;
@@ -1094,6 +1108,187 @@
     box.appendChild(card);
   }
 
+  // ---------- five schools + timeframe confluence ----------
+  // ICT/SMC, support & resistance, price action, Wyckoff, Elliott + Fibonacci on 15m, 1H and 4H.
+  // Each frame is computed from closed candles and cached by its last closed bar, so it only changes
+  // when a candle closes.
+  var S5 = window.Schools, SCH_TFS = ["15m", "1h", "4h"], SCH = { inst: null, frames: {}, keys: {}, closed: {}, tfPage: null };
+  function loadSchoolFrames() {
+    var id = st.inst;
+    if (SCH.inst !== id) { SCH.inst = id; SCH.frames = {}; SCH.keys = {}; SCH.closed = {}; }
+    return Promise.all(SCH_TFS.map(function (tf) {
+      return styleCandles(id, tf).then(function (c) {
+        if (st.inst !== id) return;
+        var cc = closedFor(c || [], tf);
+        if (cc.length < 60) { SCH.frames[tf] = null; return; }
+        var k = cc.length + ":" + cc[cc.length - 1].t + ":" + cc[cc.length - 1].c;
+        if (SCH.keys[tf] === k && SCH.frames[tf]) return;
+        SCH.keys[tf] = k; SCH.closed[tf] = cc;
+        SCH.frames[tf] = S5.all(cc, STYLE[tf] || "balanced");
+      });
+    }));
+  }
+  function renderSchools() {
+    if (!S5) return;
+    var id = st.inst;
+    loadSchoolFrames().then(function () {
+      if (st.inst !== id) return;
+      paintSchools();
+      if (currentView() === "tf") paintTfPage();
+    });
+  }
+  function biasCls(b) { return b === "bull" ? "up" : b === "bear" ? "down" : "flat"; }
+  function biasTxt(b, ar) { return S5.BIAS[b] ? S5.BIAS[b][ar ? "ar" : "en"] : "—"; }
+  function biasIco(b) { return b === "bull" ? "▲" : b === "bear" ? "▼" : "●"; }
+  function confText(cf, ar) {
+    if (!cf.tfs.length) return ar ? "بانتظار البيانات" : "Waiting for data";
+    if (cf.level === "full") return (ar ? "توافق كامل " : "Full confluence, ") + biasTxt(cf.bias, ar) + " (" + cf.tfs.length + "/" + cf.tfs.length + ")";
+    if (cf.level === "partial") return (ar ? "توافق جزئي " : "Partial confluence, ") + biasTxt(cf.bias, ar) + " (" + Math.max(cf.bull, cf.bear) + "/" + cf.tfs.length + ")";
+    if (cf.level === "conflict") return ar ? "تعارض بين الفريمات، الأفضل الانتظار" : "Timeframes disagree, better to wait";
+    return ar ? "لا اتجاه واضح على الفريمات" : "No clear direction across timeframes";
+  }
+  function paintSchools() {
+    var box = $("schools"); if (!box || !S5) return;
+    var ar = st.lang === "ar", L = ar ? "ar" : "en", fr = SCH.frames, cf = S5.confluence(fr);
+    box.textContent = "";
+    var head = el("div", "sc-head");
+    head.appendChild(el("h2", "", ar ? "المدارس الخمس وتوافق الفريمات" : "Five schools · timeframe confluence"));
+    head.appendChild(el("span", "sc-verdict " + biasCls(cf.bias), confText(cf, ar)));
+    box.appendChild(head);
+    // Matrix: one row per school, one column per timeframe.
+    var tbl = el("div", "sc-matrix");
+    var hr = el("div", "sc-r sc-hr");
+    hr.appendChild(el("span", "sc-n", ar ? "المدرسة" : "School"));
+    SCH_TFS.forEach(function (tf) {
+      var b = el("button", "sc-tf" + (tf === st.tf ? " cur" : ""), TF_NAME[tf]); b.type = "button";
+      b.title = ar ? "افتح صفحة الفريم" : "Open timeframe page";
+      b.addEventListener("click", function () { openTfPage(tf); });
+      hr.appendChild(b);
+    });
+    tbl.appendChild(hr);
+    S5.ORDER.forEach(function (sid) {
+      var row = el("div", "sc-r");
+      var nm = el("span", "sc-n", S5.NAMES[sid][L]);
+      if (cf.perSchool[sid] && cf.perSchool[sid].aligned) nm.appendChild(el("i", "sc-al", ar ? " متوافق" : " aligned"));
+      row.appendChild(nm);
+      SCH_TFS.forEach(function (tf) {
+        var r = fr[tf] && fr[tf].rows.filter(function (x) { return x.id === sid; })[0];
+        var cell = el("button", "sc-c " + (r && r.ready ? biasCls(r.bias) : "na")); cell.type = "button";
+        cell.appendChild(el("b", "", r && r.ready ? biasIco(r.bias) : "—"));
+        cell.appendChild(el("small", "", r && r.ready ? r.strength + "%" : ""));
+        if (r) cell.title = r.label[L];
+        cell.addEventListener("click", function () { openTfPage(tf, sid); });
+        row.appendChild(cell);
+      });
+      tbl.appendChild(row);
+    });
+    var tot = el("div", "sc-r sc-tot");
+    tot.appendChild(el("span", "sc-n", ar ? "الحكم" : "Verdict"));
+    SCH_TFS.forEach(function (tf) {
+      var f = fr[tf];
+      tot.appendChild(el("span", "sc-c " + (f ? biasCls(f.bias) : "na"), f ? biasIco(f.bias) + " " + f.agree + "/" + f.ready : "—"));
+    });
+    tbl.appendChild(tot);
+    box.appendChild(tbl);
+    // Current timeframe: one line per school.
+    var cur = fr[st.tf];
+    if (cur) {
+      var list = el("div", "sc-list");
+      cur.rows.forEach(function (r) {
+        var it = el("button", "sc-item"); it.type = "button";
+        var top = el("div", "sc-it-top");
+        top.appendChild(el("b", "", r.title[L]));
+        top.appendChild(el("span", "sc-pill " + biasCls(r.bias), r.ready ? biasTxt(r.bias, ar) : (ar ? "غير جاهز" : "Not ready")));
+        it.appendChild(top);
+        var bar = el("div", "sc-bar"), fill = el("i", biasCls(r.bias)); fill.style.width = r.strength + "%"; bar.appendChild(fill);
+        it.appendChild(bar);
+        it.appendChild(el("p", "muted", r.label[L]));
+        it.addEventListener("click", function () { openTfPage(st.tf, r.id); });
+        list.appendChild(it);
+      });
+      box.appendChild(list);
+    }
+    box.appendChild(el("p", "muted sc-note", ar ? "اضغط على أي فريم لفتح صفحته الكاملة. تحليل تعليمي، ليس نصيحة مالية." : "Tap a timeframe to open its full page. Educational, not financial advice."));
+  }
+  function openTfPage(tf, focus) {
+    SCH.tfPage = tf; SCH.focus = focus || null;
+    setView("tf");
+    window.scrollTo(0, 0);
+  }
+  function paintTfPage() {
+    var box = $("tf-page"); if (!box || !S5) return;
+    var ar = st.lang === "ar", L = ar ? "ar" : "en", tf = SCH.tfPage || st.tf, f = SCH.frames[tf], x = BY[st.inst], d = x.digits;
+    var fp = function (v) { return v == null || !isFinite(v) ? "—" : v.toFixed(d); };
+    box.textContent = "";
+    var top = el("div", "tf-top");
+    var back = el("button", "ghost tf-back", ar ? "→ رجوع" : "← Back"); back.type = "button";
+    back.addEventListener("click", function () { setView("analysis"); });
+    top.appendChild(back);
+    top.appendChild(el("h2", "", x.name + " · " + TF_NAME[tf]));
+    box.appendChild(top);
+    var tabs = el("div", "modes tf-tabs");
+    SCH_TFS.forEach(function (t) {
+      var b = el("button", "", TF_NAME[t]); b.type = "button"; b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(t === tf));
+      b.addEventListener("click", function () { SCH.tfPage = t; SCH.focus = null; paintTfPage(); });
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    if (!f) { box.appendChild(el("p", "muted", ar ? "جارٍ تحميل شموع هذا الفريم..." : "Loading candles for this timeframe...")); return; }
+    var cc = SCH.closed[tf] || [], last = cc[cc.length - 1];
+    var sum = el("section", "card tf-sum");
+    sum.appendChild(el("div", "tf-verdict " + biasCls(f.bias), biasIco(f.bias) + " " + biasTxt(f.bias, ar)));
+    sum.appendChild(el("p", "muted", (ar ? "اتفاق المدارس: " : "Schools agreeing: ") + f.agree + "/" + f.ready +
+      (ar ? " · صاعد " : " · bullish ") + f.bull + (ar ? " · هابط " : " · bearish ") + f.bear));
+    if (last) sum.appendChild(el("p", "muted", (ar ? "آخر شمعة مغلقة: " : "Last closed candle: ") + fp(last.c) + (last.t > 1e12 ? " · " + new Date(last.t + TF_MS[tf]).toLocaleTimeString(ar ? "ar" : "en", { hour: "2-digit", minute: "2-digit" }) : "")));
+    var sig = f.rows[0] && f.rows[0].signal;
+    if (sig) {
+      var g = el("div", "style-grid");
+      [[ar ? "دخول" : "Entry", sig.entry, ""], [ar ? "وقف" : "Stop", sig.sl, "down"], ["TP1", sig.tp1, "up"], ["TP2", sig.tp2, "up"], ["TP3", sig.tp3, "up"]].forEach(function (q) {
+        var cell = el("div", "style-cell"); cell.appendChild(el("span", "muted", q[0])); cell.appendChild(el("b", q[2], fp(q[1]))); g.appendChild(cell);
+      });
+      sum.appendChild(el("p", "", (sig.dir === "LONG" ? (ar ? "خطة شراء" : "Buy plan") : (ar ? "خطة بيع" : "Sell plan")) + " · " + (ar ? "درجة " : "grade ") + sig.grade));
+      sum.appendChild(g);
+    } else sum.appendChild(el("p", "muted", ar ? "لا توجد خطة دخول مؤكدة على هذا الفريم الآن." : "No confirmed entry plan on this timeframe right now."));
+    box.appendChild(sum);
+    f.rows.forEach(function (r) {
+      var card = el("section", "card tf-school" + (SCH.focus === r.id ? " focus" : ""));
+      card.id = "tf-s-" + r.id;
+      var h = el("div", "sc-it-top");
+      h.appendChild(el("b", "", r.title[L]));
+      h.appendChild(el("span", "sc-pill " + biasCls(r.bias), r.ready ? biasTxt(r.bias, ar) + " · " + r.strength + "%" : (ar ? "غير جاهز" : "Not ready")));
+      card.appendChild(h);
+      card.appendChild(el("div", "tf-label", r.label[L]));
+      var ul = el("ul", "tf-lines");
+      r.lines[L].forEach(function (ln) { ul.appendChild(el("li", "", ln)); });
+      card.appendChild(ul);
+      if (r.levels.length) {
+        var lv = el("div", "tf-levels");
+        r.levels.forEach(function (q) { var c = el("span", "tf-lv"); c.appendChild(el("i", "", q.name)); c.appendChild(el("b", "", fp(q.price))); lv.appendChild(c); });
+        card.appendChild(lv);
+      }
+      box.appendChild(card);
+    });
+    // All key levels of this timeframe on one price ladder.
+    if (last) {
+      var lvls = [];
+      f.rows.forEach(function (r) { r.levels.forEach(function (q) { if (isFinite(q.price)) lvls.push({ n: q.name, p: q.price, s: r.title[L] }); }); });
+      lvls.push({ n: ar ? "السعر" : "Price", p: last.c, s: "", now: true });
+      lvls.sort(function (a, b) { return b.p - a.p; });
+      var lad = el("section", "card tf-ladder");
+      lad.appendChild(el("b", "", ar ? "سلّم المستويات" : "Level ladder"));
+      lvls.forEach(function (q) {
+        var rw = el("div", "lad-r" + (q.now ? " now" : q.p > last.c ? " above" : " below"));
+        rw.appendChild(el("span", "", q.n + (q.s ? " · " + q.s : "")));
+        rw.appendChild(el("b", "", fp(q.p)));
+        lad.appendChild(rw);
+      });
+      box.appendChild(lad);
+    }
+    box.appendChild(el("p", "muted sc-note", ar ? "تحليل تعليمي من شموع مغلقة فقط، ليس نصيحة مالية." : "Educational analysis from closed candles only, not financial advice."));
+    if (SCH.focus) { var fc = $("tf-s-" + SCH.focus); if (fc) setTimeout(function () { fc.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60); SCH.focus = null; }
+  }
+
   // Backtest panel is built once, so live refreshes never wipe its results.
   renderBacktestBox();
   // ---------- alerts: in-page message always, system notification when allowed ----------
@@ -1114,30 +1309,139 @@
       "TP1 " + f(e.tp1) + "   TP2 " + f(e.tp2) + "   TP3 " + f(e.tp3)
     ].join("\n");
   }
+  // ---------- one gate for every alert ----------
+  // Each event is announced at most once, on any number of open tabs: the key is written to a shared
+  // log (localStorage) before the alert shows, and other tabs check it first. Old events found when the
+  // app opens after a break (e.g. a trade that closed hours ago) are recorded silently.
+  var ALOG = "baqerAlertLog", ASEEN = "baqerAnnounced";
+  var GRADE_RANK = { A: 3, B: 2, C: 1 };
+  function prefsAllow(ev) {
+    var p = st.prefs, e = ev.e;
+    if (p.insts && p.insts[e.inst] === false) return false;
+    if (p.tfs && e.tf && p.tfs[e.tf] === false) return false;
+    if (ev.type === "open") {
+      if (!p.signal) return false;
+      if (p.minGrade && e.grade && (GRADE_RANK[e.grade] || 0) < (GRADE_RANK[p.minGrade] || 0)) return false;
+      return true;
+    }
+    if (e.exitReason === "reversal") return p.rev !== false;
+    return !!p.tp;
+  }
+  function eventFresh(ev) {
+    var e = ev.e; if (e.practice) return true;
+    var t = ev.type === "open" ? e.t : e.closeT, ms = TF_MS[e.tf] || 60 * 60e3;
+    if (!(t > 1e12)) return true;
+    return Date.now() - t <= 3 * ms;
+  }
+  function claimAlert(key) {
+    var seen = store(ASEEN) || {}, now = Date.now();
+    if (seen[key]) return false;
+    Object.keys(seen).forEach(function (k) { if (now - seen[k] > 7 * 864e5) delete seen[k]; });
+    seen[key] = now; store(ASEEN, seen);
+    return true;
+  }
+  function logAlert(item) {
+    var log = store(ALOG) || [];
+    log.push(item); store(ALOG, log.slice(-60));
+    renderAlertLog();
+  }
+  function beep() {
+    if (!st.prefs.sound) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+      var ac = beep.ac || (beep.ac = new Ctx()), o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = 880; g.gain.setValueAtTime(0.0001, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, ac.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.35);
+      o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.4);
+    } catch (err) {}
+  }
   function announce(ev) {
-    var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg, title;
+    if (!ev || !ev.e || !BY[ev.e.inst]) return;
+    var key = ev.type + "|" + ev.e.id + (ev.e.exitReason ? "|" + ev.e.exitReason : "");
+    if (!eventFresh(ev)) return;
+    if (!claimAlert(key)) return;
+    if (!prefsAllow(ev)) return;
+    var x = BY[ev.e.inst], d = x.digits, ar = st.lang === "ar", msg, title, kind;
     if (ev.type === "close" && ev.e.exitReason === "reversal") {
       var pts2 = Math.abs(ev.e.exit - ev.e.entry).toFixed(d), side2 = ev.e.dir === "LONG" ? (ar ? "شراء" : "buy") : (ar ? "بيع" : "sell");
       var res = ev.e.status === "win" ? (ar ? "ربح " : "win ") : (ar ? "خسارة " : "loss ");
-      title = ar ? "انعكس الاتجاه، أُغلقت الصفقة" : "Trend reversed, trade closed";
+      title = ar ? "انعكس الاتجاه، أُغلقت الصفقة" : "Trend reversed, trade closed"; kind = "rev";
       msg = (ar ? "أُغلقت صفقة " + side2 + " بـ " + res + pts2 : "Closed " + side2 + ": " + res + pts2) + "\n" + alertDetails(ev.e, ar);
     } else if (ev.type === "open") {
-      if (!st.prefs.signal) return;
-      title = ar ? "إشارة جديدة" : "New signal";
+      title = (ar ? "إشارة جديدة" : "New signal") + (ev.e.grade ? " · " + ev.e.grade : ""); kind = "open";
       msg = alertDetails(ev.e, ar);
     } else {
-      if (!st.prefs.tp) return;
       var won = ev.e.status === "win", pts = ev.e.exit != null ? Math.abs(ev.e.exit - ev.e.entry) : (won ? Math.abs(ev.e.tp1 - ev.e.entry) : Math.abs(ev.e.entry - ev.e.sl));
-      title = won ? (ar ? "صفقة رابحة" : "Winning trade") : (ar ? "صفقة خاسرة" : "Losing trade");
+      title = won ? (ar ? "صفقة رابحة" : "Winning trade") : (ar ? "صفقة خاسرة" : "Losing trade"); kind = won ? "win" : "loss";
       msg = (won ? "+" : "−") + pts.toFixed(d) + (ar ? " نقطة" : " pts") + "\n" + alertDetails(ev.e, ar);
     }
     toast(title + " · " + x.name);
+    beep();
+    logAlert({ k: key, kind: kind, title: title, body: msg, at: Date.now() });
     if ("Notification" in window && Notification.permission === "granted") {
       try {
-        var n = new Notification(title, { body: msg, tag: ev.e.id, renotify: false });
+        var n = new Notification(title, { body: msg, tag: key, renotify: false, icon: "assets/apple-touch-icon.png" });
         n.onclick = function () { window.focus(); setView("analysis"); var b = $("styles"); if (b) b.scrollIntoView({ behavior: "smooth", block: "start" }); n.close(); };
       } catch (err) {}
     }
+  }
+  function renderAlertLog() {
+    var box = $("alert-log"); if (!box) return;
+    var ar = st.lang === "ar", log = (store(ALOG) || []).slice().reverse();
+    box.textContent = "";
+    box.appendChild(el("div", "al-h", ar ? "سجل التنبيهات" : "Alert log"));
+    if (!log.length) { box.appendChild(el("p", "muted", ar ? "لا توجد تنبيهات بعد. كل تنبيه يظهر هنا مرة واحدة فقط." : "No alerts yet. Each alert appears here once.")); return; }
+    log.slice(0, 25).forEach(function (a) {
+      var row = el("div", "al-row " + a.kind);
+      var top = el("div", "al-top");
+      top.appendChild(el("b", "", a.title));
+      top.appendChild(el("span", "muted", new Date(a.at).toLocaleString(ar ? "ar" : "en", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })));
+      row.appendChild(top);
+      row.appendChild(el("p", "al-body", a.body));
+      box.appendChild(row);
+    });
+  }
+  // Notification controls: instruments, timeframes, minimum grade, sound.
+  function renderAlertPrefs() {
+    var box = $("alert-prefs"); if (!box) return;
+    var ar = st.lang === "ar", p = st.prefs;
+    p.insts = p.insts || {}; p.tfs = p.tfs || {};
+    box.textContent = "";
+    function save() { store("baqerPrefs", st.prefs); }
+    function chipRow(label, items, map) {
+      var wrap = el("div", "ap-row");
+      wrap.appendChild(el("span", "ap-l", label));
+      var chips = el("div", "ap-chips");
+      items.forEach(function (it) {
+        var b = el("button", "ap-chip", it[1]); b.type = "button";
+        b.setAttribute("aria-pressed", String(map[it[0]] !== false));
+        b.addEventListener("click", function () { map[it[0]] = map[it[0]] === false; b.setAttribute("aria-pressed", String(map[it[0]] !== false)); save(); });
+        chips.appendChild(b);
+      });
+      wrap.appendChild(chips);
+      return wrap;
+    }
+    box.appendChild(chipRow(ar ? "الأصول" : "Instruments", INST.map(function (x) { return [x.id, x.name]; }), p.insts));
+    box.appendChild(chipRow(ar ? "الفريمات" : "Timeframes", [["15m", "15m"], ["1h", "1H"], ["4h", "4H"]], p.tfs));
+    var gr = el("div", "ap-row");
+    gr.appendChild(el("span", "ap-l", ar ? "أقل درجة للإشارة" : "Minimum grade"));
+    var seg = el("div", "ap-chips");
+    [["C", ar ? "الكل" : "All"], ["B", "B+"], ["A", ar ? "A فقط" : "A only"]].forEach(function (g) {
+      var b = el("button", "ap-chip", g[1]); b.type = "button";
+      b.setAttribute("aria-pressed", String((p.minGrade || "C") === g[0]));
+      b.addEventListener("click", function () { p.minGrade = g[0]; save(); renderAlertPrefs(); });
+      seg.appendChild(b);
+    });
+    gr.appendChild(seg); box.appendChild(gr);
+    [["rev", ar ? "تنبيه عند انعكاس الاتجاه وإغلاق الصفقة" : "Alert when a reversal closes a trade", p.rev !== false],
+     ["sound", ar ? "صوت مع التنبيه" : "Play a sound", !!p.sound]].forEach(function (t) {
+      var lab = el("label", "toggle"), inp = el("input"); inp.type = "checkbox"; inp.checked = t[2];
+      inp.addEventListener("change", function () { p[t[0]] = inp.checked; save(); });
+      lab.appendChild(inp); lab.appendChild(el("span", "", " " + t[1])); box.appendChild(lab);
+    });
+    var clr = el("button", "ghost", ar ? "مسح سجل التنبيهات" : "Clear alert log"); clr.type = "button";
+    clr.addEventListener("click", function () { store(ALOG, []); renderAlertLog(); });
+    box.appendChild(clr);
   }
 
   // ---------- alerts ----------
@@ -1153,7 +1457,7 @@
     var sel = $("inst-select"); if (sel) { sel.value = st.inst; }
     document.title = st.lang === "ar" ? "باقر سنايبر" : "Baqer Sniper";
     renderAccount();
-    analyzeAndRender();
+    analyzeAndRender(true);
     setView(currentView());
   }
   function setLang(lang) {
@@ -1169,7 +1473,9 @@
   // ---------- account (local sign-in, saved on this device only) ----------
   function renderAccount() {
     var u = store("baqerUser");
-    txt("acct-state", u ? T("signedInAs") + u.name : T("notSigned"));
+    txt("acct-state", u ? T("signedInAs") + u.name + (u.verified && u.email ? " · " + u.email : "") : T("notSigned"));
+    var note = document.querySelector('[data-i18n="localAccount"]');
+    if (note) note.textContent = u && u.verified ? (st.lang === "ar" ? "بريدك مؤكد. الجلسة صالحة 30 يوماً على هذا الجهاز." : "Your email is verified. The session lasts 30 days on this device.") : T("localAccount");
     var out = $("signout"); if (out) out.hidden = !u;
     var form = $("signin-form"); if (form) form.hidden = !!u;
   }
@@ -1184,8 +1490,9 @@
   function currentView() { return $("app").getAttribute("data-view") || "analysis"; }
   function setView(v) {
     $("app").setAttribute("data-view", v);
-    document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === v); });
-    ["markets", "alerts", "settings", "calendar"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
+    document.querySelectorAll(".nav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === (v === "tf" ? "analysis" : v)); });
+    ["markets", "alerts", "settings", "calendar", "tf"].forEach(function (p) { var e = $(p + "-panel"); if (e) e.hidden = p !== v; });
+    if (v === "tf") { if (!SCH.tfPage) SCH.tfPage = st.tf; paintTfPage(); renderSchools(); }
     if (v === "calendar") loadNews(false);
     if (v === "analysis") render();
   }
@@ -1465,7 +1772,8 @@
   }
   // Reading under the chart: what the structure shows right now.
   function renderChart(r) {
-    txt("chart-price", r && r.ready ? fmt(r.price) : "—");
+    var lc = candlesFor(st.inst);
+    txt("chart-price", lc.length ? fmt(lc[lc.length - 1].c) : "—");
     if (!r || !r.ready) { txt("chart-read", r ? r.reason : ""); return; }
     var sty = A.story(r, st.lang);
     if (sty) txt("chart-read", [sty.l1.state, sty.l2.state, sty.l3.state].join(" · ") + " — " + (r.signal ? (r.signal.dir === "LONG" ? T("signalBuy") : T("signalSell")) : T("signalWait")));
@@ -1688,7 +1996,25 @@
     $("signin-form").reset();
     renderAccount();
   });
-  $("signout").addEventListener("click", function () { store("baqerUser", null); renderAccount(); });
+  // Sign out ends the verified session on the server too; the gate then shows the sign-in page.
+  $("signout").addEventListener("click", function () {
+    var u = store("baqerUser");
+    store("baqerUser", null); renderAccount();
+    if (u && u.verified) fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(function () {}).then(function () { location.reload(); });
+  });
+  // Who is signed in (verified by email on the server). A 401 means the session ended: reload to the sign-in page.
+  function loadSession() {
+    return fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" }).then(function (r) {
+      if (r.status === 401) { store("baqerUser", null); location.reload(); return; }
+      if (!r.ok) return;
+      return r.json().then(function (j) {
+        if (!j || !j.ok) return;
+        store("baqerUser", { name: j.name, email: j.email, owner: !!j.owner, verified: true });
+        renderAccount();
+        if ($("welcome") && !$("welcome").hidden) showWelcome();
+      });
+    }).catch(function () {});
+  }
   // Connection test only: sends a fixed text with no prices and no trade data.
   // Local practice trade: stored only on this device, marked as a test, never sent to Telegram or the report.
   function addPracticeTrade() {
@@ -1735,14 +2061,14 @@
     if (!url) { txt("data-note", T("dataFail")); return; }
     feeds[id] = { url: url, ok: false };
     saveFeeds();
-    loadFeed(id).then(function () { if (st.inst === id) analyzeAndRender(); else renderTickers(); });
+    loadFeed(id).then(function () { if (st.inst === id) analyzeAndRender(true); else renderTickers(); });
   });
   $("data-clear").addEventListener("click", function () {
     var id = sel.value;
     delete feeds[id]; delete st.csv[id]; saveFeeds();
     $("data-url").value = "";
     txt("data-note", "");
-    if (st.inst === id) analyzeAndRender(); else renderTickers();
+    if (st.inst === id) analyzeAndRender(true); else renderTickers();
   });
 
   $("csv").addEventListener("change", function (ev) {
@@ -1752,7 +2078,7 @@
       try {
         st.csv[target] = parseCSV(String(rd.result));
         txt("csv-note", BY[target].name + T("csvLoaded") + st.csv[target].length + T("candles"));
-        if (st.inst === target) analyzeAndRender(); else renderTickers();
+        if (st.inst === target) analyzeAndRender(true); else renderTickers();
       } catch (e) { txt("csv-note", e.message); }
     };
     rd.readAsText(f);
@@ -1775,7 +2101,8 @@
 
   // ---------- boot ----------
   st.lang = store("baqerLang") === "en" ? "en" : "ar";
-  st.prefs = store("baqerPrefs") || st.prefs;
+  st.prefs = Object.assign({}, st.prefs, store("baqerPrefs") || {});
+  renderAlertPrefs(); renderAlertLog();
   pSig.checked = st.prefs.signal; pTp.checked = st.prefs.tp;
   applyLang();
   renderSessions();
@@ -1788,6 +2115,8 @@
   setInterval(refreshStyles, 900000);
   setView("analysis");
   showWelcome();
+  loadSession();
+  setInterval(loadSession, 30 * 60e3);
   setInterval(tick, 1000); tick();
   renderTV();
   loadBtc().then(function () { connect(); analyzeAndRender(); });
