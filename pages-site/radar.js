@@ -1039,7 +1039,7 @@ VIEWS.prefs = function(){
     </section>
     <section class="card pad"><div class="h"><h2>العرض والإشعارات</h2></div>
       <div class="setrow"><span>نظام الوقت</span><div class="seg"><button data-clock="12" aria-pressed="${P.clock===12}">12h</button><button data-clock="24" aria-pressed="${P.clock===24}">24h</button></div></div>
-      <div class="setrow" style="border-top:1px solid var(--line2)"><span>إشعارات الهاتف</span><button class="switch" role="switch" aria-checked="${P.push}" data-flag="push" aria-label="إشعارات الهاتف"></button></div>
+      <div class="setrow" style="border-top:1px solid var(--line2)"><span>إشعارات الهاتف</span><button class="switch" role="switch" aria-checked="${P.push && 'Notification' in window && Notification.permission==='granted'}" data-flag="push" aria-label="إشعارات الهاتف"></button></div>
       <div class="setrow" style="border-top:1px solid var(--line2)"><span>صوت التنبيه</span><button class="switch" role="switch" aria-checked="${P.sound}" data-flag="sound" aria-label="صوت التنبيه"></button></div>
     </section>
     <section class="card pad"><div class="h"><h2>البيانات</h2></div>
@@ -1055,7 +1055,15 @@ AFTER.prefs = function(){
   [['p-bal','balance'],['p-risk','risk'],['p-min','minConf']].forEach(([id,k])=>$(id).addEventListener('change',e=>{ const n=parseFloat(e.target.value); if(isFinite(n)){ S.prefs[k]=n; save(); toast('تم الحفظ','الإعدادات محدثة'); } }));
   $('p-tf').onchange=e=>{ S.prefs.tf=e.target.value; S.tf=e.target.value; save(); };
   v.querySelectorAll('[data-school]').forEach(b=>b.onclick=()=>{ const k=b.dataset.school; S.prefs.schools[k]=!S.prefs.schools[k]; save(); render(); });
-  v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=()=>{ const k=b.dataset.flag; S.prefs[k]=!S.prefs[k]; save(); b.setAttribute('aria-checked',String(S.prefs[k])); });
+  v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.flag; S.prefs[k]=!S.prefs[k];
+    // Turning phone notifications on asks the browser for permission (it must come from a tap).
+    if(k==='push' && S.prefs.push){
+      if(!('Notification' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
+      else if(Notification.permission!=='granted'){ let r='denied'; try{ r=await Notification.requestPermission(); }catch(e){}
+        if(r!=='granted'){ S.prefs.push=false; island('الإشعارات مرفوضة','فعّلها من إعدادات المتصفح لهذا الموقع ثم أعد المحاولة','sell'); }
+        else island('تم تفعيل الإشعارات','ستصلك الإشارات أثناء فتح التطبيق','buy'); }
+    }
+    save(); b.setAttribute('aria-checked',String(S.prefs[k])); });
   v.querySelectorAll('[data-clock]').forEach(b=>b.onclick=()=>{ S.prefs.clock=+b.dataset.clock; save(); render(); });
   $('p-cleard').onclick=()=>{ try{ Object.keys(localStorage).filter(k=>k.startsWith('mrpro-draw-')).forEach(k=>localStorage.removeItem(k)); }catch(e){} S._d=null; toast('تم المسح','حُذفت كل الرسومات'); };
   $('p-reset').onclick=()=>{ S.prefs={balance:10000,risk:1,tf:'15m',minConf:65,clock:12,sound:true,push:true,schools:{ict:true,snr:true,pa:true,wyc:true,elw:true}}; save(); render(); toast('تمت الإعادة','الإعدادات الافتراضية'); };
