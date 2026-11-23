@@ -59,7 +59,7 @@ const pct = v => (v>=0?'+':'')+v.toFixed(2)+'%';
 const ENG = window.Analysis, SCHOOLS = window.Schools;
 const TF_IV = {'15m':'15m','1H':'1h','4H':'4h'};
 const TF_MS = tf => TFS[tf]*60000;
-const PROFILE = {'15m':'scalp','1H':'balanced','4H':'balanced'};
+const PROFILE = {'15m':'balanced','1H':'balanced','4H':'balanced'}; // same as the server monitor
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 S.lastTick = {}; S.fetchedAt = {}; S.live = {bq:false, bn:false}; S.loaded = false;
 
@@ -280,9 +280,8 @@ function claimOnce(key){
 function notifyUser(title, body, kind, tag){
   island(title, body, kind);
   if(S.prefs.sound) beep();
-  if(S.prefs.push && 'Notification' in window && Notification.permission==='granted'){
-    try{ const n=new Notification(title,{body, tag, renotify:false, icon:'assets/apple-touch-icon.png'}); n.onclick=()=>{ window.focus(); n.close(); }; }catch(e){}
-  }
+  // Phone notifications come from one place only: the server monitor (Web Push via sw.js), so the
+  // same signal never arrives twice. Here the app shows it inside the screen.
   S.history.unshift({kind:kind||'', title, body, at:Date.now()}); S.history=S.history.slice(0,40); saveAlerts();
   const d=$('bellDot'); if(d) d.hidden=false;
 }
@@ -1058,11 +1057,12 @@ AFTER.prefs = function(){
   v.querySelectorAll('[data-flag]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.flag; S.prefs[k]=!S.prefs[k];
     // Turning phone notifications on asks the browser for permission (it must come from a tap).
     if(k==='push' && S.prefs.push){
-      if(!('Notification' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
-      else if(Notification.permission!=='granted'){ let r='denied'; try{ r=await Notification.requestPermission(); }catch(e){}
+      if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){ S.prefs.push=false; island('غير مدعوم هنا','على آيفون: أضف التطبيق للشاشة الرئيسية من زر المشاركة ثم افتحه من هناك',''); }
+      else { let r=Notification.permission; if(r!=='granted'){ try{ r=await Notification.requestPermission(); }catch(e){} }
         if(r!=='granted'){ S.prefs.push=false; island('الإشعارات مرفوضة','فعّلها من إعدادات المتصفح لهذا الموقع ثم أعد المحاولة','sell'); }
-        else island('تم تفعيل الإشعارات','ستصلك الإشارات أثناء فتح التطبيق','buy'); }
-    }
+        else if(await enablePush()) island('تم تفعيل الإشعارات','تصلك الإشارات على الهاتف حتى والتطبيق مغلق','buy');
+        else { S.prefs.push=false; island('تعذّر التفعيل','تحقق من الإنترنت ثم أعد المحاولة','sell'); } }
+    } else if(k==='push') disablePush();
     save(); b.setAttribute('aria-checked',String(S.prefs[k])); });
   v.querySelectorAll('[data-clock]').forEach(b=>b.onclick=()=>{ S.prefs.clock=+b.dataset.clock; save(); render(); });
   $('p-cleard').onclick=()=>{ try{ Object.keys(localStorage).filter(k=>k.startsWith('mrpro-draw-')).forEach(k=>localStorage.removeItem(k)); }catch(e){} S._d=null; toast('تم المسح','حُذفت كل الرسومات'); };
@@ -2045,6 +2045,23 @@ AFTER.chart = function(){ chartAfterSchools(); const b=$('cSchools'); if(b) b.on
 const moreBeforeSchools = VIEWS.more;
 VIEWS.more = function(){ return moreBeforeSchools().replace('<div class="tilegrid">', `<div class="tilegrid"><a class="mtile" href="#schools" style="--tc:#f0d28f"><span class="mti"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="10" cy="18" r="1.6"/></svg></span><b>المدارس والأطر</b><span class="label">5 مدارس · 3 أطر</span></a>`); };
 
+/* ---------- phone notifications (Web Push from the server monitor) ---------- */
+function b64uToU8(b){ const p='='.repeat((4-b.length%4)%4), s=atob((b+p).replace(/-/g,'+').replace(/_/g,'/')), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+async function enablePush(){
+  try{
+    if(!window.PUSH_WORKER || !('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    const reg=await navigator.serviceWorker.register('sw.js');
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){ const j=await (await fetch(PUSH_WORKER+'/vapid-public',{cache:'no-store'})).json(); sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uToU8(j.key)}); }
+    const r=await fetch(PUSH_WORKER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(sub)});
+    return r.ok;
+  }catch(e){ return false; }
+}
+async function disablePush(){
+  try{ const reg=await navigator.serviceWorker.getRegistration('sw.js'); const sub=reg && await reg.pushManager.getSubscription(); if(!sub) return;
+    await fetch(PUSH_WORKER+'/unsubscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe(); }catch(e){}
+}
+
 /* ---------- boot: real data first, then the app ---------- */
 function bootScreen(msg, err){
   const v=$('view'); if(!v) return;
@@ -2063,6 +2080,7 @@ loadAll((d,n)=>bootScreen('جارٍ تحميل الأسعار الحية… '+Ma
   route();
   cloudChanged(false);
   loadNews();
+  if(S.prefs.push && 'Notification' in window && Notification.permission==='granted') enablePush();
   setInterval(tick,1500); setInterval(updateSess,30000);
   setInterval(refreshClosed,15000); setInterval(pollBinance,5000);
   setInterval(()=>loadState(false),120000); setInterval(loadNews,30*60000);
