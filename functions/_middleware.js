@@ -4,7 +4,8 @@ import { readSession, json } from "../lib/auth.js";
 import { loginPage, setupPage } from "../lib/login-page.js";
 import { getJSON } from "../lib/app-store.js";
 
-const PUBLIC = [/^\/api\/auth\//, /^\/assets\/(cover|me|apple-touch-icon)\.(jpg|png)$/, /^\/(logo|icon)\.svg$/, /^\/favicon\.ico$/, /^\/manifest\.webmanifest$/];
+// sw.js / push-config.js: the phone's service worker fetches them without the page's session (no secrets inside).
+const PUBLIC = [/^\/api\/auth\//, /^\/assets\/(cover|me|apple-touch-icon)\.(jpg|png)$/, /^\/(logo|icon)\.svg$/, /^\/favicon\.ico$/, /^\/manifest\.webmanifest$/, /^\/(sw|push-config)\.js$/];
 
 // The maintenance flag is read from KV at most every 30 s per worker instance.
 let CFG = null, CFG_AT = 0;
