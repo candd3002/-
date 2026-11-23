@@ -1962,6 +1962,81 @@ VIEWS.scanner = function(){
   return scannerView();
 };
 
+/* ---------- the five schools: a page per timeframe ----------
+   Every school's full reading (lines, key levels, strength) on 15m / 1H / 4H, plus the
+   confluence matrix and one price ladder of all levels. Closed candles only. */
+ROUTES.push({id:'schools',name:'المدارس والأطر',icon:''});
+SUB.schools='المدارس والأطر';
+S.schTf=null; S.schFocus=null;
+function openSchools(a, tf, focus){ if(a) S.asset=a; S.schTf=tf||S.tf; S.schFocus=focus||null; closeSheet(true); if(S.route==='schools') render(); else location.hash='#schools'; }
+const BIAS_AR={bull:'صاعد',bear:'هابط',neutral:'محايد'};
+const biasCol=b=>b==='bull'?C.buy:b==='bear'?C.sell:C.muted;
+const biasIco=b=>b==='bull'?'▲':b==='bear'?'▼':'●';
+VIEWS.schools = function(){
+  const a=S.asset, tf=S.schTf||S.tf, ids=enabledIds();
+  const frames={}; Object.keys(TFS).forEach(t=>{ frames[t]=schoolsOf(a,t); });
+  const f=frames[tf];
+  const rowsOf=t=>frames[t]? frames[t].rows.filter(r=>ids.includes(r.id)) : [];
+  const fb=t=>frameBias(frameVotes(a,t));
+  const mtfBias=Object.keys(TFS).map(fb), bulls=mtfBias.filter(b=>b==='bull').length, bears=mtfBias.filter(b=>b==='bear').length, n=mtfBias.length;
+  const conf = bulls===n?'توافق كامل صاعد':bears===n?'توافق كامل هابط':bulls>=2&&!bears?'توافق جزئي صاعد':bears>=2&&!bulls?'توافق جزئي هابط':bulls&&bears?'تعارض بين الأطر · الأفضل الانتظار':'لا اتجاه واضح على الأطر';
+  const confC = bulls>=2&&!bears?C.buy:bears>=2&&!bulls?C.sell:C.gold;
+  const P=planOf(a,tf), price=last(a);
+  const head=backTo('المدارس والأطر','chart');
+  const chips=`<div class="hscroll" role="group" aria-label="الأصل">${Object.keys(ASSETS).map(k=>`<button class="chip" data-sa="${k}" aria-pressed="${k===a}">${ASSETS[k].name}</button>`).join('')}</div>`;
+  const tabs=`<div class="seg wide" role="group" aria-label="الإطار الزمني">${Object.keys(TFS).map(t=>`<button data-stf="${t}" aria-pressed="${t===tf}">${t}</button>`).join('')}</div>`;
+  const matrix=`<section class="card pad"><div class="sechead"><h2>توافق الأطر</h2><span class="sub" style="color:${confC}">${conf}</span></div>
+    <table class="matrix"><thead><tr><th></th>${Object.keys(TFS).map(t=>`<th><button class="linkbtn" data-stf="${t}" style="${t===tf?'color:var(--gold);font-weight:700':''}">${t}</button></th>`).join('')}</tr></thead><tbody>
+    ${ids.map(id=>`<tr><td style="font-family:var(--f-body)">${SCHOOLS.NAMES[id].ar}</td>${Object.keys(TFS).map(t=>{ const r=rowsOf(t).find(x=>x.id===id); return `<td style="color:${r&&r.ready?biasCol(r.bias):C.muted}">${r&&r.ready?biasIco(r.bias)+' '+r.strength+'%':'—'}</td>`; }).join('')}</tr>`).join('')}
+    <tr><td style="font-family:var(--f-body);color:var(--gold)">الحكم</td>${Object.keys(TFS).map((t,k)=>`<td style="color:${biasCol(mtfBias[k])};font-weight:700">${biasIco(mtfBias[k])} ${BIAS_AR[mtfBias[k]]}</td>`).join('')}</tr>
+    </tbody></table></section>`;
+  if(!f) return head+chips+tabs+`<section class="card pad"><p class="empty">بيانات هذا الفريم غير كافية الآن.</p></section>`;
+  const vb=fb(tf), rs=rowsOf(tf), agree=rs.filter(r=>r.ready&&r.bias===vb).length, ready=rs.filter(r=>r.ready).length;
+  const summary=`<section class="card lux ${P?(P.sell?'sell':'buy'):''} pad">
+    <div class="decision"><div><div class="label">${ASSETS[a].name} · <span class="ltr">${tf}</span> · شموع مغلقة</div>
+      <h2 style="color:${P?decCol(P):biasCol(vb)}">${P?decTitle(P):(vb==='neutral'?'لا اتجاه واضح':'الميل '+BIAS_AR[vb])}</h2>
+      <div class="label">${vb==='neutral'?'المدارس غير متفقة':agree+' من '+ready+' مدارس '+(vb==='bull'?'صاعدة':'هابطة')}</div></div>
+      <div style="text-align:center"><b class="num" style="font-size:22px;font-weight:500" data-live="${a}" data-kind="raw">${fp(a,price)}</b><div class="label">السعر الآن</div></div></div>
+    ${P?miniPlan(a,P)+`<button class="btn" data-plan style="width:100%;margin-top:12px">الخطة الكاملة</button>`:`<p class="note" style="margin:10px 0 0">لا توجد صفقة مؤكدة على هذا الفريم الآن.</p>`}
+  </section>`;
+  const cards=rs.map(r=>`<section class="card pad" id="sc-${r.id}" style="${S.schFocus===r.id?'border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset':''}">
+    <div class="sechead" style="margin-bottom:6px"><h2>${r.title.ar}</h2><span class="tag" style="color:${r.ready?biasCol(r.bias):C.muted}">${r.ready?BIAS_AR[r.bias]+' · '+r.strength+'%':'غير جاهز'}</span></div>
+    <div class="cbar" style="margin:2px 0 10px"><i style="width:${r.strength}%;background:${biasCol(r.bias)};color:${biasCol(r.bias)}"></i></div>
+    <b style="color:var(--gold-hi,#f0d28f);font-size:14px">${esc(r.label.ar)}</b>
+    <ul class="list" style="margin-top:6px">${r.lines.ar.map(l=>`<li style="padding:6px 0;font-size:13px;color:var(--muted)">${esc(l)}</li>`).join('')}</ul>
+    ${r.levels.length?`<div class="chips" style="margin-top:8px">${r.levels.filter(q=>isFinite(q.price)).map(q=>`<span class="mchip">${esc(q.name)}<b>${fp(a,q.price)}</b></span>`).join('')}</div>`:''}
+  </section>`).join('');
+  const lv=[]; rs.forEach(r=>r.levels.forEach(q=>{ if(isFinite(q.price)) lv.push({n:q.name, s:r.title.ar, p:q.price}); }));
+  lv.push({n:'السعر', s:'', p:price, now:true}); lv.sort((x,y)=>y.p-x.p);
+  const ladder=`<section class="card pad"><div class="sechead"><h2>سلّم المستويات</h2><span class="sub">كل المدارس · <span class="ltr">${tf}</span></span></div>
+    <div class="list">${lv.map(q=>`<div class="lrow" style="${q.now?'background:rgba(212,175,106,.12);border-radius:10px;padding-inline:8px':''}"><span class="ldot" style="background:${q.now?C.gold:q.p>price?C.sell:C.buy}"></span><span class="${q.now?'gold':'mut'}">${esc(q.n)}${q.s?' · '+q.s:''}</span><b class="num ltr" style="font-weight:500;color:${q.now?C.gold:q.p>price?C.sell:C.buy}">${fp(a,q.p)}</b></div>`).join('')}</div>
+  </section>`;
+  return head+chips+tabs+summary+matrix+cards+ladder+`<p class="note">تحليل تعليمي من شموع مغلقة فقط · ليس نصيحة مالية. المدارس المفعّلة تُختار من الإعدادات.</p>`;
+};
+AFTER.schools = function(){
+  const v=$('view');
+  v.querySelectorAll('[data-sa]').forEach(b=>b.onclick=()=>{ S.asset=b.dataset.sa; S.schFocus=null; render(); });
+  v.querySelectorAll('[data-stf]').forEach(b=>b.onclick=()=>{ S.schTf=b.dataset.stf; S.schFocus=null; render(); });
+  const pl=v.querySelector('[data-plan]'); if(pl) pl.onclick=()=>openSheet(S.asset, S.schTf||S.tf);
+  if(S.schFocus){ const el=$('sc-'+S.schFocus); if(el) setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),80); }
+};
+// Entry points: the result sheet, the chart and the More screen.
+const sheetBeforeSchools = openSheet;
+openSheet = function(a, tf){
+  sheetBeforeSchools(a, tf);
+  const w=$('sheet'); if(!w) return;
+  const box=w.querySelector('.sheet'); if(!box) return;
+  const b=document.createElement('button'); b.className='btn outline'; b.style.cssText='width:100%;margin-top:10px';
+  b.textContent='تفاصيل المدارس الخمس على كل الأطر'; b.onclick=()=>openSchools(a, tf);
+  box.appendChild(b);
+};
+const chartBeforeSchools = VIEWS.chart;
+VIEWS.chart = function(){ return chartBeforeSchools().replace('<div class="cactions">', '<button class="btn ghost" id="cSchools" style="width:100%">المدارس الخمس على '+S.tf+' · صفحة الفريم</button>\n  <div class="cactions">'); };
+const chartAfterSchools = AFTER.chart;
+AFTER.chart = function(){ chartAfterSchools(); const b=$('cSchools'); if(b) b.onclick=()=>openSchools(S.asset, S.tf); };
+const moreBeforeSchools = VIEWS.more;
+VIEWS.more = function(){ return moreBeforeSchools().replace('<div class="tilegrid">', `<div class="tilegrid"><a class="mtile" href="#schools" style="--tc:#f0d28f"><span class="mti"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.6"/><circle cx="14" cy="12" r="1.6"/><circle cx="10" cy="18" r="1.6"/></svg></span><b>المدارس والأطر</b><span class="label">5 مدارس · 3 أطر</span></a>`); };
+
 /* ---------- boot: real data first, then the app ---------- */
 function bootScreen(msg, err){
   const v=$('view'); if(!v) return;
