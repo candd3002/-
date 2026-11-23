@@ -1,35 +1,50 @@
-// Service worker: shows app notifications when the server sends a Web Push (page may be closed).
+// Service worker: shows the app's notifications when the server monitor sends a Web Push (page may be closed).
+// The push carries no text; the messages are read from the monitor's feed (/latest = last 40 messages).
+// - every message is shown once on this device (remembered in a cache);
+// - messages older than 12 hours, or older than this device's subscription, are never shown;
+// - a late push still shows the entry message before the target/stop messages (oldest first);
+// - every push shows at least one notification (iPhone stops delivering pushes that show nothing).
 importScripts("push-config.js");
 
-self.addEventListener("install", function () { self.skipWaiting(); });
+var SHOWN = "baqer-shown";
+
+self.addEventListener("install", function (e) {
+  e.waitUntil(caches.open(SHOWN).then(function (c) {
+    return c.match("/since").then(function (r) { if (!r) return c.put("/since", new Response(String(Date.now()))); });
+  }).then(function () { return self.skipWaiting(); }));
+});
 self.addEventListener("activate", function (e) { e.waitUntil(self.clients.claim()); });
 
 self.addEventListener("push", function (e) {
   e.waitUntil((async function () {
-    // If the app is open and visible, it already shows the alert itself.
-    var wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    if (wins.some(function (c) { return c.visibilityState === "visible"; })) return;
+    var cache = await caches.open(SHOWN);
+    var sinceR = await cache.match("/since"), since = sinceR ? +(await sinceR.text()) || 0 : 0;
     var items = [];
     try {
       var r = await fetch(self.PUSH_WORKER + "/latest", { cache: "no-store" });
       items = (await r.json()).items || [];
     } catch (err) {}
-    if (!items.length) items = [{ id: "generic-" + Date.now(), title: "Baqer Sniper", body: "\u062a\u062d\u062f\u064a\u062b \u062c\u062f\u064a\u062f \u0641\u064a \u0627\u0644\u062a\u0637\u0628\u064a\u0642" }];
-    // Show each item once on this device (the same batch is re-read by every push).
-    var cache = await caches.open("baqer-shown");
-    for (const it of items.slice(-10)) {
-      var key = "/shown/" + encodeURIComponent(it.id);
+    var now = Date.now(), shown = 0;
+    var fresh = items.filter(function (it) { var at = it.at || now; return it && it.id && at >= since - 60000 && now - at <= 12 * 3600e3; })
+      .sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+    for (var i = 0; i < fresh.length && shown < 8; i++) {
+      var it = fresh[i], key = "/shown/" + encodeURIComponent(it.id);
       if (await cache.match(key)) continue;
       await cache.put(key, new Response("1"));
-      await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: "icon.svg", badge: "icon.svg" });
+      await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: "assets/apple-touch-icon.png", badge: "icon.svg", data: { url: "/" } });
+      shown++;
+    }
+    if (!shown) {
+      // Nothing new (already shown, or the feed could not be read): one quiet summary, replaced each time.
+      await self.registration.showNotification("Baqer Sniper", { body: "تحديث جديد في التطبيق", tag: "baqer-update", renotify: false, icon: "assets/apple-touch-icon.png" });
     }
   })());
 });
 
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: "window" }).then(function (list) {
-    for (const c of list) { if ("focus" in c) return c.focus(); }
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) { if ("focus" in list[i]) return list[i].focus(); }
     return self.clients.openWindow("/");
   }));
 });

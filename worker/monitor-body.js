@@ -85,8 +85,8 @@ const PNAME = { balanced: "متوازن / balanced", sniper: "قناص / sniper"
 function fmt(inst, v) { return v == null || isNaN(v) ? "—" : v.toFixed(inst.digits); }
 function setupMsg(inst, tf, profile, sig) {
   const side = sig.dir === "LONG" ? "شراء / BUY" : "بيع / SELL";
-  return { title: "دخول / Entry: " + side,
-    body: inst.name + " · " + tf.toUpperCase() + " · " + (PNAME[profile] || profile) + "\n" +
+  return { title: "دخول " + (sig.dir === "LONG" ? "شراء" : "بيع") + " · " + inst.name + " · " + tf.toUpperCase(),
+    body: side + "\n" +
       "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) };
 }
 function fmtMove(inst, pts) {
@@ -105,7 +105,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       const won = tr.tpHits > 0;
       const lvl = won ? tr["tp" + tr.tpHits] : tr.sl;
       const pts = won ? Math.abs(lvl - tr.entry) : -Math.abs(tr.entry - tr.sl);
-      out.push({ id: "exit|" + id + "|" + b.t, title: won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
+      out.push({ id: "exit|" + id + "|" + b.t, title: (won ? "صفقة رابحة · " : "صفقة خاسرة · ") + inst.name + " · " + tr.tf.toUpperCase(),
         body: label + "\n" + (won ? "أُغلقت بعد الهدف " + tr.tpHits : "وصل وقف الخسارة") + " · " + (pts >= 0 ? "+" : "−") + fmtMove(inst, Math.abs(pts)) });
       hist.push({ t: now, kind: won ? "win" : "loss", inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       delete state.open[id]; return;
@@ -116,7 +116,7 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
       if (!hit) break;
       tr.tpHits = k;
       const pts = Math.abs(level - tr.entry);
-      out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " / TP" + k + " hit",
+      out.push({ id: "tp|" + id + "|" + k, title: "وصل الهدف " + k + " · " + inst.name + " · " + tr.tf.toUpperCase(),
         body: label + "\nالسعر " + fmt(inst, level) + " · +" + fmtMove(inst, pts) });
       hist.push({ t: now, kind: "tp" + k, inst: inst.name, tf: tr.tf, profile: tr.profile || "", dir: tr.dir, entry: tr.entry, pts: pts, digits: dg });
       if (k === 3) {
@@ -126,13 +126,22 @@ function manage(tr, id, bars, inst, now, out, hist, state) {
     }
   }
 }
-async function run(env) {
-  const skipped = [];
-  const hist = JSON.parse((await env.MONITOR_KV.get("history")) || "[]");
+// KV free plan: 1,000 writes per day for the whole account. Everything the monitor keeps (open trades,
+// seen setups, the notification feed and the trade history) lives in ONE key, written only when it
+// changed. The candle archive is saved every 6 hours.
+async function loadState(env) {
   const raw = await env.MONITOR_KV.get("state");
   const state = raw ? JSON.parse(raw) : { init: false, seen: {}, open: {} };
+  if (!state.history) { try { state.history = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); } catch (e) { state.history = []; } }
+  if (!state.feed) { try { const l = JSON.parse((await env.MONITOR_KV.get("latest")) || "{}"); state.feed = (l.items || []).map(it => Object.assign({ at: l.at || Date.now() }, it)); } catch (e) { state.feed = []; } }
+  return { state, before: JSON.stringify(state) };
+}
+async function run(env) {
+  const skipped = [];
+  const { state, before } = await loadState(env);
+  const hist = state.history;
   const now = Date.now(), firstRun = !state.init, out = [];
-  const histDue = now - (state.histAt || 0) >= 3600e3;
+  const histDue = now - (state.histAt || 0) >= 6 * 3600e3;
 
   for (const inst of INSTR) {
     for (const tf of TFS) {
@@ -175,21 +184,23 @@ async function run(env) {
   state.recent = (state.recent || []).filter(r => now - r.t < 14 * 864e5);
   state.init = true;
   if (histDue) state.histAt = now;
-  await env.MONITOR_KV.put("state", JSON.stringify(state));
   while (hist.length > 200) hist.shift();
-  await env.MONITOR_KV.put("history", JSON.stringify(hist));
-  if (out.length) {
-    await env.MONITOR_KV.put("latest", JSON.stringify({ at: now, items: out }));
-    await pushAll(env);
-  }
+  // Notification feed: the last 40 messages stay available, so a push that reaches the phone late
+  // still shows the entry message and not only the later target/stop messages.
+  if (out.length) state.feed = (state.feed || []).concat(out.map(it => Object.assign({ at: now }, it))).slice(-40);
+  const hourly = now - (state.beatAt || 0) >= 3600e3;
+  if (hourly) state.beatAt = now;
+  if (JSON.stringify(state) !== before) await env.MONITOR_KV.put("state", JSON.stringify(state));
+  if (out.length) await pushAll(env);
   console.log("run done: " + out.length + " notifications" + (firstRun ? " (first run: history recorded silently)" : ""));
-  return { firstRun: firstRun, notifications: out.length, skipped: skipped };
+  return { firstRun: firstRun, notifications: out.length, skipped: skipped, write: hourly || out.length > 0 };
 }
 async function runSafe(env) {
   const at = Date.now();
   try {
     const info = await run(env);
-    await env.MONITOR_KV.put("lastrun", JSON.stringify(Object.assign({ ok: true, at: at, finished: Date.now() }, info)));
+    // The run status is written at most once an hour (or when something was sent) to save KV writes.
+    if (info.write) await env.MONITOR_KV.put("lastrun", JSON.stringify(Object.assign({ ok: true, at: at, finished: Date.now() }, info)));
   } catch (e) {
     await env.MONITOR_KV.put("lastrun", JSON.stringify({ ok: false, at: at, error: String(e && e.stack || e).slice(0, 500) }));
   }
@@ -269,11 +280,11 @@ export default {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/vapid-public") { const v = await getVapid(env); return json({ key: v.pub }); }
-    if (url.pathname === "/history") { const h = JSON.parse((await env.MONITOR_KV.get("history")) || "[]"); return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
+    if (url.pathname === "/history") { const h = (await loadState(env)).state.history || []; return new Response(historyHtml(h), { headers: { "content-type": "text/html; charset=utf-8" } }); }
     if (url.pathname === "/backtest") return backtestRoute(url, env);
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
-    if (url.pathname === "/latest") { const r = await env.MONITOR_KV.get("latest"); return json(r ? JSON.parse(r) : { items: [] }); }
+    if (url.pathname === "/latest") { const st = (await loadState(env)).state; return json({ at: Date.now(), items: st.feed || [] }); }
     if (url.pathname === "/unsubscribe" && req.method === "POST") {
       let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
       const subs = (await getSubs(env)).filter(s => !sub || s.endpoint !== sub.endpoint);
@@ -289,7 +300,9 @@ export default {
       return json({ ok: true }, 201);
     }
     if (url.pathname === "/test") {
-      await env.MONITOR_KV.put("latest", JSON.stringify({ at: Date.now(), items: [{ id: "test|" + Date.now(), title: "اختبار الإشعارات", body: "الإشعارات تعمل من التطبيق. هذه ليست إشارة تداول." }] }));
+      const { state } = await loadState(env);
+      state.feed = (state.feed || []).concat([{ id: "test|" + Date.now(), at: Date.now(), title: "اختبار الإشعارات", body: "الإشعارات تعمل من التطبيق. هذه ليست إشارة تداول." }]).slice(-40);
+      await env.MONITOR_KV.put("state", JSON.stringify(state));
       await pushAll(env);
       return json({ ok: true });
     }
