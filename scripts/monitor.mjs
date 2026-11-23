@@ -64,60 +64,65 @@ function setupText(inst, style, sig, title) {
     "تعليمي، ليس نصيحة مالية / Educational, not advice"].join("\n");
 }
 
+// No repeats: a setup is identified by instrument + timeframe + direction + the closed bar it formed on
+// (never the entry price), and the same instrument/timeframe/direction stays silent while a trade is
+// open and for a few bars after it. Same rules as the app (pages-site/analysis.js: isRepeat).
 async function main() {
   const state = loadState();
   const now = Date.now();
   const firstRun = !state.init;
   const notes = [];
+  state.trades = state.trades || [];
+  // Older state files kept open trades in state.open: carry them over once.
+  for (const id of Object.keys(state.open || {})) {
+    const o = state.open[id];
+    state.trades.push({ id, inst: o.inst, tf: o.tf, dir: o.dir, entry: o.entry, sl: o.sl, tp1: o.tp1, tp2: o.tp2, tp3: o.tp3, t: o.t, status: "open" });
+  }
+  state.open = {};
 
   for (const inst of INSTR) {
     for (const style of STYLES) {
-      let bars;
-      try { bars = await fetchBars(inst.sym, style.tf); } catch (e) { console.log("skip " + inst.id + " " + style.tf + ": " + e.message); continue; }
+      let raw;
+      try { raw = await fetchBars(inst.sym, style.tf); } catch (e) { console.log("skip " + inst.id + " " + style.tf + ": " + e.message); continue; }
+      const bars = A.closedBars(raw, TF_MS[style.tf], now); // the forming candle is never analysed
       if (bars.length < 60) continue;
       const last = bars[bars.length - 1];
-      const fresh = now - last.t <= 2 * TF_MS[style.tf];
+      const fresh = now - last.t <= 2 * TF_MS[style.tf] + TF_MS[style.tf];
 
-      // 1) new setup on the latest bars
-      const r = A.analyze(bars, style.profile, null);
-      if (r.ready && r.signal) {
-        const id = inst.id + "|" + style.id + "|" + r.signal.key + "|" + r.signal.entry.toFixed(inst.digits);
-        if (!state.seen[id]) {
-          state.seen[id] = now;
-          // Old setups found on the very first run are remembered silently, never announced.
-          if (!firstRun && fresh) {
-            state.open[id] = { inst: inst.id, style: style.id, tf: style.tf, dir: r.signal.dir, entry: r.signal.entry,
-              sl: r.signal.sl, tp1: r.signal.tp1, tp2: r.signal.tp2, tp3: r.signal.tp3, t: last.t };
-            notes.push(setupText(inst, style, r.signal, "إشارة جديدة / New setup"));
-          }
-        }
+      // 1) exits first, so a trade that just closed frees its slot only after the cooldown
+      for (const tr of state.trades) {
+        if (tr.status !== "open" || tr.inst !== inst.id || tr.tf !== style.tf) continue;
+        const ex = A.resolveExit(tr, bars);
+        if (!ex) continue;
+        tr.status = ex.status; tr.closeT = ex.closeT;
+        if (firstRun) continue;
+        const won = ex.status === "win";
+        const pts = won ? Math.abs(tr.tp1 - tr.entry) : Math.abs(tr.entry - tr.sl);
+        notes.push([won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
+          inst.name + " · " + (won ? "+" : "−") + pts.toFixed(inst.digits) + " نقطة / pts · " + style.tf.toUpperCase(),
+          "دخول " + tr.entry.toFixed(inst.digits) + " · وقف " + tr.sl.toFixed(inst.digits) + " · TP1 " + tr.tp1.toFixed(inst.digits)].join("\n"));
       }
 
-      // 2) exits for open trades on this instrument and timeframe
-      for (const id of Object.keys(state.open)) {
-        const tr = state.open[id];
-        if (tr.inst !== inst.id || tr.tf !== style.tf) continue;
-        const long = tr.dir === "LONG";
-        for (const b of bars) {
-          if (b.t <= tr.t) continue;
-          const hitStop = long ? b.l <= tr.sl : b.h >= tr.sl;
-          const hitTp = long ? b.h >= tr.tp1 : b.l <= tr.tp1;
-          if (!hitStop && !hitTp) continue;
-          const won = hitTp && !hitStop;
-          const pts = won ? Math.abs(tr.tp1 - tr.entry) : Math.abs(tr.entry - tr.sl);
-          notes.push([won ? "صفقة رابحة / Win" : "صفقة خاسرة / Loss",
-            inst.name + " · " + (won ? "+" : "−") + pts.toFixed(inst.digits) + " نقطة / pts · " + style.tf.toUpperCase(),
-            "دخول " + tr.entry.toFixed(inst.digits) + " · وقف " + tr.sl.toFixed(inst.digits) + " · TP1 " + tr.tp1.toFixed(inst.digits)].join("\n"));
-          delete state.open[id];
-          break;
-        }
+      // 2) new setup on the last closed bar
+      const r = A.analyze(bars, style.profile, null);
+      if (r.ready && r.signal && !A.isRepeat(state.trades, inst.id, style.tf, r.signal.dir, last.t, TF_MS[style.tf])) {
+        const s = r.signal;
+        state.trades.push({ id: A.setupId(inst.id, style.tf, s.dir, last.t), inst: inst.id, style: style.id, tf: style.tf, dir: s.dir,
+          entry: s.entry, sl: s.sl, tp1: s.tp1, tp2: s.tp2, tp3: s.tp3, t: last.t, status: "open" });
+        // Setups found on the very first run, or on stale data, are remembered silently, never announced.
+        if (!firstRun && fresh) notes.push(setupText(inst, style, s, "إشارة جديدة / New setup"));
       }
     }
   }
 
+  // Keep the state small: closed trades older than 14 days are dropped.
+  state.trades = state.trades.filter(t => t.status === "open" || now - (t.closeT || t.t) < 14 * 864e5);
+  delete state.seen;
   state.init = true;
   saveState(state);
-  for (const n of notes) await sendTelegram(n);
-  console.log("done: " + notes.length + " messages" + (firstRun ? " (first run: history recorded silently)" : ""));
+  let sent = 0;
+  // A failed send is logged and skipped: the state is already saved, so it is never re-sent as a duplicate.
+  for (const n of notes) { try { await sendTelegram(n); sent++; } catch (e) { console.log("send failed: " + e.message); } }
+  console.log("done: " + sent + "/" + notes.length + " messages" + (firstRun ? " (first run: history recorded silently)" : ""));
 }
 main().catch(e => { console.error(e); process.exit(1); });

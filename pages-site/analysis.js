@@ -636,7 +636,44 @@
     return out.map(function (k) { return { t: k.t, o: k.o * f, h: k.h * f, l: k.l * f, c: k.c * f, v: k.v }; });
   }
 
+  // ---------- alert hygiene (shared by the app and the server monitor) ----------
+  // 1) Only closed bars: a bar whose period has not ended yet is dropped, so a signal cannot
+  //    appear, change its entry and appear again while the candle is still forming.
+  // 2) One setup = instrument + timeframe + direction + the closed bar it formed on.
+  // 3) No repeat: the same instrument/timeframe/direction is silent while a trade is open, and for
+  //    ALERT.cooldownBars bars after the last one.
+  var ALERT = { cooldownBars: 8 };
+  function closedBars(c, tfMs, now) {
+    if (!c || !c.length) return c || [];
+    var last = c[c.length - 1];
+    if (last.t > 1e12 && tfMs && last.t + tfMs > (now || Date.now())) return c.slice(0, -1);
+    return c;
+  }
+  function setupId(inst, tf, dir, barT) { return inst + "|" + tf + "|" + dir + "|" + barT; }
+  function isRepeat(list, inst, tf, dir, barT, tfMs) {
+    var unit = barT > 1e12 ? (tfMs || 3600e3) : 1, win = ALERT.cooldownBars * unit;
+    return (list || []).some(function (e) {
+      if (!e || e.practice || e.inst !== inst || (e.tf || null) !== (tf || null) || e.dir !== dir) return false;
+      if (e.id === setupId(inst, tf, dir, barT)) return true;
+      if (e.status === "open") return true;
+      return Math.abs(barT - e.t) < win || (e.closeT != null && barT >= e.closeT && barT - e.closeT < win / 2);
+    });
+  }
+  // First stop or TP1 touch after the entry bar. Same bar touching both counts as a stop (conservative).
+  function resolveExit(e, c) {
+    var long = e.dir === "LONG";
+    for (var i = 0; i < c.length; i++) {
+      if (!(c[i].t > e.t)) continue;
+      var hitStop = long ? c[i].l <= e.sl : c[i].h >= e.sl;
+      var hitTP = long ? c[i].h >= e.tp1 : c[i].l <= e.tp1;
+      if (hitStop) return { status: "loss", closeT: c[i].t };
+      if (hitTP) return { status: "win", closeT: c[i].t };
+    }
+    return null;
+  }
+
   return {
+    ALERT: ALERT, closedBars: closedBars, setupId: setupId, isRepeat: isRepeat, resolveExit: resolveExit,
     CFG: CFG, PROFILES: PROFILES, scalpSetup: scalpSetup, backtestMTF: backtestMTF, backtest15: backtest15, ema: ema, sma: sma, bollinger: bollinger, macd: macd, rsi: rsi, atr: atr, swings: swings, fvgs: fvgs,
     analyze: analyze, backtest: backtest, sampleCandles: sampleCandles, story: story, TXT: TXT,
     breakQuality: breakQuality, obQuality: obQuality
