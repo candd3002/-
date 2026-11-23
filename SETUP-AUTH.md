@@ -21,11 +21,18 @@ set `BREVO_API_KEY` instead of `RESEND_API_KEY`.
 | `OWNER_EMAIL` | your email (optional, marks you as owner) |
 | `ALLOWED_EMAILS` | optional, comma-separated: only these emails may enter. Leave empty = anyone who verifies |
 
-Optional, recommended: **Workers & Pages → KV → Create namespace** `baqer-auth`, then in the Pages project
-**Settings → Bindings → KV namespace**, variable name `AUTH_KV`. It makes the limits exact
-(5 codes per hour per email, 5 wrong attempts per code). Without it the limits are per data centre.
+Needed for the owner panel: **Workers & Pages → KV → Create namespace** `baqer-auth`, then in the Pages project
+**Settings → Bindings → Add → KV namespace**, variable name `AUTH_KV`. It stores the owner panel
+(official signals, analyst note, banner, profile links, maintenance mode, members list) and makes the
+sign-in limits exact. Without it the app works, but owner changes cannot be saved.
 
 ## 3. Redeploy
 Deployments → latest → Retry deployment (variables only apply to new deployments).
 
 Sessions last 30 days. Changing `AUTH_SECRET` signs everybody out.
+
+## The app
+- `/` is the gold app (index.html + radar.js): live prices (biquote for gold/silver/FX, Binance for crypto),
+  five schools on 15m / 1H / 4H from closed candles only, automatic signals announced once, journal,
+  owner panel (More → لوحة التحكم, visible only to OWNER_EMAIL).
+- `/classic.html` is the previous app, kept as a fallback.
