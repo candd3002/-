@@ -294,6 +294,8 @@ export default {
     if (url.pathname === "/backtest") return backtestRoute(url, env);
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
+    // Open trades (the ones the phone was told about), so the app shows the same trade.
+    if (url.pathname === "/open") { const st = (await loadState(env)).state; return json({ at: Date.now(), open: Object.keys(st.open || {}).map(id => Object.assign({ id: id }, st.open[id])) }); }
     if (url.pathname === "/latest") { const st = (await loadState(env)).state; return json({ at: Date.now(), items: st.feed || [] }); }
     if (url.pathname === "/unsubscribe" && req.method === "POST") {
       let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }

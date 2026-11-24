@@ -235,7 +235,8 @@ function analyze(a, tf){
   // A setup is reported on the candle it forms on; after that the trade stays open until its stop or
   // first target. An open trade is therefore still the current plan, even when the newest candle has
   // no fresh setup (this is what the phone notification announced).
-  const open = (S.journal||[]).filter(e=>e.status==='open' && e.inst===a && e.tf===tf).sort((x,y)=>y.t-x.t)[0];
+  // The trade the phone notification announced (server monitor) comes first, then the app's own journal.
+  const open = serverOpenFor(a, tf) || (S.journal||[]).filter(e=>e.status==='open' && e.inst===a && e.tf===tf).sort((x,y)=>y.t-x.t)[0];
   const fresh = r.ready ? r.signal : null;
   const sig = fresh || (open ? {dir:open.dir, entry:open.entry, sl:open.sl, tp1:open.tp1, tp2:open.tp2, tp3:open.tp3, grade:open.grade, key:'open', active:true, since:open.t} : null);
   const bias = sig ? (sig.dir==='SHORT'?'bear':'bull') : frameBias(votes);
@@ -270,6 +271,25 @@ function analystLine(A){
   if(!A) return 'السوق خريطة. اقرأ الاتجاه أولاً، ثم انتظر السعر في منطقتك.';
   if(A.wait) return n+': لا توجد صفقة مؤكدة الآن. لا أدخل إلا إذا اتفقت المدارس والأطر.';
   return A.sell ? n+' ضعيف على أغلب المدارس. انتظر الارتداد لمنطقة الدخول ولا تطارد السعر.' : n+' يحاول الصعود. الدخول فقط من منطقة قوية مع وقف واضح.';
+}
+
+/* ---------- open trades from the server monitor (same trades as the phone notifications) ---------- */
+const SRV_INST = {XAU:'XAU', EURUSD:'EUR', GBPUSD:'GBP', BTC:'BTC'}, SRV_TF = {'15m':'15m','1h':'1H','4h':'4H'};
+S.serverOpen = [];
+function serverOpenFor(a, tf){
+  return S.serverOpen.filter(o=>o.a===a && o.tf===tf).sort((x,y)=>y.t-x.t)[0] || null;
+}
+async function loadServerOpen(){
+  if(!window.PUSH_WORKER) return;
+  try{
+    const r=await fetch(PUSH_WORKER+'/open',{cache:'no-store'}); if(!r.ok) return;
+    const j=await r.json(), list=(j.open||[]).map(o=>({a:SRV_INST[o.inst], tf:SRV_TF[o.tf], dir:o.dir, entry:+o.entry, sl:+o.sl, tp1:+o.tp1, tp2:+o.tp2, tp3:+o.tp3, t:+o.t, tpHits:o.tpHits||0, grade:null, server:true}))
+      .filter(o=>ASSETS[o.a] && TFS[o.tf] && isFinite(o.entry) && isFinite(o.sl));
+    const changed = JSON.stringify(list)!==JSON.stringify(S.serverOpen);
+    S.serverOpen=list;
+    if(changed){ list.forEach(o=>analyze(o.a,o.tf)); Object.keys(S.analysis).forEach(k=>{ const [a,tf]=k.split('|'); analyze(a,tf); });
+      if(['home','chart','schools'].includes(S.route) && !document.querySelector('.sheetwrap') && !document.activeElement?.closest?.('input,textarea,select')) render(); }
+  }catch(e){}
 }
 
 /* ---------- automatic signals + journal (each event announced once) ---------- */
@@ -2110,6 +2130,7 @@ loadAll((d,n)=>bootScreen('جارٍ تحميل الأسعار الحية… '+Ma
   route();
   cloudChanged(false);
   loadNews();
+  loadServerOpen(); setInterval(loadServerOpen,60000);
   if(S.prefs.push && 'Notification' in window && Notification.permission==='granted') enablePush();
   setInterval(tick,1500); setInterval(updateSess,30000);
   setInterval(refreshClosed,15000); setInterval(pollBinance,5000);
