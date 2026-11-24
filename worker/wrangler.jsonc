@@ -5,7 +5,7 @@
   "main": "monitor.js",
   "compatibility_date": "2025-01-01",
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["* * * * *"]
   },
   "kv_namespaces": [
     {

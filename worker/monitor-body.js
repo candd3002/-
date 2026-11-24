@@ -83,11 +83,12 @@ const PROFILES = ["balanced"];
 const TFS = ["15m", "1h", "4h"];
 const PNAME = { balanced: "متوازن / balanced", sniper: "قناص / sniper", scalp: "مضاربة / scalp" };
 function fmt(inst, v) { return v == null || isNaN(v) ? "—" : v.toFixed(inst.digits); }
-function setupMsg(inst, tf, profile, sig) {
+function setupMsg(inst, tf, profile, sig, priceNow, movedR) {
   const side = sig.dir === "LONG" ? "شراء / BUY" : "بيع / SELL";
+  const warn = movedR >= 0.5 ? "\nالسعر تحرك بعيداً عن الدخول: لا تطارد، انتظر عودته لمنطقة الدخول" : "";
   return { title: "دخول " + (sig.dir === "LONG" ? "شراء" : "بيع") + " · " + inst.name + " · " + tf.toUpperCase(),
-    body: side + "\n" +
-      "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) };
+    body: side + " · الآن " + fmt(inst, priceNow) + "\n" +
+      "دخول " + fmt(inst, sig.entry) + " · وقف " + fmt(inst, sig.sl) + "\nTP1 " + fmt(inst, sig.tp1) + " · TP2 " + fmt(inst, sig.tp2) + " · TP3 " + fmt(inst, sig.tp3) + warn };
 }
 function fmtMove(inst, pts) {
   if (inst.digits === 5) return (pts * 10000).toFixed(1) + " pip";
@@ -148,6 +149,8 @@ async function run(env) {
       let bars;
       try { bars = await fetchBars(inst.sym, tf); } catch (e) { skipped.push(inst.id + " " + tf + ": " + e.message); continue; }
       // Closed candles only: the forming candle never produces (or changes) a signal.
+      // The live bars (with the forming candle) are still used for the current price and for exits.
+      const live = bars, priceNow = live[live.length - 1].c;
       bars = A.closedBars(bars, TF_MS[tf], now);
       if (bars.length < 60) continue;
       if (histDue) await saveHist(env, inst.id, tf, bars);
@@ -164,8 +167,14 @@ async function run(env) {
         if (state.seen[id] || A.isRepeat(known, inst.id, tf, sig.dir, last.t, TF_MS[tf])) continue;
         state.seen[id] = now;
         state.recent = (state.recent || []).concat([{ inst: inst.id, tf: tf, dir: sig.dir, t: last.t, status: "seen" }]).slice(-300);
+        // Late setup: the price already reached the first target before we could announce it.
+        const risk = Math.abs(sig.entry - sig.sl) || 1, moved = (sig.dir === "LONG" ? priceNow - sig.entry : sig.entry - priceNow);
+        if (!firstRun && fresh && moved >= Math.abs(sig.tp1 - sig.entry)) {
+          hist.push({ t: now, kind: "late", inst: inst.name, tf: tf, profile: profile, dir: sig.dir, entry: sig.entry, digits: inst.digits });
+          continue;
+        }
         if (!firstRun && fresh) {
-          const m = setupMsg(inst, tf, profile, sig);
+          const m = setupMsg(inst, tf, profile, sig, priceNow, moved / risk);
           state.open[id] = { inst: inst.id, tf: tf, profile: profile, dir: sig.dir, entry: sig.entry, sl: sig.sl,
             tp1: sig.tp1, tp2: sig.tp2, tp3: sig.tp3, tpHits: 0, t: last.t };
           out.push({ id: "new|" + id, title: m.title, body: m.body });
@@ -175,7 +184,7 @@ async function run(env) {
       for (const id of Object.keys(state.open)) {
         const tr = state.open[id];
         if (tr.inst !== inst.id || tr.tf !== tf) continue;
-        manage(tr, id, bars, inst, now, out, hist, state);
+        manage(tr, id, live, inst, now, out, hist, state);
       }
     }
   }
@@ -212,9 +221,9 @@ function historyHtml(h) {
   const d = (n, x) => (x == null || isNaN(x) ? "—" : Number(x).toFixed(n));
   const rows = h.slice().reverse().map(e => {
     const dt = new Date(e.t).toISOString().replace("T", " ").slice(0, 16);
-    const res = e.kind === "open" ? "دخول / entry" : e.kind === "win" ? "ربح / win" : e.kind === "loss" ? "خسارة / loss" : "وصل الهدف " + e.kind.slice(2);
+    const res = e.kind === "late" ? "فاتت (وصل الهدف قبل الإشعار)" : e.kind === "open" ? "دخول / entry" : e.kind === "win" ? "ربح / win" : e.kind === "loss" ? "خسارة / loss" : "وصل الهدف " + e.kind.slice(2);
     const cls = e.kind === "win" ? "w" : e.kind === "loss" ? "l" : "o";
-    const pts = e.kind === "open" ? "" : (e.pts >= 0 ? "+" : "") + d(e.digits, e.pts) + " pts";
+    const pts = (e.kind === "open" || e.kind === "late") ? "" : (e.pts >= 0 ? "+" : "") + d(e.digits, e.pts) + " pts";
     return '<tr class="' + cls + '"><td>' + dt + "</td><td>" + e.inst + " · " + e.tf + "</td><td>" +
       (e.dir === "LONG" ? "شراء" : "بيع") + "</td><td>" + d(e.digits, e.entry) + "</td><td>" + res + "</td><td>" + pts + "</td></tr>";
   }).join("");
