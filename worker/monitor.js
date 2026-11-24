@@ -909,7 +909,16 @@ function historyHtml(h) {
   const closed = h.filter(e => e.kind === "win" || e.kind === "loss");
   const wins = closed.filter(e => e.kind === "win").length;
   const net = closed.reduce((s, e) => s + (e.pts || 0), 0);
-  const summary = "ربح " + wins + " · خسارة " + (closed.length - wins) + " · صافي " + net.toFixed(2) + " نقطة";
+  // net per instrument, in that instrument's own units (gold points, pips for FX): never mixed in one number
+  const perInst = {};
+  closed.forEach(e => { const k = e.inst || "?"; perInst[k] = (perInst[k] || 0) + (e.pts || 0); });
+  const fx = e => /USD$/.test(e.inst || "") && (e.digits === 5);
+  const parts = Object.keys(perInst).map(k => {
+    const sample = closed.find(e => e.inst === k);
+    const unit = sample && sample.digits === 5 ? (perInst[k] * 10000).toFixed(1) + " pip" : perInst[k].toFixed(2) + " نقطة";
+    return k + " " + unit;
+  });
+  const summary = "ربح " + wins + " · خسارة " + (closed.length - wins) + " · " + (parts.length ? parts.join(" · ") : "لا صفقات مغلقة");
   return '<!doctype html><html dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>سجل الصفقات</title>' +
     '<style>body{font-family:system-ui,sans-serif;background:#0b1424;color:#eee;margin:16px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #1e2c44;padding:6px;text-align:start}.w td:nth-child(5){color:#6fd08c}.l td:nth-child(5){color:#ff6b6b}h2{color:#e8c35a}</style></head>' +
     "<body><h2>سجل الصفقات</h2><p>" + summary + '</p><table><tr><th>الوقت UTC</th><th>الأداة</th><th>الاتجاه</th><th>الدخول</th><th>النتيجة</th><th>النقاط</th></tr>' +
