@@ -683,6 +683,7 @@ const module = { exports: {} };
 });
 
 const A = module.exports;
+// Phone-notification monitor (Cloudflare Worker "alert"). Deployed by Workers Builds from this folder.
 // ---- Free server monitor on Cloudflare Workers (cron) ----
 // Sends Web Push notifications to the app (no Telegram).
 // Binding needed: KV namespace MONITOR_KV. No secrets needed: VAPID keys are generated and kept in KV.
