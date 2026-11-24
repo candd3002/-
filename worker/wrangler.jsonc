@@ -1,16 +1,16 @@
 {
-  // Keep in sync with the Worker "alert" configured in the Cloudflare dashboard.
-  // Replace REPLACE_WITH_NAMESPACE_ID with the Namespace ID shown on the baqer-monitor-kv page (Storage & databases → Workers KV).
+  // The Cloudflare Worker "alert" (phone notifications). Deployed automatically from this folder by
+  // Workers Builds: root directory "worker", build command "node build.mjs", deploy "npx wrangler deploy".
   "name": "alert",
   "main": "monitor.js",
   "compatibility_date": "2025-01-01",
+  "workers_dev": true,
+  "keep_vars": true,
   "triggers": {
+    // every minute: a 15m setup is announced about one minute after its candle closes
     "crons": ["* * * * *"]
   },
   "kv_namespaces": [
-    {
-      "binding": "MONITOR_KV",
-      "id": "REPLACE_WITH_NAMESPACE_ID"
-    }
+    { "binding": "MONITOR_KV", "id": "224c5eec9ed6475baba0b88e7c7c7957" }
   ]
 }
