@@ -987,17 +987,48 @@ AFTER.trades = function(){
 
 /* ---------- agenda ---------- */
 const EVENTS=[]; S.newsState='loading';
+// News: the calendar (Forex Factory) and headlines (FXStreet) come from the monitor (/news), which also
+// sends the morning summary and the 15-minute warnings. /api/news is the fallback for the calendar.
+S.headlines=[]; S.newsSources=[];
+function pushEvent(t, cur, n, imp, f, p){
+  const d=new Date(t), dd=new Date(t), d0=new Date(); d0.setHours(0,0,0,0); dd.setHours(0,0,0,0);
+  const day=Math.round((dd-d0)/864e5); if(day<0||day>2) return;
+  EVENTS.push({t, day, h:d.getUTCHours()+d.getUTCMinutes()/60, n:String(n||''), cur:String(cur||''), imp, f:f!=null&&f!==''?String(f):'—', p:p!=null&&p!==''?String(p):'—'});
+}
 async function loadNews(){
+  let ok=false;
   try{
-    const r=await fetch('/api/news',{cache:'no-store',credentials:'same-origin'}); const j=await r.json(); if(!r.ok) throw new Error('news');
-    const d0=new Date(); d0.setHours(0,0,0,0); EVENTS.length=0;
-    (j.calendar||[]).forEach(e=>{ const t=Date.parse(e.time); if(!isFinite(t)) return; const d=new Date(t), dd=new Date(t); dd.setHours(0,0,0,0);
-      const day=Math.round((dd-d0)/864e5); if(day<0||day>2) return;
-      const im=String(e.impact||''), imp=/high|3/.test(im)?3:/med|2/.test(im)?2:1;
-      EVENTS.push({t, day, h:d.getUTCHours()+d.getUTCMinutes()/60, n:String(e.event||''), cur:String(e.country||''), imp, f:e.forecast!=null&&e.forecast!==''?String(e.forecast):'—', p:e.previous!=null&&e.previous!==''?String(e.previous):'—'}); });
-    EVENTS.sort((x,y)=>x.t-y.t); S.newsState='ok';
-  }catch(e){ S.newsState='err'; }
-  if(S.route==='agenda') render();
+    if(window.PUSH_WORKER){
+      const r=await fetch(PUSH_WORKER+'/news',{cache:'no-store'}); const j=await r.json();
+      if(r.ok && Array.isArray(j.calendar) && j.calendar.length){
+        EVENTS.length=0; j.calendar.forEach(e=>{ if(e.imp>0) pushEvent(e.t, e.cur, e.title, e.imp, e.forecast, e.previous); });
+        S.headlines=(j.headlines||[]).filter(h=>/^https:\/\//.test(h.link)); S.newsSources=j.sources||[]; ok=true;
+      }
+    }
+  }catch(e){}
+  if(!ok){
+    try{
+      const r=await fetch('/api/news',{cache:'no-store',credentials:'same-origin'}); const j=await r.json(); if(!r.ok) throw new Error('news');
+      EVENTS.length=0;
+      (j.calendar||[]).forEach(e=>{ const t=Date.parse(e.time); if(!isFinite(t)) return; const im=String(e.impact||''); pushEvent(t, e.country, e.event, /high|3/.test(im)?3:/med|2/.test(im)?2:1, e.forecast, e.previous); });
+      ok=true;
+    }catch(e){}
+  }
+  EVENTS.sort((x,y)=>x.t-y.t); S.newsState= ok?'ok':'err';
+  if(['agenda','home'].includes(S.route) && !document.querySelector('.sheetwrap') && !document.activeElement?.closest?.('input,textarea,select')) render();
+}
+const NEWS_CUR=['USD','EUR','GBP','CNY','ALL'];
+function strongToday(){ return EVENTS.filter(e=>e.day===0 && e.imp===3 && NEWS_CUR.includes(e.cur)); }
+function hhmm(t){ return new Date(t).toLocaleTimeString(S.prefs.clock===12?'ar':'en-GB',{hour:'2-digit',minute:'2-digit'}); }
+function agoAr(t){ const m=Math.round((Date.now()-t)/60000); return m<60? 'قبل '+Math.max(1,m)+' د' : m<1440? 'قبل '+Math.round(m/60)+' س' : 'قبل '+Math.round(m/1440)+' ي'; }
+function newsTodayCard(){
+  const st=strongToday(), next=st.find(e=>e.t>Date.now()-5*60e3);
+  const mins=next? Math.round((next.t-Date.now())/60000) : null;
+  return `<a class="card pad newscard" href="#agenda" aria-label="أخبار اليوم">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:15.5px">أخبار اليوم</b><span class="tag" style="color:${st.length?C.sell:C.muted}">${st.length? st.length+' قوية':'هادئ'}</span></div>
+    ${next?`<div style="margin-top:8px"><span class="label">الخبر القادم</span><br><b>${esc(next.cur)} · ${esc(next.n)}</b> <span class="num mut">${hhmm(next.t)}${mins>0?' · بعد '+(mins>=60?Math.floor(mins/60)+' س '+(mins%60)+' د':mins+' د'):' · الآن'}</span></div>`:`<p class="label" style="margin:8px 0 0">${S.newsState==='loading'?'جارٍ تحميل الأجندة…':st.length?'انتهت أخبار اليوم القوية':'لا أخبار قوية اليوم على الدولار واليورو والباوند'}</p>`}
+    ${S.headlines[0]?`<p class="label" style="margin:8px 0 0">آخر خبر: ${esc(S.headlines[0].title)}</p>`:''}
+  </a>`;
 }
 VIEWS.agenda = function(){
   const days=[...Array(3)].map((_,k)=>{const d=new Date(); d.setDate(d.getDate()+k); return d;});
@@ -1005,7 +1036,7 @@ VIEWS.agenda = function(){
   const s=sessNow(), nowPct=s.h/24*100;
   const ev=EVENTS.filter(e=>e.day===S.agendaDay);
   const ht=h=>{const d=new Date(); d.setUTCHours(Math.floor(h),Math.round((h%1)*60),0,0); let hh=d.getHours(); const mm=String(d.getMinutes()).padStart(2,'0'); if(S.prefs.clock===12){const ap=hh>=12?'م':'ص'; hh=hh%12||12; return hh+':'+mm+' '+ap;} return String(hh).padStart(2,'0')+':'+mm;};
-  return `
+  return `${S.agendaDay===0?newsTodayCard().replace('href="#agenda"','href="#agenda" onclick="return false"'):''}
   <div class="days" role="group" aria-label="اليوم">${days.map((d,k)=>`<button data-day="${k}" aria-pressed="${S.agendaDay===k}">${k===0?'اليوم':names[d.getDay()]}<br><b class="num" style="font-weight:500">${d.getDate()}</b></button>`).join('')}</div>
   <section class="card pad" aria-label="الجلسات">
     <div class="h"><h2>الجلسات بتوقيت <span class="num">UTC</span></h2><span class="gold" style="font-size:13px">${s.kill?s.kill.n+' الآن':'لا كيل زون الآن'}</span></div>
@@ -1021,7 +1052,11 @@ VIEWS.agenda = function(){
       <span><b style="font-size:14.5px">${esc(e.n)}</b><br><span class="label"><span class="num">${esc(e.cur)}</span> · المتوقع ${esc(e.f)} · السابق ${esc(e.p)}</span></span>
       <span class="impact" role="img" aria-label="تأثير ${e.imp===3?'عالٍ':e.imp===2?'متوسط':'منخفض'}">${[1,2,3].map(i=>`<i style="background:${i<=e.imp?(e.imp===3?C.sell:C.gold):''}"></i>`).join('')}</span></li>`).join('') || `<li><p class="empty" style="padding:16px">${S.newsState==='loading'?'جارٍ تحميل الأجندة…':S.newsState==='err'?'تعذّر تحميل الأجندة الآن.':'لا أخبار مهمة في هذا اليوم.'}</p></li>`}</ul>
   </section>
-  <p class="note">الجلسات محسوبة من ساعتك. الأخبار من الأجندة الاقتصادية بتوقيتك المحلي.</p>`;
+  <section class="card" aria-label="آخر الأخبار">
+    <div class="sechead" style="padding:14px 18px 0"><h2>آخر الأخبار</h2><span class="sub">${S.headlines.length}</span></div>
+    <ul class="list">${S.headlines.slice(0,15).map(h=>`<li style="padding:12px 18px"><a href="${esc(h.link)}" target="_blank" rel="noopener noreferrer" style="display:block;color:inherit;text-decoration:none" ${h.lang==='en'?'dir="ltr"':''}><b style="font-size:14px;line-height:1.6">${esc(h.title)}</b><br><span class="label">${esc(h.source)} · ${agoAr(h.t)}</span></a></li>`).join('') || `<li><p class="empty" style="padding:16px">${S.newsState==='loading'?'جارٍ تحميل الأخبار…':'لا توجد أخبار حديثة الآن.'}</p></li>`}</ul>
+  </section>
+  <p class="note">المصادر: ${(S.newsSources.length?S.newsSources:[{name:'Forex Factory',url:'https://www.forexfactory.com/calendar',what:'الأجندة الاقتصادية'},{name:'FXStreet',url:'https://www.fxstreet.com/news',what:'الأخبار'}]).map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.name)}</a> (${esc(x.what)})`).join(' · ')}. الأوقات بتوقيت جهازك. يصلك إشعار صباحي بأخبار اليوم القوية، وتنبيه قبل كل خبر قوي بـ 15 دقيقة.</p>`;
 };
 AFTER.agenda = function(){ $('view').querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{ S.agendaDay=+b.dataset.day; render(); }); };
 
@@ -2106,6 +2141,10 @@ async function disablePush(){
     await fetch(PUSH_WORKER+'/unsubscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe(); }catch(e){}
 }
 
+/* ---------- home: today's news card ---------- */
+const homeBeforeNews = VIEWS.home;
+VIEWS.home = function(){ const h=homeBeforeNews(); return h.includes('<a class="card analyst"') ? h.replace('<a class="card analyst"', newsTodayCard()+'\n  <a class="card analyst"') : h+newsTodayCard(); };
+
 /* ---------- boot: real data first, then the app ---------- */
 function bootScreen(msg, err){
   const v=$('view'); if(!v) return;
@@ -2134,7 +2173,7 @@ loadAll((d,n)=>bootScreen('جارٍ تحميل الأسعار الحية… '+Ma
   if(S.prefs.push && 'Notification' in window && Notification.permission==='granted') enablePush();
   setInterval(tick,1500); setInterval(updateSess,30000);
   setInterval(refreshClosed,15000); setInterval(pollBinance,5000);
-  setInterval(()=>loadState(false),120000); setInterval(loadNews,30*60000);
+  setInterval(()=>loadState(false),120000); setInterval(loadNews,10*60000);
   if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ if(S.route==='chart') chartDraw(); });
 });
 })();
