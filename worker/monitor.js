@@ -823,6 +823,85 @@ async function loadState(env) {
   if (!state.feed) { try { const l = JSON.parse((await env.MONITOR_KV.get("latest")) || "{}"); state.feed = (l.items || []).map(it => Object.assign({ at: l.at || Date.now() }, it)); } catch (e) { state.feed = []; } }
   return { state, before: JSON.stringify(state) };
 }
+
+// ---------------- economic news: calendar, headlines and news alerts ----------------
+// Calendar: Forex Factory weekly feed (no key). Headlines: FXStreet RSS (Arabic + English).
+// Both are cached at the edge, so the every-minute cron does not hit the sources each time.
+const NEWS_TZ = "Europe/Helsinki";
+const CAL_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+const RSS = [
+  { url: "https://ar.fxstreet.com/rss/news", source: "FXStreet العربية", lang: "ar" },
+  { url: "https://xml.fxstreet.com/news/forex-news/index.xml", source: "FXStreet", lang: "en" }
+];
+const WATCH = ["USD", "EUR", "GBP", "CNY", "ALL"]; // currencies that move gold, EUR/USD, GBP/USD, BTC
+async function cachedFetch(url, ttl) {
+  const r = await fetch(url, { cf: { cacheTtl: ttl, cacheEverything: true }, headers: { "user-agent": "BaqerSniper/1.0 (+https://baqersniper.pages.dev)" } });
+  if (!r.ok) throw new Error(url + " HTTP " + r.status);
+  return r;
+}
+async function getCalendar() {
+  const rows = await (await cachedFetch(CAL_URL, 1800)).json();
+  return (Array.isArray(rows) ? rows : []).map(e => {
+    const t = Date.parse(e.date);
+    const imp = /high/i.test(e.impact) ? 3 : /medium/i.test(e.impact) ? 2 : /holiday/i.test(e.impact) ? 0 : 1;
+    return { id: "ff|" + e.country + "|" + e.title + "|" + t, t: t, cur: e.country || "", title: e.title || "", imp: imp,
+      forecast: e.forecast || "", previous: e.previous || "", actual: e.actual || "" };
+  }).filter(e => isFinite(e.t)).sort((a, b) => a.t - b.t);
+}
+function rssText(x, tag) {
+  const m = new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">", "i").exec(x);
+  if (!m) return "";
+  return m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+}
+async function getHeadlines() {
+  const out = [];
+  for (const f of RSS) {
+    try {
+      const xml = await (await cachedFetch(f.url, 600)).text();
+      const items = xml.split(/<item[\s>]/i).slice(1);
+      for (const it of items.slice(0, 15)) {
+        const title = rssText(it, "title"), link = rssText(it, "link"), t = Date.parse(rssText(it, "pubDate"));
+        if (!title || !/^https:\/\//.test(link) || !isFinite(t)) continue;
+        if (Date.now() - t > 3 * 864e5) continue; // old items are left out
+        out.push({ title: title.slice(0, 200), link: link, t: t, source: f.source, lang: f.lang, summary: rssText(it, "description").slice(0, 240) });
+      }
+    } catch (e) {}
+  }
+  return out.sort((a, b) => b.t - a.t).slice(0, 30);
+}
+const hm = t => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: NEWS_TZ });
+const dayKey = t => new Date(t).toLocaleDateString("en-CA", { timeZone: NEWS_TZ });
+const IMP_AR = { 3: "قوي", 2: "متوسط", 1: "ضعيف", 0: "عطلة" };
+// Called from run(): a morning summary of today's strong news (08:00 local) and an alert 15 minutes
+// before each strong (high impact) release. Each message once (ids kept in state.newsSent).
+async function newsTick(state, out, now) {
+  let cal;
+  try { cal = await getCalendar(); } catch (e) { return; }
+  state.newsSent = state.newsSent || {};
+  const today = dayKey(now), local = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", hour12: false, timeZone: NEWS_TZ });
+  const strong = cal.filter(e => e.imp === 3 && WATCH.includes(e.cur));
+  const todays = strong.filter(e => dayKey(e.t) === today && e.t > now - 3600e3);
+  const briefId = "brief|" + today;
+  if (+local >= 8 && !state.newsSent[briefId]) {
+    state.newsSent[briefId] = now;
+    out.push(todays.length
+      ? { id: briefId, title: "أخبار اليوم القوية · " + todays.length, body: todays.slice(0, 6).map(e => hm(e.t) + " " + e.cur + " · " + e.title).join("\n") + "\nالمصدر: Forex Factory" }
+      : { id: briefId, title: "أخبار اليوم", body: "لا توجد أخبار قوية اليوم على الدولار واليورو والباوند.\nالمصدر: Forex Factory" });
+  }
+  // Releases at the same minute (e.g. CPI m/m + core CPI) go out as one message.
+  const groups = {};
+  for (const e of strong) { const lead = e.t - now; if (lead > 15 * 60e3 || lead < 0) continue; (groups[e.t] = groups[e.t] || []).push(e); }
+  for (const t of Object.keys(groups)) {
+    const g = groups[t], id = "soon|" + g.map(e => e.id).join(",");
+    if (g.every(e => state.newsSent["soon|" + e.id])) continue;
+    g.forEach(e => { state.newsSent["soon|" + e.id] = now; });
+    const lead = +t - now, curs = Array.from(new Set(g.map(e => e.cur))).join(" / ");
+    out.push({ id: id.slice(0, 180), title: "بعد " + Math.max(1, Math.round(lead / 60e3)) + " دقيقة: خبر قوي · " + curs,
+      body: g.slice(0, 4).map(e => e.title + (e.forecast ? " · المتوقع " + e.forecast : "") + (e.previous ? " · السابق " + e.previous : "")).join("\n") +
+        "\n" + hm(+t) + " · تقلب متوقع، انتبه لصفقاتك · المصدر: Forex Factory" });
+  }
+  for (const k of Object.keys(state.newsSent)) if (now - state.newsSent[k] > 8 * 864e5) delete state.newsSent[k];
+}
 async function run(env) {
   const skipped = [];
   const { state, before } = await loadState(env);
@@ -877,6 +956,7 @@ async function run(env) {
   const cutoff = now - 30 * 864e5;
   for (const k of Object.keys(state.seen)) if (state.seen[k] < cutoff) delete state.seen[k];
   state.recent = (state.recent || []).filter(r => now - r.t < 14 * 864e5);
+  try { await newsTick(state, out, now); } catch (e) { skipped.push("news: " + e.message); }
   state.init = true;
   if (histDue) state.histAt = now;
   while (hist.length > 200) hist.shift();
@@ -979,6 +1059,17 @@ export default {
     if (url.pathname === "/backtest") return backtestRoute(url, env);
     if (url.pathname === "/export.csv") return exportCsv(url);
     if (url.pathname === "/status") { const r = await env.MONITOR_KV.get("lastrun"); return json(r ? JSON.parse(r) : { note: "no run yet" }); }
+    // Calendar (this week) and latest headlines, with their sources, for the app's news page.
+    if (url.pathname === "/news") {
+      let calendar = [], headlines = [], err = null;
+      try { calendar = await getCalendar(); } catch (e) { err = e.message; }
+      try { headlines = await getHeadlines(); } catch (e) {}
+      return new Response(JSON.stringify({ at: Date.now(), calendar: calendar, headlines: headlines, error: err,
+        sources: [{ name: "Forex Factory", url: "https://www.forexfactory.com/calendar", what: "الأجندة الاقتصادية" }, { name: "FXStreet", url: "https://www.fxstreet.com/news", what: "الأخبار" }] }),
+        { headers: Object.assign({ "content-type": "application/json", "cache-control": "public, max-age=120" }, CORS) });
+    }
+    // Open trades (the ones the phone was told about), so the app shows the same trade.
+    if (url.pathname === "/open") { const st = (await loadState(env)).state; return json({ at: Date.now(), open: Object.keys(st.open || {}).map(id => Object.assign({ id: id }, st.open[id])) }); }
     if (url.pathname === "/latest") { const st = (await loadState(env)).state; return json({ at: Date.now(), items: st.feed || [] }); }
     if (url.pathname === "/unsubscribe" && req.method === "POST") {
       let sub; try { sub = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
