@@ -736,6 +736,8 @@ async function vapidAuth(vapid, endpoint) {
 }
 async function getSubs(env) { const r = await env.MONITOR_KV.get("subs"); return r ? JSON.parse(r) : []; }
 
+// Urgency high: Apple and Google deliver at once instead of batching (they may delay "normal" pushes
+// for a long time on a sleeping phone). TTL 15 min: a message that cannot arrive in time is dropped.
 async function pushAll(env) {
   const subs = await getSubs(env);
   if (!subs.length) return;
@@ -743,7 +745,7 @@ async function pushAll(env) {
   const keep = [];
   for (const s of subs) {
     try {
-      const r = await fetch(s.endpoint, { method: "POST", headers: { TTL: "3600", Authorization: await vapidAuth(vapid, s.endpoint) } });
+      const r = await fetch(s.endpoint, { method: "POST", headers: { TTL: "900", Urgency: "high", Authorization: await vapidAuth(vapid, s.endpoint) } });
       if (r.status === 404 || r.status === 410) continue; // subscription expired or removed
       keep.push(s);
     } catch (e) { keep.push(s); }
