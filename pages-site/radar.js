@@ -59,7 +59,7 @@ const pct = v => (v>=0?'+':'')+v.toFixed(2)+'%';
 const ENG = window.Analysis, SCHOOLS = window.Schools;
 const TF_IV = {'15m':'15m','1H':'1h','4H':'4h'};
 const TF_MS = tf => TFS[tf]*60000;
-const PROFILE = {'15m':'balanced','1H':'balanced','4H':'balanced'}; // same as the server monitor
+const PROFILE = {'15m':'scalp','1H':'balanced','4H':'balanced'}; // same as the server monitor: tight stops on 15m
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 S.lastTick = {}; S.fetchedAt = {}; S.live = {bq:false, bn:false}; S.loaded = false;
 
@@ -1001,7 +1001,7 @@ async function loadNews(){
     if(window.PUSH_WORKER){
       const r=await fetch(PUSH_WORKER+'/news',{cache:'no-store'}); const j=await r.json();
       if(r.ok && Array.isArray(j.calendar) && j.calendar.length){
-        EVENTS.length=0; j.calendar.forEach(e=>{ if(e.imp>0) pushEvent(e.t, e.cur, e.title, e.imp, e.forecast, e.previous); });
+        EVENTS.length=0; j.calendar.forEach(e=>pushEvent(e.t, e.cur, e.title, e.imp, e.forecast, e.previous));
         S.headlines=(j.headlines||[]).filter(h=>/^https:\/\//.test(h.link)); S.newsSources=j.sources||[]; ok=true;
       }
     }
@@ -1018,6 +1018,9 @@ async function loadNews(){
   if(['agenda','home'].includes(S.route) && !document.querySelector('.sheetwrap') && !document.activeElement?.closest?.('input,textarea,select')) render();
 }
 const NEWS_CUR=['USD','EUR','GBP','CNY','ALL'];
+const CUR_AR={USD:'الولايات المتحدة',EUR:'منطقة اليورو',GBP:'بريطانيا',JPY:'اليابان',CNY:'الصين',AUD:'أستراليا',CAD:'كندا',NZD:'نيوزيلندا',CHF:'سويسرا',ALL:'عالمي'};
+function holidayAr(t){ t=String(t||''); return /thanksgiving/i.test(t)?'عيد الشكر':/christmas/i.test(t)?'عيد الميلاد':/new year/i.test(t)?'رأس السنة':/good friday/i.test(t)?'الجمعة العظيمة':/easter/i.test(t)?'عيد الفصح':/independence/i.test(t)?'عيد الاستقلال':/labou?r/i.test(t)?'عيد العمال':/bank holiday/i.test(t)?'عطلة البنوك':/early close/i.test(t)?'إغلاق مبكر':t; }
+function holidaysToday(){ return EVENTS.filter(e=>e.day===0 && e.imp===0); }
 function strongToday(){ return EVENTS.filter(e=>e.day===0 && e.imp===3 && NEWS_CUR.includes(e.cur)); }
 function hhmm(t){ return new Date(t).toLocaleTimeString(S.prefs.clock===12?'ar':'en-GB',{hour:'2-digit',minute:'2-digit'}); }
 function agoAr(t){ const m=Math.round((Date.now()-t)/60000); return m<60? 'قبل '+Math.max(1,m)+' د' : m<1440? 'قبل '+Math.round(m/60)+' س' : 'قبل '+Math.round(m/1440)+' ي'; }
@@ -1025,6 +1028,7 @@ function newsTodayCard(){
   const st=strongToday(), next=st.find(e=>e.t>Date.now()-5*60e3);
   const mins=next? Math.round((next.t-Date.now())/60000) : null;
   return `<a class="card pad newscard" href="#agenda" aria-label="أخبار اليوم">
+    ${holidaysToday().length?`<div class="holiday"><b>اليوم عطلة</b> · ${holidaysToday().slice(0,3).map(e=>esc((CUR_AR[e.cur]||e.cur)+': '+holidayAr(e.n))).join(' · ')}<br><span class="label">${holidaysToday().some(e=>e.cur==='USD')?'السيولة ضعيفة والسوق الأمريكي مغلق أو يغلق مبكراً. خفّف حجم صفقاتك.':'سيولة أقل على عملة هذا البلد اليوم.'}</span></div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:15.5px">أخبار اليوم</b><span class="tag" style="color:${st.length?C.sell:C.muted}">${st.length? st.length+' قوية':'هادئ'}</span></div>
     ${next?`<div style="margin-top:8px"><span class="label">الخبر القادم</span><br><b>${esc(next.cur)} · ${esc(next.n)}</b> <span class="num mut">${hhmm(next.t)}${mins>0?' · بعد '+(mins>=60?Math.floor(mins/60)+' س '+(mins%60)+' د':mins+' د'):' · الآن'}</span></div>`:`<p class="label" style="margin:8px 0 0">${S.newsState==='loading'?'جارٍ تحميل الأجندة…':st.length?'انتهت أخبار اليوم القوية':'لا أخبار قوية اليوم على الدولار واليورو والباوند'}</p>`}
     ${S.headlines[0]?`<p class="label" style="margin:8px 0 0">آخر خبر: ${esc(S.headlines[0].title)}</p>`:''}
@@ -1049,7 +1053,7 @@ VIEWS.agenda = function(){
   <section class="card" aria-label="الأخبار">
     <ul class="list">${ev.map(e=>`<li style="display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:center;padding:14px 18px">
       <span class="num mut" style="font-size:13px">${ht(e.h)}</span>
-      <span><b style="font-size:14.5px">${esc(e.n)}</b><br><span class="label"><span class="num">${esc(e.cur)}</span> · المتوقع ${esc(e.f)} · السابق ${esc(e.p)}</span></span>
+      <span>${e.imp===0?`<b style="font-size:14.5px;color:var(--gold)">عطلة · ${esc(holidayAr(e.n))}</b><br><span class="label">${esc(CUR_AR[e.cur]||e.cur)} · ${esc(e.n)}</span>`:`<b style="font-size:14.5px">${esc(e.n)}</b><br><span class="label"><span class="num">${esc(e.cur)}</span> · المتوقع ${esc(e.f)} · السابق ${esc(e.p)}</span>`}</span>
       <span class="impact" role="img" aria-label="تأثير ${e.imp===3?'عالٍ':e.imp===2?'متوسط':'منخفض'}">${[1,2,3].map(i=>`<i style="background:${i<=e.imp?(e.imp===3?C.sell:C.gold):''}"></i>`).join('')}</span></li>`).join('') || `<li><p class="empty" style="padding:16px">${S.newsState==='loading'?'جارٍ تحميل الأجندة…':S.newsState==='err'?'تعذّر تحميل الأجندة الآن.':'لا أخبار مهمة في هذا اليوم.'}</p></li>`}</ul>
   </section>
   <section class="card" aria-label="آخر الأخبار">
