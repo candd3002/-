@@ -767,7 +767,9 @@ async function saveHist(env, id, tf, bars) {
 
 // ---- Monitor ----
 // One profile, the same as the app, so a setup is announced once and matches what the app shows.
-const PROFILES = ["balanced"];
+// 15m uses the scalp profile (stop at most ~0.9 ATR, targets 1.2/2/3 R); 1h and 4h use balanced.
+// Same choice as the app (pages-site/radar.js PROFILE).
+const PROFILE_FOR = { "15m": "scalp", "1h": "balanced", "4h": "balanced" };
 const TFS = ["15m", "1h", "4h"];
 const PNAME = { balanced: "متوازن / balanced", sniper: "قناص / sniper", scalp: "مضاربة / scalp" };
 function fmt(inst, v) { return v == null || isNaN(v) ? "—" : v.toFixed(inst.digits); }
@@ -874,6 +876,20 @@ async function getHeadlines() {
 const hm = t => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: NEWS_TZ });
 const dayKey = t => new Date(t).toLocaleDateString("en-CA", { timeZone: NEWS_TZ });
 const IMP_AR = { 3: "قوي", 2: "متوسط", 1: "ضعيف", 0: "عطلة" };
+const CUR_AR = { USD: "الولايات المتحدة", EUR: "منطقة اليورو", GBP: "بريطانيا", JPY: "اليابان", CNY: "الصين", AUD: "أستراليا", CAD: "كندا", NZD: "نيوزيلندا", CHF: "سويسرا", ALL: "عالمي" };
+function holidayAr(title) {
+  const t = String(title || "");
+  if (/thanksgiving/i.test(t)) return "عيد الشكر";
+  if (/christmas/i.test(t)) return "عيد الميلاد";
+  if (/new year/i.test(t)) return "رأس السنة";
+  if (/good friday/i.test(t)) return "الجمعة العظيمة";
+  if (/easter/i.test(t)) return "عيد الفصح";
+  if (/independence/i.test(t)) return "عيد الاستقلال";
+  if (/labou?r/i.test(t)) return "عيد العمال";
+  if (/bank holiday/i.test(t)) return "عطلة البنوك";
+  if (/early close/i.test(t)) return "إغلاق مبكر";
+  return t;
+}
 // Called from run(): a morning summary of today's strong news (08:00 local) and an alert 15 minutes
 // before each strong (high impact) release. Each message once (ids kept in state.newsSent).
 async function newsTick(state, out, now) {
@@ -902,6 +918,16 @@ async function newsTick(state, out, now) {
       body: g.slice(0, 4).map(e => e.title + (e.forecast ? " · المتوقع " + e.forecast : "") + (e.previous ? " · السابق " + e.previous : "")).join("\n") +
         "\n" + hm(+t) + " · تقلب متوقع، انتبه لصفقاتك · المصدر: Forex Factory" });
   }
+  // Holidays today (Forex Factory "Holiday" rows): one message per day, e.g. US Thanksgiving.
+  const hol = cal.filter(e => e.imp === 0 && dayKey(e.t) === today);
+  const holId = "holiday|" + today;
+  if (hol.length && +local >= 7 && !state.newsSent[holId]) {
+    state.newsSent[holId] = now;
+    const us = hol.some(e => e.cur === "USD");
+    out.push({ id: holId, title: "اليوم عطلة · " + Array.from(new Set(hol.map(e => CUR_AR[e.cur] || e.cur))).join(" / "),
+      body: hol.slice(0, 4).map(e => (CUR_AR[e.cur] || e.cur) + ": " + holidayAr(e.title) + (holidayAr(e.title) !== e.title ? " (" + e.title + ")" : "")).join("\n") +
+        "\n" + (us ? "السيولة ضعيفة اليوم والسوق الأمريكي مغلق أو يغلق مبكراً: حركات مفاجئة أو بطيئة، خفّف حجم صفقاتك." : "سيولة أقل على عملة هذا البلد اليوم.") + "\nالمصدر: Forex Factory" });
+  }
   for (const k of Object.keys(state.newsSent)) if (now - state.newsSent[k] > 8 * 864e5) delete state.newsSent[k];
 }
 async function run(env) {
@@ -923,7 +949,7 @@ async function run(env) {
       if (histDue) await saveHist(env, inst.id, tf, bars);
       const last = bars[bars.length - 1];
       const fresh = now - (last.t + TF_MS[tf]) <= 2 * TF_MS[tf];
-      for (const profile of PROFILES) {
+      for (const profile of [PROFILE_FOR[tf] || "balanced"]) {
         const r = A.analyze(bars, profile, null);
         if (!(r.ready && r.signal)) continue;
         const sig = r.signal;
